@@ -30,6 +30,8 @@
 #include "study.h"
 #include "string_parameter.h"
 
+#include "treatment_factor.h"
+
 
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
 
@@ -212,6 +214,7 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL json_t *GetStudyAsFrictionlessDataResource (const 
 DFW_FIELD_TRIAL_SERVICE_LOCAL bool SaveStudyAsFrictionlessData (Study *study_p, FieldTrialServiceData *data_p);
 
 
+DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddTreatmentFactorToStudy (TreatmentFactor *tf_p, Study *study_p);
 
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL json_t *GetStudyDistinctPhenotypesAsFrictionlessDataJSON (bson_oid_t *study_id_p, const FieldTrialServiceData *data_p);

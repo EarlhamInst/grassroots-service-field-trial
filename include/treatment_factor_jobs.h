@@ -86,7 +86,7 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL Parameter *GetTreatmentFactorTableParameter (Param
 DFW_FIELD_TRIAL_SERVICE_LOCAL bool IsTreatmentFactorParameter (const char * const param_name_s);
 
 
-DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddTreatmentFactorToStudy (const char *treatment_url_s, const json_t *factors_json_p, struct Study *study_p, const FieldTrialServiceData *data_p);
+DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddTreatmentFactorByPartsToStudy (const char *treatment_url_s, const json_t *factors_json_p, struct Study *study_p, const FieldTrialServiceData *data_p);
 
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL json_t *GetTreatmentFactorAsFrictionlessData (const TreatmentFactor *treatment_factor_p);

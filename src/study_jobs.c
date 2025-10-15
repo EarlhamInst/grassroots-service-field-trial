@@ -864,9 +864,13 @@ bool GetSubmissionStudyParameterTypeForNamedParameter (const char *param_name_s,
 		{
 			success_flag = true;
 		}
+	else if (GetPersonParameterTypeForNamedParameter (param_name_s, pt_p))
+		{
+			success_flag = true;
+		}
 	else
 		{
-			success_flag = GetPersonParameterTypeForNamedParameter (param_name_s, pt_p);
+			success_flag = GetPermissionsEditorParameterTypeForNamedParameter (param_name_s, pt_p);
 		}
 
 	return success_flag;
@@ -4532,14 +4536,11 @@ TreatmentFactor *GetOrCreateTreatmentFactorForStudy (Study *study_p, const bson_
 
 					if (tf_p)
 						{
-							TreatmentFactorNode *node_p = AllocateTreatmentFactorNode (tf_p);
+							if (!AddTreatmentFactorToStudy (tf_p, study_p))
+								{
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add new TreatmentFactor \"%s\" to Study \"%s\"",
+															 tf_p -> tf_treatment_p -> tr_ontology_term_p -> st_name_s, study_p -> st_name_s);
 
-							if (node_p)
-								{
-									LinkedListAddTail (study_p -> st_treatments_p, & (node_p -> tfn_node));
-								}
-							else
-								{
 									FreeTreatmentFactor (tf_p);
 									tf_p = NULL;
 								}
@@ -4556,6 +4557,30 @@ TreatmentFactor *GetOrCreateTreatmentFactorForStudy (Study *study_p, const bson_
 	return tf_p;
 }
 
+
+
+bool AddTreatmentFactorToStudy (TreatmentFactor *tf_p, Study *study_p)
+{
+	bool success_flag = false;
+
+	if (tf_p)
+		{
+			TreatmentFactorNode *node_p = AllocateTreatmentFactorNode (tf_p);
+
+			if (node_p)
+				{
+					LinkedListAddTail (study_p -> st_treatments_p, & (node_p -> tfn_node));
+					success_flag = true;
+				}
+			else
+				{
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add TreatmentFactor \"%s\" to Study \"%s\"",
+											 tf_p -> tf_treatment_p -> tr_ontology_term_p -> st_name_s, study_p -> st_name_s);
+				}
+		}
+
+	return success_flag;
+}
 
 
 static bool AddDefaultPlotsParameters (ServiceData *data_p, ParameterSet *params_p, const Study *study_p)
@@ -5059,7 +5084,7 @@ static bool AddTreatmentFactorsToStudy (Study *study_p, Parameter *treatment_nam
 					const char *name_s = GetStringParameterCurrentValue ((StringParameter *) treatment_names_p);
 					const json_t *level_p = json_array_get (levels_json_p, 0);
 
-					if (!AddTreatmentFactorToStudy (name_s, level_p, study_p, data_p))
+					if (!AddTreatmentFactorByPartsToStudy (name_s, level_p, study_p, data_p))
 						{
 
 							ReportTreatmentFactorError (study_p, name_s, level_p, job_p);
@@ -5079,7 +5104,7 @@ static bool AddTreatmentFactorsToStudy (Study *study_p, Parameter *treatment_nam
 								{
 									const json_t *level_p = json_array_get (levels_json_p, i);
 
-									if (AddTreatmentFactorToStudy (*value_ss, level_p, study_p, data_p))
+									if (AddTreatmentFactorByPartsToStudy (*value_ss, level_p, study_p, data_p))
 										{
 											++ i;
 											++ value_ss;

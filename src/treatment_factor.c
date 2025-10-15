@@ -84,13 +84,13 @@ void FreeTreatmentFactor (TreatmentFactor *treatment_factor_p)
 
 
 
-TreatmentFactor *CopyTreatmentFactor (const TreatmentFactor * const src_p)
+TreatmentFactor *CopyTreatmentFactor (const TreatmentFactor * const src_p, const Study * const dest_study_p)
 {
 	Treatment *copied_treatment_p = CopyTreatment (src_p -> tf_treatment_p);
 
 	if (copied_treatment_p)
 		{
-			TreatmentFactor *dest_p = AllocateTreatmentFactor (copied_treatment_p, src_p -> tf_study_p);
+			TreatmentFactor *dest_p = AllocateTreatmentFactor (copied_treatment_p, dest_study_p);
 
 			if (dest_p)
 				{

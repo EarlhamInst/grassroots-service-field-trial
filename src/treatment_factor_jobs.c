@@ -159,7 +159,7 @@ bool GetSubmissionTreatmentFactorParameterTypeForNamedParameter (const char *par
 }
 
 
-bool AddTreatmentFactorToStudy (const char *treatment_url_s, const json_t *factors_json_p, Study *study_p, const FieldTrialServiceData *data_p)
+bool AddTreatmentFactorByPartsToStudy (const char *treatment_url_s, const json_t *factors_json_p, Study *study_p, const FieldTrialServiceData *data_p)
 {
 	bool success_flag = false;
 	size_t num_values = 0;
@@ -274,7 +274,7 @@ bool RunForSubmissionTreatmentFactorParams (FieldTrialServiceData *data_p, Param
 												{
 													status = OS_FAILED;
 
-													if (AddTreatmentFactorToStudy (tf_url_s, factors_json_p, study_p, data_p))
+													if (AddTreatmentFactorByPartsToStudy (tf_url_s, factors_json_p, study_p, data_p))
 														{
 															if (SaveStudy (study_p, job_p, data_p, NULL))
 																{

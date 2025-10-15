@@ -29,6 +29,7 @@
 #include "row.h"
 #include "standard_row.h"
 #include "treatment_factor.h"
+#include "treatment_factor_jobs.h"
 #include "location.h"
 #include "dfw_util.h"
 #include "time_util.h"
@@ -2252,13 +2253,7 @@ static bool AddTreatmentsFromJSON (Study *study_p, const json_t *study_json_p, c
 
 					if (tf_p)
 						{
-							TreatmentFactorNode *node_p = AllocateTreatmentFactorNode (tf_p);
-
-							if (node_p)
-								{
-									LinkedListAddTail (study_p -> st_treatments_p, & (node_p -> tfn_node));
-								}
-							else
+							if (!AddTreatmentFactorToStudy (tf_p, study_p))
 								{
 									i = size;		/* force exit from loop */
 								}
@@ -2694,8 +2689,6 @@ Study *CopyStudy (const Study * const src_p, const char * const new_name_s, cons
 
 									if ((src_p -> st_curator_p == NULL)|| ((curator_p = CopyPerson (src_p -> st_curator_p)) != NULL))
 										{
-
-
 											Study *dest_p = AllocateStudy (NULL, metadata_p,  new_name_s, src_p -> st_data_url_s, src_p -> st_aspect_s, src_p -> st_slope_s,
 																										 location_p, src_p -> st_parent_p, MF_SHADOW_USE, current_crop_p, previous_crop_p, src_p -> st_description_s,
 																										 src_p -> st_design_s, src_p -> st_growing_conditions_s, src_p -> st_phenotype_gathering_notes_s,
@@ -2711,11 +2704,25 @@ Study *CopyStudy (const Study * const src_p, const char * const new_name_s, cons
 
 											if (dest_p)
 												{
-		//											LinkedList *st_treatments_p;
+													bool success_flag = true;
+
+													//											LinkedList *st_treatments_p;
 
 		//											LinkedList *st_phenotypes_p;
 
 		//												LinkedList *st_contributors_p;
+
+
+													/*
+													 * Now that the Study has the contact, contributor and crops we
+													 * don't need to worry about deleting them to stop memory leaks
+													 * as the Study will take care of that
+													 */
+													contact_p = NULL;
+													curator_p = NULL;
+													previous_crop_p = NULL;
+													current_crop_p = NULL;
+
 
 													if (copy_treatment_factors_flag)
 														{
@@ -2723,19 +2730,87 @@ Study *CopyStudy (const Study * const src_p, const char * const new_name_s, cons
 															if (src_p -> st_treatments_p -> ll_size > 0)
 																{
 																	/* Copy all of the treatments */
+																	const TreatmentFactorNode *src_node_p = (const TreatmentFactorNode *) (src_p -> st_treatments_p -> ll_head_p);
+
+																	while ((src_node_p != NULL) && (success_flag == true))
+																		{
+																			const TreatmentFactor *src_tf_p = src_node_p -> tfn_p;
+
+																			TreatmentFactor *dest_tf_p = CopyTreatmentFactor (src_node_p -> tfn_p, dest_p);
+
+																			if (dest_tf_p)
+																				{
+																					if (AddTreatmentFactorToStudy (dest_tf_p, dest_p))
+																						{
+																							src_node_p = (const TreatmentFactorNode *) (src_node_p -> tfn_node.ln_next_p);
+																						}
+																					else
+																						{
+																							success_flag = false;
+																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddTreatmentFactorToStudy () failed");
+																						}
+																				}
+
+																		}		/* while ((src_node_p != NULL) && (success_flag == true)) */
+
 																}
 
 														}		/* if (copy_treatment_factors_flag) */
 
 
-													if (copy_measured_variables_flag)
+													if (success_flag)
 														{
+															if (copy_measured_variables_flag)
+																{
 
-														}		/* if (copy_treatment_factors_flag) */
+																}		/* if (copy_treatment_factors_flag) */
 
 
-													return dest_p;
-												}
+															if (success_flag)
+																{
+																	if (src_p -> st_contributors_p -> ll_size > 0)
+																		{
+																			/* Copy all of the contributors */
+																			const PersonNode *src_node_p = (const PersonNode *) (src_p -> st_contributors_p -> ll_head_p);
+
+																			while ((src_node_p != NULL) && (success_flag == true))
+																				{
+																					Person *contributor_p = CopyPerson (src_node_p -> pn_person_p);
+
+																					if (contributor_p)
+																						{
+																							if (AddStudyContributor (dest_p, contributor_p, MF_SHALLOW_COPY))
+																								{
+																									src_node_p = (const PersonNode *) (src_node_p -> pn_node.ln_next_p);
+																								}
+																							else
+																								{
+																									success_flag = false;
+																									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddStudyContributor () failed for \"%s\" to \"%s\"",
+																															 contributor_p -> pe_name_s, dest_p -> st_name_s);
+
+																									FreePerson (contributor_p);
+																								}
+																						}
+
+																				}		/* while ((src_node_p != NULL) && (success_flag == true)) */
+
+																		}		/* if (src_p -> st_contributors_p -> ll_size > 0) */
+
+																}		/* if (success_flag) */
+
+
+															if (success_flag)
+																{
+																	return dest_p;
+																}
+
+														}		/* if (success_flag) */
+
+
+													FreeStudy (dest_p);
+												}		/* if (dest_p) */
+
 
 											if (curator_p)
 												{
@@ -2788,8 +2863,6 @@ Study *CopyStudy (const Study * const src_p, const char * const new_name_s, cons
 		{
 			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to copy location \"%s\"", src_p -> st_location_p -> lo_address_p -> ad_name_s);
 		}
-
-
 
 	return NULL;
 }

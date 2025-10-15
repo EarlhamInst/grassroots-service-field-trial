@@ -111,7 +111,8 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL TreatmentFactor *AllocateTreatmentFactor (Treatmen
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL void FreeTreatmentFactor (TreatmentFactor *treatment_factor_p);
 
-DFW_FIELD_TRIAL_SERVICE_LOCAL TreatmentFactor *CopyTreatmentFactor (const TreatmentFactor * const src_p);
+DFW_FIELD_TRIAL_SERVICE_LOCAL TreatmentFactor *CopyTreatmentFactor (const TreatmentFactor * const src_p, const struct Study * const dest_study_p);
+
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddTreatmentFactorValue (TreatmentFactor *treatment_p, const char *name_s, const char *value_s);
 
