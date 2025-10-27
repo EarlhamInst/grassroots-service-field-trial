@@ -1110,122 +1110,171 @@ json_t *GetStudyAsJSON (Study *study_p, const ViewFormat format, JSONProcessor *
 		{
 			if (AddCommonStudyJSONValues (study_p, study_json_p, format, data_p))
 				{
-					bool add_item_flag = false;
-
-					/*
-					 * Add the location
-					 */
-					if ((format == VF_CLIENT_FULL) || (format == VF_CLIENT_MINIMAL) || (format == VF_INDEXING))
+					if (AddMetadataToJSON (study_p -> st_metadata_p, study_json_p, format))
 						{
-							json_t *location_json_p = GetLocationAsJSON (study_p -> st_location_p);
+							bool add_item_flag = false;
 
-							if (location_json_p)
+							/*
+							 * Add the location
+							 */
+							if ((format == VF_CLIENT_FULL) || (format == VF_CLIENT_MINIMAL) || (format == VF_INDEXING))
 								{
-									if (json_object_set_new (study_json_p, ST_LOCATION_S, location_json_p) == 0)
+									json_t *location_json_p = GetLocationAsJSON (study_p -> st_location_p);
+
+									if (location_json_p)
 										{
-											if (AddValidCropToJSON (study_p -> st_current_crop_p, study_json_p, ST_CURRENT_CROP_S, format, data_p))
+											if (json_object_set_new (study_json_p, ST_LOCATION_S, location_json_p) == 0)
 												{
-													if (AddValidCropToJSON (study_p -> st_previous_crop_p, study_json_p, ST_PREVIOUS_CROP_S, format, data_p))
+													if (AddValidCropToJSON (study_p -> st_current_crop_p, study_json_p, ST_CURRENT_CROP_S, format, data_p))
 														{
-															if (AddParentFieldTrialToJSON (study_p, study_json_p, data_p))
+															if (AddValidCropToJSON (study_p -> st_previous_crop_p, study_json_p, ST_PREVIOUS_CROP_S, format, data_p))
 																{
-																	if (AddGrandParentProgramToJSON (study_p, study_json_p, format, data_p))
+																	if (AddParentFieldTrialToJSON (study_p, study_json_p, data_p))
 																		{
-																			AddFrictionlessDataLink (study_p, study_json_p, data_p);
+																			if (AddGrandParentProgramToJSON (study_p, study_json_p, format, data_p))
+																				{
+																					AddFrictionlessDataLink (study_p, study_json_p, data_p);
 
-																			AddHandbookLinks (study_p, study_json_p, data_p);
+																					AddHandbookLinks (study_p, study_json_p, data_p);
 
-																			#ifdef ENABLE_MARTI
-																			AddMartiResults (study_p, study_json_p, format, data_p);
-																			#endif
+																					#ifdef ENABLE_MARTI
+																					AddMartiResults (study_p, study_json_p, format, data_p);
+																					#endif
 
-																			add_item_flag = true;
+																					add_item_flag = true;
+																				}
+																			else
+																				{
+																					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "Failed to add grandparent program to study \"%s\"", study_p -> st_parent_p -> ft_name_s);
+																				}
 																		}
 																	else
 																		{
-																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "Failed to add grandparent program to study \"%s\"", study_p -> st_parent_p -> ft_name_s);
+																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "Failed to add parent field trial to study \"%s\"", study_p -> st_parent_p -> ft_name_s);
 																		}
 																}
 															else
 																{
-																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "Failed to add parent field trial to study \"%s\"", study_p -> st_parent_p -> ft_name_s);
+																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "Failed to add previous crop to study \"%s\"", study_p -> st_previous_crop_p -> cr_name_s);
 																}
 														}
 													else
 														{
-															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "Failed to add previous crop to study \"%s\"", study_p -> st_previous_crop_p -> cr_name_s);
+															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "Failed to add current crop to study \"%s\"", study_p -> st_current_crop_p -> cr_name_s);
 														}
-												}
+
+												}		/* if (json_object_set_new (study_json_p, ST_LOCATION_S, location_json_p) == 0) */
 											else
 												{
-													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "Failed to add current crop to study \"%s\"", study_p -> st_current_crop_p -> cr_name_s);
+													json_decref (location_json_p);
+													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "Failed to add location to study \"%s\"", study_p -> st_location_p -> lo_address_p -> ad_name_s);
 												}
-
-										}		/* if (json_object_set_new (study_json_p, ST_LOCATION_S, location_json_p) == 0) */
+										}		/* if (location_json_p) */
 									else
 										{
-											json_decref (location_json_p);
-											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "Failed to add location to study \"%s\"", study_p -> st_location_p -> lo_address_p -> ad_name_s);
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get location \"%s\" as JSON", study_p -> st_location_p -> lo_address_p -> ad_name_s);
 										}
-								}		/* if (location_json_p) */
+								}
 							else
 								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get location \"%s\" as JSON", study_p -> st_location_p -> lo_address_p -> ad_name_s);
-								}
-						}
-					else
-						{
-							if (AddNamedCompoundIdToJSON (study_json_p, study_p -> st_parent_p -> ft_id_p, ST_PARENT_FIELD_TRIAL_S))
-								{
 
-									if ((! (study_p -> st_location_p)) || (AddNamedCompoundIdToJSON (study_json_p, study_p -> st_location_p -> lo_id_p, ST_LOCATION_ID_S)))
+									if (AddNamedCompoundIdToJSON (study_json_p, study_p -> st_parent_p -> ft_id_p, ST_PARENT_FIELD_TRIAL_S))
 										{
-											if (AddValidCropToJSON (study_p -> st_current_crop_p, study_json_p, ST_CURRENT_CROP_S, VF_STORAGE, data_p))
+
+											if ((! (study_p -> st_location_p)) || (AddNamedCompoundIdToJSON (study_json_p, study_p -> st_location_p -> lo_id_p, ST_LOCATION_ID_S)))
 												{
-													if (AddValidCropToJSON (study_p -> st_previous_crop_p, study_json_p, ST_PREVIOUS_CROP_S, VF_STORAGE, data_p))
+													if (AddValidCropToJSON (study_p -> st_current_crop_p, study_json_p, ST_CURRENT_CROP_S, VF_STORAGE, data_p))
 														{
-															add_item_flag = true;
-														}		/* if (AddNamedCompoundIdToJSON (study_json_p, study_p -> st_previous_crop_p -> cr_id_p, ST_PREVIOUS_CROP_S)) */
+															if (AddValidCropToJSON (study_p -> st_previous_crop_p, study_json_p, ST_PREVIOUS_CROP_S, VF_STORAGE, data_p))
+																{
+																	add_item_flag = true;
+																}		/* if (AddNamedCompoundIdToJSON (study_json_p, study_p -> st_previous_crop_p -> cr_id_p, ST_PREVIOUS_CROP_S)) */
+															else
+																{
+																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "Failed to add previous crop \"%s\"", study_p -> st_previous_crop_p -> cr_name_s);
+																}
+														}		/* if (AddNamedCompoundIdToJSON (study_json_p, study_p -> st_current_crop_p -> cr_id_p, ST_CURRENT_CROP_S)) */
 													else
 														{
-															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "Failed to add previous crop \"%s\"", study_p -> st_previous_crop_p -> cr_name_s);
+															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "Failed to add current crop \"%s\"", study_p -> st_current_crop_p -> cr_name_s);
 														}
-												}		/* if (AddNamedCompoundIdToJSON (study_json_p, study_p -> st_current_crop_p -> cr_id_p, ST_CURRENT_CROP_S)) */
+												}		/* if (AddNamedCompoundIdToJSON (study_json_p, study_p -> st_location_p -> lo_id_p, ST_LOCATION_ID_S)) */
 											else
 												{
-													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "Failed to add current crop \"%s\"", study_p -> st_current_crop_p -> cr_name_s);
+													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "Failed to add location \"%s\"", study_p -> st_location_p -> lo_address_p -> ad_name_s);
 												}
-										}		/* if (AddNamedCompoundIdToJSON (study_json_p, study_p -> st_location_p -> lo_id_p, ST_LOCATION_ID_S)) */
+										}		/* if (AddNamedCompoundIdToJSON (study_json_p, study_p -> st_parent_p -> ft_id_p, ST_PARENT_FIELD_TRIAL_S)) */
 									else
 										{
-											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "Failed to add location \"%s\"", study_p -> st_location_p -> lo_address_p -> ad_name_s);
+											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "Failed to add \"%s\" \"%s\"", ST_PARENT_FIELD_TRIAL_S, study_p -> st_parent_p -> ft_name_s);
 										}
-								}		/* if (AddNamedCompoundIdToJSON (study_json_p, study_p -> st_parent_p -> ft_id_p, ST_PARENT_FIELD_TRIAL_S)) */
-							else
-								{
-									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "Failed to add \"%s\" \"%s\"", ST_PARENT_FIELD_TRIAL_S, study_p -> st_parent_p -> ft_name_s);
+
 								}
 
-						}
-
-					if (add_item_flag)
-						{
-							if (AddCompoundIdToJSON (study_json_p, study_p -> st_id_p))
+							if (add_item_flag)
 								{
-									bool success_flag = false;
+									if (AddCompoundIdToJSON (study_json_p, study_p -> st_id_p))
+										{
+											bool success_flag = false;
 
-									switch (format)
-									{
-										case VF_INDEXING:
-											success_flag = true;
-											break;
-
-										case VF_CLIENT_FULL:
+											switch (format)
 											{
-												if (GetStudyPlots (study_p, format, data_p))
+												case VF_INDEXING:
+													success_flag = true;
+													break;
+
+												case VF_CLIENT_FULL:
 													{
-														if (AddPlotsToJSON (study_p, study_json_p, format, processor_p, data_p))
+														if (GetStudyPlots (study_p, format, data_p))
 															{
+																if (AddPlotsToJSON (study_p, study_json_p, format, processor_p, data_p))
+																	{
+																		if (study_p -> st_shape_p)
+																			{
+																				if (json_object_set (study_json_p, ST_SHAPE_S, study_p -> st_shape_p) == 0)
+																					{
+																						success_flag = true;
+																					}		/*  if (json_object_set (study_json_p, ST_SHAPE_S, study_p -> st_shape_p) == 0) */
+																				else
+																					{
+																						PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_p -> st_shape_p, "Failed to add shape sata to study json for \"%s\"",
+																															 study_p -> st_name_s ? study_p -> st_name_s : "unknown study");
+																					}
+
+																			}
+																		else
+																			{
+																				success_flag = true;
+																			}		/* if ((!study_p -> st_shape_p) */
+																	}
+															}
+													}
+													break;
+
+												case VF_CLIENT_MINIMAL:
+													{
+														json_int_t num_plots = GetNumberOfPlotsInStudy (study_p, data_p);
+
+														if (SetJSONInteger (study_json_p, ST_NUMBER_OF_PLOTS_S, num_plots))
+															{
+																const bool has_shape_data_flag = (study_p -> st_shape_p) ? true : false;
+
+																if (SetJSONBoolean (study_json_p, ST_HAS_SHAPE_S, has_shape_data_flag))
+																	{
+																		success_flag = true;
+																	}
+															}
+
+													}
+													break;
+
+												case VF_STORAGE:
+													{
+														json_int_t num_plots = GetNumberOfPlotsInStudy (study_p, data_p);
+
+														if (SetJSONInteger (study_json_p, ST_NUMBER_OF_PLOTS_S, num_plots))
+															{
+
 																if (study_p -> st_shape_p)
 																	{
 																		if (json_object_set (study_json_p, ST_SHAPE_S, study_p -> st_shape_p) == 0)
@@ -1245,68 +1294,32 @@ json_t *GetStudyAsJSON (Study *study_p, const ViewFormat format, JSONProcessor *
 																	}		/* if ((!study_p -> st_shape_p) */
 															}
 													}
-											}
-											break;
+													break;
 
-										case VF_CLIENT_MINIMAL:
-											{
-												json_int_t num_plots = GetNumberOfPlotsInStudy (study_p, data_p);
-
-												if (SetJSONInteger (study_json_p, ST_NUMBER_OF_PLOTS_S, num_plots))
-													{
-														const bool has_shape_data_flag = (study_p -> st_shape_p) ? true : false;
-
-														if (SetJSONBoolean (study_json_p, ST_HAS_SHAPE_S, has_shape_data_flag))
-															{
-																success_flag = true;
-															}
-													}
-
-											}
-											break;
-
-										case VF_STORAGE:
-											{
-												json_int_t num_plots = GetNumberOfPlotsInStudy (study_p, data_p);
-
-												if (SetJSONInteger (study_json_p, ST_NUMBER_OF_PLOTS_S, num_plots))
-													{
-
-														if (study_p -> st_shape_p)
-															{
-																if (json_object_set (study_json_p, ST_SHAPE_S, study_p -> st_shape_p) == 0)
-																	{
-																		success_flag = true;
-																	}		/*  if (json_object_set (study_json_p, ST_SHAPE_S, study_p -> st_shape_p) == 0) */
-																else
-																	{
-																		PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_p -> st_shape_p, "Failed to add shape sata to study json for \"%s\"",
-																											 study_p -> st_name_s ? study_p -> st_name_s : "unknown study");
-																	}
-
-															}
-														else
-															{
-																success_flag = true;
-															}		/* if ((!study_p -> st_shape_p) */
-													}
+												default:
+													break;
 											}
 
-									}
 
 
-
-									if (success_flag)
-										{
-											if (AddDatatype (study_json_p, DFTD_STUDY))
+											if (success_flag)
 												{
-													return study_json_p;
+													if (AddDatatype (study_json_p, DFTD_STUDY))
+														{
+															return study_json_p;
+														}
 												}
-										}
+
+										}		/* if (add_item_flag) */
 
 								}		/* if (add_item_flag) */
 
-						}		/* if (add_item_flag) */
+
+						}		/* if (AddMetadataToJSON (study_p -> st_metadata_p, study_json_p, format)) */
+					else
+						{
+							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "AddPermissionsGroupToJSON () failed");
+						}
 
 				}		/* if (AddCommonStudyJSONValues (study_p, study_json_p, format, data_p)) */
 

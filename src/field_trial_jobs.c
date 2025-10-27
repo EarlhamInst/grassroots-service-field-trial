@@ -178,7 +178,7 @@ bool AddTrialEditor (const char * const name_s, const char * const team_s, const
 								{
 									param_p -> pa_read_only_flag = read_only_flag;
 
-									if (AddMultiplePeopleParameters (param_set_p, "Investigators", existing_people_p, dfw_data_p))
+									if (AddMultiplePeopleParameters (param_set_p, "Investigators", existing_people_p, read_only_flag, dfw_data_p))
 										{
 											success_flag = true;
 										}

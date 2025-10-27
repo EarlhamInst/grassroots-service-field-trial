@@ -1175,17 +1175,29 @@ Row *GetRowByStudyIndex (const int32 by_study_index, Study *study_p, const ViewF
 														}		/* if (num_results == 1) */
 													else
 														{
-															char *query_json_s = ConvertBSONToJSON (query_p, NULL);
+															json_t *query_json_p = ConvertBSONToJSON (query_p, NULL);
+															bool printed_error_flag = false;
 
-															if (query_json_s)
+															if (query_json_p)
 																{
-																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, UINT32_FMT " results for \"%s\"", query_json_s);
-																	free (query_json_s);
+																	char *query_json_s = json_dumps (query_json_p, 0);
+
+																	if (query_json_s)
+																		{
+																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, UINT32_FMT " results for \"%s\"", query_json_s);
+																			free (query_json_s);
+
+																			printed_error_flag = true;
+																		}
+
+																	json_decref (query_json_p);
 																}
-															else
+
+															if (!printed_error_flag)
 																{
 																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, UINT32_FMT " for row " UINT32_FMT " in study \"%s\"", by_study_index, study_p -> st_name_s);
 																}
+
 														}
 
 												}		/* if (json_is_array (results_p)) */

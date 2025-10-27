@@ -32,6 +32,8 @@
 #include "parameter.h"
 #include "string_parameter.h"
 
+#include "metadata.h"
+
 
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
 
@@ -98,6 +100,9 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL bool CreateValidDateFromJSON (const json_t *json_p
 DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddValidDateToJSON (struct tm *time_p, json_t *json_p, const char *key_s, const bool add_time_flag);
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddValidDateAsEpochToJSON (struct tm *time_p, json_t *json_p, const char *key_s);
+
+DFW_FIELD_TRIAL_SERVICE_LOCAL bool GetInitialisedPermissionsGroupAndMetadata (PermissionsGroup **perms_group_pp, Metadata **metadata_pp, ParameterSet *param_set_p,
+																								ServiceJob *job_p, User *user_p, ServiceData *service_data_p);
 
 
 

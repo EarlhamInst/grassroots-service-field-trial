@@ -139,10 +139,14 @@ extern "C"
 
 
 
-DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddSubmissionStudyParams (ServiceData *data_p, ParameterSet *param_set_p, Study *active_study_p);
+DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddSubmissionStudyParams (ServiceData *data_p, ParameterSet *params_p, Study *active_study_p, const bool read_only_flag);
 
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL bool RunForSubmissionStudyParams (FieldTrialServiceData *data_p, ParameterSet *param_set_p, ServiceJob *job_p, User *user_p);
+
+
+DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddStudyEditor (Study *study_p, const char *id_s, ParameterSet *params_p, ParameterGroup *group_p, const char * const trial_s,
+																									 const char * const location_s, const char * const this_crop_s, const char * const previous_crop_s, const bool read_only_flag, ServiceData *data_p);
 
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL bool GetSubmissionStudyParameterTypeForNamedParameter (const char *param_name_s, ParameterType *pt_p);

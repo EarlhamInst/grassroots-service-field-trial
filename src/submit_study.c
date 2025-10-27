@@ -168,30 +168,30 @@ static ParameterSet *GetStudySubmissionServiceParameters (Service *service_p, Da
 			ServiceData *data_p = service_p -> se_data_p;
 			FieldTrialServiceData *dfw_data_p = (FieldTrialServiceData *) data_p;
 			Study *active_study_p = GetStudyFromResource (resource_p, STUDY_ID, dfw_data_p);
+			PermissionsGroup *perms_group_p = NULL;
+			bool read_only_flag = false;
 
-			if (AddSubmissionStudyParams (data_p, params_p, active_study_p))
+			if (active_study_p)
 				{
-					PermissionsGroup *perms_group_p = NULL;
-					bool read_only_flag = false;
+					if (active_study_p -> st_metadata_p)
+						{
+							perms_group_p = active_study_p -> st_metadata_p -> me_permissions_p;
+						}
+				}
+
+			if (perms_group_p)
+				{
+					if (user_p)
+						{
+							read_only_flag = !CheckPermissionsGroupForUser (perms_group_p, user_p, AM_WRITE);
+						}
+				}
+
+
+			if (AddSubmissionStudyParams (data_p, params_p, active_study_p, read_only_flag))
+				{
 					const char *id_s = NULL;
 					bool success_flag = true;
-
-					if (active_study_p)
-						{
-							if (active_study_p -> st_metadata_p)
-								{
-									perms_group_p = active_study_p -> st_metadata_p -> me_permissions_p;
-								}
-						}
-
-					if (perms_group_p)
-						{
-							if (user_p)
-								{
-									read_only_flag = !CheckPermissionsGroupForUser (perms_group_p, user_p, AM_WRITE);
-								}
-						}
-
 
 					if (AddPermissionsEditor (perms_group_p, id_s, params_p, read_only_flag, (FieldTrialServiceData *) data_p))
 						{

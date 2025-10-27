@@ -28,6 +28,8 @@
 #include "schema_keys.h"
 #include "math_utils.h"
 
+#include "permissions_editor.h"
+
 
 #ifdef _DEBUG
 	#define DFW_UTIL_DEBUG	(STM_LEVEL_FINE)
@@ -380,6 +382,38 @@ void *GetDFWObjectByIdString (const char *object_id_s, FieldTrialDatatype collec
 	return GetDFWObjectByNamedIdString (object_id_s, collection_type, MONGO_ID_S, get_obj_from_json_fn, format, data_p);
 }
 
+
+bool GetInitialisedPermissionsGroupAndMetadata (PermissionsGroup **perms_group_pp, Metadata **metadata_pp, ParameterSet *param_set_p,
+																								ServiceJob *job_p, User *user_p, ServiceData *service_data_p)
+{
+	PermissionsGroup *perms_group_p = GetPermissionsGroupFromPermissionsEditor (param_set_p, job_p, user_p, service_data_p);
+
+	if (perms_group_p)
+		{
+			Metadata *metadata_p = AllocateMetadata (perms_group_p, user_p, false, NULL);
+
+			if (metadata_p)
+				{
+					*perms_group_pp = perms_group_p;
+					*metadata_pp = metadata_p;
+
+					return true;
+				}
+			else
+				{
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AllocateMetadata () failed for \"%s\"", job_p -> sj_name_s);
+				}
+
+
+			FreePermissionsGroup (perms_group_p);
+		}
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetPermissionsGroupFromPermissionsEditor () failed for \"%s\"", job_p -> sj_name_s);
+		}
+
+	return false;
+}
 
 
 static bool RunVersionSearch (const char * const collection_s, const char * const key_s, const char * const id_s, const char *timestamp_s, json_t *results_p, bson_t *extra_opts_p, const FieldTrialServiceData *data_p)
@@ -1191,7 +1225,7 @@ bool SetUpListParameterFromJSON (const FieldTrialServiceData *data_p, StringPara
 					 */
 					if (empty_option_s)
 						{
-							success_flag = CreateAndAddStringParameterOption (param_p, empty_option_s, empty_option_s);
+							success_flag = CreateAndAddStringParameterOption (& (param_p -> sp_base_param), empty_option_s, empty_option_s);
 						}
 
 

@@ -208,7 +208,7 @@ static ParameterSet *GetStudyCopyServiceParameters (Service *service_p, DataReso
 
 									if ((param_p = EasyCreateAndAddBooleanParameterToParameterSet (data_p, params_p, group_p, S_COPY_TREATMENT_FACTORS.npt_name_s, "Copy Treatment Factors?", "Do you wish to copy the Treatment Factors?", &b, PL_ALL)) != NULL)
 										{
-											if ((param_p = EasyCreateAndAddBooleanParameterToParameterSet (data_p, params_p, group_p, S_COPY_MEASURED_VARIABLES.npt_name_s, "Copy Measured Variables?", "Do you wish to copy the Measured Variables?", &b, PL_ADVANCEDs)) != NULL)
+											if ((param_p = EasyCreateAndAddBooleanParameterToParameterSet (data_p, params_p, group_p, S_COPY_MEASURED_VARIABLES.npt_name_s, "Copy Measured Variables?", "Do you wish to copy the Measured Variables?", &b, PL_ADVANCED)) != NULL)
 												{
 													success_flag = true;
 												}

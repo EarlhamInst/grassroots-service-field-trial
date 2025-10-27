@@ -1034,61 +1034,68 @@ static bool AddProgramme (ServiceJob *job_p, ParameterSet *param_set_p, FieldTri
 															const char *funders_s = NULL;
 															const char *project_code_s = NULL;
 															Crop *crop_p = NULL;
-															PermissionsGroup *perms_group_p = GetPermissionsGroupFromPermissionsEditor (param_set_p, job_p, user_p, & (data_p -> dftsd_base_data));
+															PermissionsGroup *perms_group_p = NULL;
+															Metadata *metadata_p = NULL;
 
-															Metadata *metadata_p = AllocateMetadata (perms_group_p, user_p, false, NULL);
-
-															GetCurrentStringParameterValueFromParameterSet (param_set_p, PROGRAMME_ABBREVIATION.npt_name_s, &abbreviation_s);
-															GetCurrentStringParameterValueFromParameterSet (param_set_p, PROGRAMME_CROP.npt_name_s, &crop_id_s);
-															GetCurrentStringParameterValueFromParameterSet (param_set_p, PROGRAMME_URL.npt_name_s, &url_s);
-															GetCurrentStringParameterValueFromParameterSet (param_set_p, PROGRAMME_OBJECTIVE.npt_name_s, &objective_s);
-															GetCurrentStringParameterValueFromParameterSet (param_set_p, PROGRAMME_LOGO.npt_name_s, &logo_s);
-															GetCurrentStringParameterValueFromParameterSet (param_set_p, PROGRAMME_FUNDER.npt_name_s, &funders_s);
-															GetCurrentStringParameterValueFromParameterSet (param_set_p, PROGRAMME_CODE.npt_name_s, &project_code_s);
-
-															crop_p = GetCropByIdString (crop_id_s, data_p);
-
-															programme_p = AllocateProgramme (programme_id_p, metadata_p, abbreviation_s, crop_p, url_s, name_s, objective_s, person_p, logo_s, funders_s, project_code_s);
-
-															if (programme_p)
+															if (GetInitialisedPermissionsGroupAndMetadata (&perms_group_p, &metadata_p, param_set_p, job_p, user_p, & (data_p -> dftsd_base_data)))
 																{
-																	OperationStatus perms_status = RunForPermissionEditor (param_set_p, metadata_p -> me_permissions_p, job_p, user_p, & (data_p -> dftsd_base_data));
+																	GetCurrentStringParameterValueFromParameterSet (param_set_p, PROGRAMME_ABBREVIATION.npt_name_s, &abbreviation_s);
+																	GetCurrentStringParameterValueFromParameterSet (param_set_p, PROGRAMME_CROP.npt_name_s, &crop_id_s);
+																	GetCurrentStringParameterValueFromParameterSet (param_set_p, PROGRAMME_URL.npt_name_s, &url_s);
+																	GetCurrentStringParameterValueFromParameterSet (param_set_p, PROGRAMME_OBJECTIVE.npt_name_s, &objective_s);
+																	GetCurrentStringParameterValueFromParameterSet (param_set_p, PROGRAMME_LOGO.npt_name_s, &logo_s);
+																	GetCurrentStringParameterValueFromParameterSet (param_set_p, PROGRAMME_FUNDER.npt_name_s, &funders_s);
+																	GetCurrentStringParameterValueFromParameterSet (param_set_p, PROGRAMME_CODE.npt_name_s, &project_code_s);
 
-																	if ((perms_status == OS_SUCCEEDED) || (perms_status == OS_PARTIALLY_SUCCEEDED) || (perms_status == OS_IDLE))
+																	crop_p = GetCropByIdString (crop_id_s, data_p);
+
+																	programme_p = AllocateProgramme (programme_id_p, metadata_p, abbreviation_s, crop_p, url_s, name_s, objective_s, person_p, logo_s, funders_s, project_code_s);
+
+																	if (programme_p)
 																		{
-																			status = SaveProgramme (programme_p, job_p, data_p);
+																			OperationStatus perms_status = RunForPermissionEditor (param_set_p, metadata_p -> me_permissions_p, job_p, user_p, & (data_p -> dftsd_base_data));
 
-																			if (status == OS_FAILED)
+																			if ((perms_status == OS_SUCCEEDED) || (perms_status == OS_PARTIALLY_SUCCEEDED) || (perms_status == OS_IDLE))
 																				{
-																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to save Programme named \"%s\"", name_s);
+																					status = SaveProgramme (programme_p, job_p, data_p);
+
+																					if (status == OS_FAILED)
+																						{
+																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to save Programme named \"%s\"", name_s);
+																						}
+																				}
+
+																			FreeProgramme (programme_p);
+																			freed_person_flag = true;
+																		}
+																	else
+																		{
+																			if (metadata_p)
+																				{
+																					FreeMetadata (metadata_p);
+																				}
+
+																			if (crop_p)
+																				{
+																					FreeCrop (crop_p);
 																				}
 																		}
 
-																	FreeProgramme (programme_p);
-																	freed_person_flag = true;
-																}
+																	if (!freed_person_flag)
+																		{
+																			FreePerson (person_p);
+																		}
+
+																}		/* if (person_p) */
 															else
 																{
-																	if (metadata_p)
-																		{
-																			FreeMetadata (metadata_p);
-																		}
-
-																	if (crop_p)
-																		{
-																			FreeCrop (crop_p);
-																		}
+																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to allocate Person for %s, %s in programme %s", pi_name_s, pi_email_s, name_s);
 																}
 
-															if (!freed_person_flag)
-																{
-																	FreePerson (person_p);
-																}
-
-														}		/* if (person_p) */
+														}		/* if (GetInitialisedPermissionsGroupAndMetadata (&perms_group_p, &metadata_p, param_set_p, job_p, user_p, & (data_p -> dftsd_base_data))) */
 													else
 														{
-															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to allocate Person for %s, %s in programme %s", pi_name_s, pi_email_s, name_s);
+															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetInitialisedPermissionsGroupAndMetadata () failed for \"%s\"", name_s);
 														}
 
 												}

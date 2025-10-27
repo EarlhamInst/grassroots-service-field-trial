@@ -228,7 +228,7 @@ json_t *GetMetadataAsJSON (const Metadata * const metadata_p, const ViewFormat v
 				{
 					if ((metadata_p -> me_user_p == NULL) || (AddUserToJSON (metadata_p -> me_user_p, metadata_json_p, FT_USER_S, vf)))
 						{
-							if ((metadata_p -> me_permissions_p == NULL) || (AddPermissionsGroupToJSON (metadata_p -> me_permissions_p, metadata_json_p, FT_PERMISSIONS_S, vf)))
+							if ((metadata_p -> me_permissions_p == NULL) || (AddPermissionsGroupToJSON (metadata_p -> me_permissions_p, metadata_json_p, metadata_p -> me_user_p, FT_PERMISSIONS_S, vf)))
 								{
 									return metadata_json_p;
 								}

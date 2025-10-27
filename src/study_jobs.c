@@ -138,10 +138,11 @@ static Study *GetStudyFromJSONResource (const json_t *resource_data_p, ServiceDa
 static bool SetUpDefaultsFromExistingStudy (const Study * const study_p, char **id_ss, char **this_crop_ss, char **previous_crop_ss, char **trial_ss, char **location_ss);
 
 
-static bool AddDefaultPlotsParameters (ServiceData *data_p, ParameterSet *params_p, const Study *study_p);
+
+static bool AddDefaultPlotsParameters (ServiceData *data_p, ParameterSet *params_p, const bool read_only_flag, const Study *study_p);
 
 
-static bool AddLayoutParams (ParameterSet *params_p, const Study *study_p, FieldTrialServiceData *dfw_data_p);
+static bool AddLayoutParams (ParameterSet *params_p, const Study *study_p, const bool read_only_flag, FieldTrialServiceData *dfw_data_p);
 
 
 static bool AddTermToJSON (const SchemaTerm *term_p, json_t *phenotypes_p);
@@ -160,7 +161,7 @@ static bool AddFullPhenotypeAsJSON (const char *oid_s, json_t *values_p, const F
 static json_t *GetDistinctValuesAsJSON (bson_oid_t *study_id_p, const char *key_s, bool (*add_value_fn) (const char *oid_s, json_t *values_p, const FieldTrialServiceData *data_p), const FieldTrialServiceData *data_p);
 
 
-static bool AddTreatmentFactorParameters (ParameterSet *params_p, const Study *study_p, FieldTrialServiceData *data_p);
+static bool AddTreatmentFactorParameters (ParameterSet *params_p, const Study *study_p, const bool read_only_flag, FieldTrialServiceData *data_p);
 
 
 static bool AddTreatmentFactorsToStudy (Study *study_p, Parameter *treatment_names_p, Parameter *treatment_levels_p, const size_t num_treatments, ServiceJob *job_p, const FieldTrialServiceData *data_p);
@@ -184,23 +185,24 @@ static bool AddCropAsFrictionlessData (const Crop * const crop_p, json_t *json_p
 
 static bool AddTreatmentFactorsAsFrictionlessData (json_t *json_p, LinkedList *treatments_p, const char * const key_s);
 
-static bool AddGeneralSubmissionStudyParams (Study *active_study_p, const char *id_s, const char *trial_s, const char *location_s, ParameterSet *params_p, ParameterGroup *group_p, ServiceData *data_p);
+
+static bool AddGeneralSubmissionStudyParams (Study *active_study_p, const char *id_s, const char *trial_s, const char *location_s, ParameterSet *params_p, ParameterGroup *group_p, const bool read_only_flag, ServiceData *data_p);
 
 
 static OperationStatus ProcessDistinctValues (bson_oid_t *study_id_p, const char *key_s, bool (*process_value_fn) (const char *oid_s, void *user_data_p, const FieldTrialServiceData *service_data_p), void *user_data_p, const FieldTrialServiceData *service_data_p);
 
 static bool ProcessStudyPhenotype (const char *phenotype_oid_s, void *user_data_p, const FieldTrialServiceData *service_data_p);
 
-static bool AddCuratorSubmissionParams (const Person *curator_p, ParameterSet *params_p, ServiceData *data_p);
+static bool AddCuratorSubmissionParams (const Person *curator_p, ParameterSet *params_p, const bool read_only_flag, ServiceData *data_p);
 
-static bool AddContactSubmissionParams (const Person *contact_p, ParameterSet *params_p, ServiceData *data_p);
+static bool AddContactSubmissionParams (const Person *curator_p, ParameterSet *params_p, const bool read_only_flag, ServiceData *data_p);
 
 
 static bool ProcessPersonForStudy (Person *person_p, void *user_data_p);
 
 static bool AddStudyLevelDetailParameter (ParameterSet *param_set_p, ParameterGroup *group_p, ServiceData * data_p);
 
-static bool AddMeasuredVariableParameters (ParameterSet *params_p, const Study *study_p, FieldTrialServiceData *data_p);
+static bool AddMeasuredVariableParameters (ParameterSet *params_p, const Study *study_p, const bool read_only_flag, FieldTrialServiceData *data_p);
 
 
 static OperationStatus ProcessMeasuredVariables (ServiceJob *job_p, ParameterSet *param_set_p, Study *study_p, FieldTrialServiceData *ft_service_data_p);
@@ -219,7 +221,7 @@ static OperationStatus SearchMarti (const double64 *latitude_p, const double64 *
  */
 
 
-bool AddSubmissionStudyParams (ServiceData *data_p, ParameterSet *params_p, Study *active_study_p)
+bool AddSubmissionStudyParams (ServiceData *data_p, ParameterSet *params_p, Study *active_study_p, const bool read_only_flag)
 {
 	bool success_flag = false;
 	Parameter *param_p = NULL;
@@ -252,108 +254,40 @@ bool AddSubmissionStudyParams (ServiceData *data_p, ParameterSet *params_p, Stud
 
 	if (defaults_flag)
 		{
-			if (AddGeneralSubmissionStudyParams (active_study_p, id_s, trial_s, location_s, params_p, group_p, data_p))
+			FieldTrialServiceData *dfw_data_p = (FieldTrialServiceData *) data_p;
+			Parameter *param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_ID.npt_type, STUDY_ID.npt_name_s, "Load Study", "Edit an existing study", id_s, PL_ALL_AND_WIZARD);
+
+			if (param_p)
 				{
-					if (AddLayoutParams (params_p, active_study_p, dfw_data_p))
+					if (SetUpStudiesListParameter (dfw_data_p, param_p, NULL, true))
 						{
-							if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_THIS_CROP.npt_type, STUDY_THIS_CROP.npt_name_s, "Crop", "The crop variety for this study", this_crop_s, PL_ALL)) != NULL)
+							/*
+							 * We want to update all of the values in the form
+							 * when a user selects a study from the list so
+							 * we need to make the parameter automatically
+							 * refresh the values. So we set the
+							 * pa_refresh_service_flag to true.
+							 */
+							param_p -> pa_refresh_service_flag = true;
+
+							if (AddStudyEditor (active_study_p, id_s, params_p, group_p, trial_s,
+																	location_s, this_crop_s, previous_crop_s, read_only_flag, data_p))
 								{
-									const bool new_study_flag = active_study_p ? false : true;
-
-									if (SetUpCropsListParameter (dfw_data_p, param_p, active_study_p ? active_study_p -> st_current_crop_p : NULL, S_UNKNOWN_CROP_OPTION_S, new_study_flag))
-										{
-											if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_PREVIOUS_CROP.npt_type, STUDY_PREVIOUS_CROP.npt_name_s, "Previous Crop", "The previous crop variety planted in this field", previous_crop_s, PL_ALL)) != NULL)
-												{
-													if (SetUpCropsListParameter (dfw_data_p, param_p, active_study_p ? active_study_p -> st_previous_crop_p : NULL, S_UNKNOWN_CROP_OPTION_S, new_study_flag))
-														{
-															if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_LINK.npt_type, STUDY_LINK.npt_name_s, "Link", "The url for any downloads relating to this Study", active_study_p ? active_study_p -> st_data_url_s : NULL, PL_ALL)) != NULL)
-																{
-																	if (AddDefaultPlotsParameters (data_p, params_p, active_study_p))
-																		{
-																			if ((param_p = EasyCreateAndAddJSONParameterToParameterSet (data_p, params_p, group_p, STUDY_SHAPE_DATA.npt_type, STUDY_SHAPE_DATA.npt_name_s, "Plots GPS", "The GeoJSON for the vertices of the plots layout", active_study_p ? active_study_p -> st_shape_p : NULL, PL_ALL)) != NULL)
-																				{
-																					if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_SHAPE_NOTES.npt_type, STUDY_SHAPE_NOTES.npt_name_s, "Plots GPS Notes", "Any notes relating to the GPS data of the plots", active_study_p ? active_study_p -> st_shape_notes_s : NULL, PL_ALL)) != NULL)
-																						{
-																							if (AddMultiplePeopleParameters (params_p, "Contributors", active_study_p ? active_study_p -> st_contributors_p : NULL, dfw_data_p))
-																								{
-																									success_flag = true;
-																								}
-																							else
-																								{
-																									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddMultiplePeopleParameters () failed for \"%s\"", active_study_p ? active_study_p -> st_name_s : "NULL");
-																								}
-																						}
-																					else
-																						{
-																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SetUpCropsListParameter failed for \"%s\"", STUDY_SHAPE_NOTES.npt_name_s);
-																						}
-
-																				}
-																			else
-																				{
-																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SetUpCropsListParameter failed for \"%s\"", STUDY_SHAPE_DATA.npt_name_s);
-																				}
-
-																			if (AddTreatmentFactorParameters (params_p, active_study_p, dfw_data_p))
-																				{
-																					if (AddMeasuredVariableParameters (params_p, active_study_p, dfw_data_p))
-																						{
-																							success_flag = true;
-																						}
-																					else
-																						{
-																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddMeasuredVariableParameters () failed");
-																						}
-																				}
-																			else
-																				{
-																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddTreatmentFactorParameters () failed");
-																				}
-
-
-																		}
-																	else
-																		{
-																			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddDefaultPlotsParameters () failed");
-																		}
-
-
-																}		/* if ((param_p = EasyCreateAndAddParameterToParameterSet (data_p, param_set_p, group_p, STUDY_LINK.npt_type, STUDY_LINK.npt_name_s, "Link", "The url for any downloads relating to this Study", def, PL_ALL)) != NULL) */
-															else
-																{
-																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_LINK.npt_name_s);
-																}
-
-														}		/* if (SetUpCropsListParameter (dfw_data_p, param_p)) */
-													else
-														{
-															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SetUpCropsListParameter failed for \"%s\"", STUDY_PREVIOUS_CROP.npt_name_s);
-														}
-
-												}		/* if (param_p) */
-											else
-												{
-													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_PREVIOUS_CROP.npt_name_s);
-												}
-										}		/* if (SetUpCropsListParameter (dfw_data_p, param_p)) */
-									else
-										{
-											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SetUpCropsListParameter failed for \"%s\"", STUDY_THIS_CROP.npt_name_s);
-										}
-
-								}		/* if (param_p) */
+									success_flag = true;
+								}
 							else
 								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_THIS_CROP.npt_name_s);
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddStudyEditor () failed for \"%s\"", active_study_p ? active_study_p -> st_name_s : "NULL");
 								}
 
-						}		/* if (AddLayoutParams (params_p, active_study_p, dfw_data_p)) */
-					else
-						{
-							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddLayoutParams failed");
-						}
 
-				}		/* if (AddGeneralSubmissionStudyParams (active_study_p, params_p, group_p, data_p)) */
+						}		/* if (SetUpStudiesListParameter (dfw_data_p, param_p, NULL, true)) */
+
+				}		/* if (param_p) */
+
+
+
+
 
 
 		}		/* if (defaults_flag) */
@@ -380,6 +314,133 @@ bool AddSubmissionStudyParams (ServiceData *data_p, ParameterSet *params_p, Stud
 		{
 			FreeCopiedString (location_s);
 		}
+
+	return success_flag;
+}
+
+
+bool AddStudyEditor (Study *study_p, const char *id_s, ParameterSet *params_p, ParameterGroup *group_p, const char * const trial_s,
+										 const char * const location_s, const char * const this_crop_s,  const char * const previous_crop_s, const bool read_only_flag, ServiceData *data_p)
+{
+	Parameter *param_p = NULL;
+	FieldTrialServiceData *dfw_data_p = (FieldTrialServiceData *) data_p;
+	bool success_flag = false;
+
+
+
+	if (AddGeneralSubmissionStudyParams (study_p, id_s, trial_s, location_s, params_p, group_p, read_only_flag, data_p))
+		{
+			if (AddLayoutParams (params_p, study_p, read_only_flag, dfw_data_p))
+				{
+					if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_THIS_CROP.npt_type, STUDY_THIS_CROP.npt_name_s, "Crop", "The crop variety for this study", this_crop_s, PL_ALL)) != NULL)
+						{
+							const bool new_study_flag = study_p ? false : true;
+
+							param_p -> pa_read_only_flag = read_only_flag;
+
+							if (SetUpCropsListParameter (dfw_data_p, param_p, study_p ? study_p -> st_current_crop_p : NULL, S_UNKNOWN_CROP_OPTION_S, new_study_flag))
+								{
+									if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_PREVIOUS_CROP.npt_type, STUDY_PREVIOUS_CROP.npt_name_s, "Previous Crop", "The previous crop variety planted in this field", previous_crop_s, PL_ALL)) != NULL)
+										{
+											param_p -> pa_read_only_flag = read_only_flag;
+
+											if (SetUpCropsListParameter (dfw_data_p, param_p, study_p ? study_p -> st_previous_crop_p : NULL, S_UNKNOWN_CROP_OPTION_S, new_study_flag))
+												{
+													if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_LINK.npt_type, STUDY_LINK.npt_name_s, "Link", "The url for any downloads relating to this Study", study_p ? study_p -> st_data_url_s : NULL, PL_ALL)) != NULL)
+														{
+															param_p -> pa_read_only_flag = read_only_flag;
+
+															if (AddDefaultPlotsParameters (data_p, params_p, read_only_flag, study_p))
+																{
+																	if ((param_p = EasyCreateAndAddJSONParameterToParameterSet (data_p, params_p, group_p, STUDY_SHAPE_DATA.npt_type, STUDY_SHAPE_DATA.npt_name_s, "Plots GPS", "The GeoJSON for the vertices of the plots layout", study_p ? study_p -> st_shape_p : NULL, PL_ALL)) != NULL)
+																		{
+																			param_p -> pa_read_only_flag = read_only_flag;
+
+																			if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_SHAPE_NOTES.npt_type, STUDY_SHAPE_NOTES.npt_name_s, "Plots GPS Notes", "Any notes relating to the GPS data of the plots", study_p ? study_p -> st_shape_notes_s : NULL, PL_ALL)) != NULL)
+																				{
+																					param_p -> pa_read_only_flag = read_only_flag;
+
+																					if (AddMultiplePeopleParameters (params_p, "Contributors", study_p ? study_p -> st_contributors_p : NULL, read_only_flag, dfw_data_p))
+																						{
+																							success_flag = true;
+																						}
+																					else
+																						{
+																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddMultiplePeopleParameters () failed for \"%s\"", study_p ? study_p -> st_name_s : "NULL");
+																						}
+																				}
+																			else
+																				{
+																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SetUpCropsListParameter failed for \"%s\"", STUDY_SHAPE_NOTES.npt_name_s);
+																				}
+
+																		}
+																	else
+																		{
+																			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SetUpCropsListParameter failed for \"%s\"", STUDY_SHAPE_DATA.npt_name_s);
+																		}
+
+																	if (AddTreatmentFactorParameters (params_p, study_p, read_only_flag, dfw_data_p))
+																		{
+																			if (AddMeasuredVariableParameters (params_p, study_p, read_only_flag, dfw_data_p))
+																				{
+																					success_flag = true;
+																				}
+																			else
+																				{
+																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddMeasuredVariableParameters () failed");
+																				}
+																		}
+																	else
+																		{
+																			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddTreatmentFactorParameters () failed");
+																		}
+
+
+																}
+															else
+																{
+																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddDefaultPlotsParameters () failed");
+																}
+
+
+														}		/* if ((param_p = EasyCreateAndAddParameterToParameterSet (data_p, param_set_p, group_p, STUDY_LINK.npt_type, STUDY_LINK.npt_name_s, "Link", "The url for any downloads relating to this Study", def, PL_ALL)) != NULL) */
+													else
+														{
+															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_LINK.npt_name_s);
+														}
+
+												}		/* if (SetUpCropsListParameter (dfw_data_p, param_p)) */
+											else
+												{
+													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SetUpCropsListParameter failed for \"%s\"", STUDY_PREVIOUS_CROP.npt_name_s);
+												}
+
+										}		/* if (param_p) */
+									else
+										{
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_PREVIOUS_CROP.npt_name_s);
+										}
+								}		/* if (SetUpCropsListParameter (dfw_data_p, param_p)) */
+							else
+								{
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SetUpCropsListParameter failed for \"%s\"", STUDY_THIS_CROP.npt_name_s);
+								}
+
+						}		/* if (param_p) */
+					else
+						{
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_THIS_CROP.npt_name_s);
+						}
+
+				}		/* if (AddLayoutParams (params_p, active_study_p, dfw_data_p)) */
+			else
+				{
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddLayoutParams failed");
+				}
+
+		}		/* if (AddGeneralSubmissionStudyParams (active_study_p, params_p, group_p, data_p)) */
+
 
 	return success_flag;
 }
@@ -658,9 +719,11 @@ static bool AddWizardParams (ParameterSet *params_p, Study *active_study_p, Serv
 
 	if (defaults_flag)
 		{
-			if (AddGeneralSubmissionStudyParams (active_study_p, id_s, trial_s, location_s, params_p, group_p, data_p))
+			const bool read_only_flag = false;
+
+			if (AddGeneralSubmissionStudyParams (active_study_p, id_s, trial_s, location_s, params_p, group_p, read_only_flag, data_p))
 				{
-					if (AddLayoutParams (params_p, active_study_p, ft_data_p))
+					if (AddLayoutParams (params_p, active_study_p, read_only_flag, ft_data_p))
 						{
 							if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_THIS_CROP.npt_type, STUDY_THIS_CROP.npt_name_s, "Crop", "The crop variety for this study", this_crop_s, PL_ALL)) != NULL)
 								{
@@ -674,13 +737,13 @@ static bool AddWizardParams (ParameterSet *params_p, Study *active_study_p, Serv
 														{
 															if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_LINK.npt_type, STUDY_LINK.npt_name_s, "Link", "The url for any downloads relating to this Study", active_study_p ? active_study_p -> st_data_url_s : NULL, PL_ALL)) != NULL)
 																{
-																	if (AddDefaultPlotsParameters (data_p, params_p, active_study_p))
+																	if (AddDefaultPlotsParameters (data_p, params_p, read_only_flag, active_study_p))
 																		{
 																			if ((param_p = EasyCreateAndAddJSONParameterToParameterSet (data_p, params_p, group_p, STUDY_SHAPE_DATA.npt_type, STUDY_SHAPE_DATA.npt_name_s, "Plots GPS", "The GeoJSON for the vertices of the plots layout", active_study_p ? active_study_p -> st_shape_p : NULL, PL_ALL)) != NULL)
 																				{
 																					if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_SHAPE_NOTES.npt_type, STUDY_SHAPE_NOTES.npt_name_s, "Plots GPS Notes", "Any notes relating to the GPS data of the plots", active_study_p ? active_study_p -> st_shape_notes_s : NULL, PL_ALL)) != NULL)
 																						{
-																							if (AddMultiplePeopleParameters (params_p, "Contributors", active_study_p ? active_study_p -> st_contributors_p : NULL, ft_data_p))
+																							if (AddMultiplePeopleParameters (params_p, "Contributors", active_study_p ? active_study_p -> st_contributors_p : NULL, read_only_flag, ft_data_p))
 																								{
 																									success_flag = true;
 																								}
@@ -711,7 +774,7 @@ static bool AddWizardParams (ParameterSet *params_p, Study *active_study_p, Serv
 
 
 
-static bool AddLayoutParams (ParameterSet *params_p, const Study *study_p, FieldTrialServiceData *dfw_data_p)
+static bool AddLayoutParams (ParameterSet *params_p, const Study *study_p, const bool read_only_flag, FieldTrialServiceData *dfw_data_p)
 {
 	ServiceData *data_p = & (dfw_data_p -> dftsd_base_data);
 	ParameterGroup *group_p = CreateAndAddParameterGroupToParameterSet ("Layout", false, data_p, params_p);
@@ -719,20 +782,36 @@ static bool AddLayoutParams (ParameterSet *params_p, const Study *study_p, Field
 
 	if ((param_p = GetAndAddAspectParameter (study_p ? study_p -> st_aspect_s : NULL, dfw_data_p, params_p, group_p)) != NULL)
 		{
+			param_p -> pa_read_only_flag = read_only_flag;
+
 			if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_SLOPE.npt_type, STUDY_SLOPE.npt_name_s, "Slope", "The slope of the Study", study_p ? study_p -> st_slope_s : NULL, PL_ALL)) != NULL)
 				{
-					if (EasyCreateAndAddDoubleParameterToParameterSet (data_p, params_p, group_p, STUDY_PLOT_HGAP.npt_type, STUDY_PLOT_HGAP.npt_name_s, "Horizontal plot gap", "The distance (in metres) between plots in a row.", study_p ? study_p -> st_plot_horizontal_gap_p : NULL, PL_ALL))
+					param_p -> pa_read_only_flag = read_only_flag;
+
+					if ((param_p = EasyCreateAndAddDoubleParameterToParameterSet (data_p, params_p, group_p, STUDY_PLOT_HGAP.npt_type, STUDY_PLOT_HGAP.npt_name_s, "Horizontal plot gap", "The distance (in metres) between plots in a row.", study_p ? study_p -> st_plot_horizontal_gap_p : NULL, PL_ALL)) != NULL)
 						{
-							if (EasyCreateAndAddDoubleParameterToParameterSet (data_p, params_p, group_p, STUDY_PLOT_VGAP.npt_type, STUDY_PLOT_VGAP.npt_name_s, "Vertical plot gap", "The distance (in metres) between plots in a column.", study_p ? study_p -> st_plot_vertical_gap_p : NULL, PL_ALL))
+							param_p -> pa_read_only_flag = read_only_flag;
+
+							if ((param_p = EasyCreateAndAddDoubleParameterToParameterSet (data_p, params_p, group_p, STUDY_PLOT_VGAP.npt_type, STUDY_PLOT_VGAP.npt_name_s, "Vertical plot gap", "The distance (in metres) between plots in a column.", study_p ? study_p -> st_plot_vertical_gap_p : NULL, PL_ALL)) != NULL)
 								{
-									if (EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, params_p, group_p, STUDY_PLOT_ROWS_PER_BLOCK.npt_name_s, "Plot rows per block", "The number of rows of plots in a block", study_p ? study_p -> st_plots_rows_per_block_p : NULL, PL_ALL))
+									param_p -> pa_read_only_flag = read_only_flag;
+
+									if ((param_p = EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, params_p, group_p, STUDY_PLOT_ROWS_PER_BLOCK.npt_name_s, "Plot rows per block", "The number of rows of plots in a block", study_p ? study_p -> st_plots_rows_per_block_p : NULL, PL_ALL)) != NULL)
 										{
-											if (EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, params_p, group_p, STUDY_PLOT_COLS_PER_BLOCK.npt_name_s, "Plot columns per block", "The number of columns of plots in a block", study_p ? study_p -> st_plots_columns_per_block_p : NULL, PL_ALL))
+											param_p -> pa_read_only_flag = read_only_flag;
+
+											if ((param_p = EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, params_p, group_p, STUDY_PLOT_COLS_PER_BLOCK.npt_name_s, "Plot columns per block", "The number of columns of plots in a block", study_p ? study_p -> st_plots_columns_per_block_p : NULL, PL_ALL)) != NULL)
 												{
-													if (EasyCreateAndAddDoubleParameterToParameterSet (data_p, params_p, group_p, STUDY_PLOT_BLOCK_HGAP.npt_type, STUDY_PLOT_BLOCK_HGAP.npt_name_s, "Horizontal plot block gap", "The distance (in metres) between blocks of plots in a row.", study_p ? study_p -> st_plot_block_horizontal_gap_p : NULL, PL_ALL))
+													param_p -> pa_read_only_flag = read_only_flag;
+
+													if ((param_p = EasyCreateAndAddDoubleParameterToParameterSet (data_p, params_p, group_p, STUDY_PLOT_BLOCK_HGAP.npt_type, STUDY_PLOT_BLOCK_HGAP.npt_name_s, "Horizontal plot block gap", "The distance (in metres) between blocks of plots in a row.", study_p ? study_p -> st_plot_block_horizontal_gap_p : NULL, PL_ALL)) != NULL)
 														{
-															if (EasyCreateAndAddDoubleParameterToParameterSet (data_p, params_p, group_p, STUDY_PLOT_BLOCK_VGAP.npt_type, STUDY_PLOT_BLOCK_VGAP.npt_name_s, "Vertical plot block gap", "The distance (in metres) between blocks of plots in a column.", study_p ? study_p -> st_plot_block_vertical_gap_p : NULL, PL_ALL))
+															param_p -> pa_read_only_flag = read_only_flag;
+
+															if ((param_p = EasyCreateAndAddDoubleParameterToParameterSet (data_p, params_p, group_p, STUDY_PLOT_BLOCK_VGAP.npt_type, STUDY_PLOT_BLOCK_VGAP.npt_name_s, "Vertical plot block gap", "The distance (in metres) between blocks of plots in a column.", study_p ? study_p -> st_plot_block_vertical_gap_p : NULL, PL_ALL)) != NULL)
 																{
+																	param_p -> pa_read_only_flag = read_only_flag;
+
 																	return true;
 																}
 															else
@@ -1510,163 +1589,173 @@ static bool AddStudy (ServiceJob *job_p, ParameterSet *param_set_p, FieldTrialSe
 																											const char *image_collection_notes_s = NULL;
 																											const char *gps_notes_s = NULL;
 
-																											PermissionsGroup *perms_group_p = GetPermissionsGroupFromPermissionsEditor (param_set_p, job_p, user_p, & (data_p -> dftsd_base_data));
+																											PermissionsGroup *perms_group_p = NULL;
+																											Metadata *metadata_p = NULL;
 
-																											Metadata *metadata_p = AllocateMetadata (perms_group_p, user_p, false, NULL);
-
-
-																											GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_ASPECT.npt_name_s, &aspect_s);
-																											GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_SLOPE.npt_name_s, &slope_s);
-																											GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_LINK.npt_name_s, &data_link_s);
-
-																											GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_PLAN_CHANGES.npt_name_s, &plan_changes_s);
-																											GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_PHYSICAL_SAMPLES_COLLECTED.npt_name_s, &samples_collected_s);
-																											GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_DATA_NOT_INCLUDED.npt_name_s, &data_not_included_s);
-
-																											GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_DESIGN.npt_name_s, &design_s);
-																											GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_GROWING_CONDITIONS.npt_name_s, &growing_conditions_s);
-																											GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_PHENOTYPE_GATHERING_NOTES.npt_name_s, &phenotype_notes_s);
-
-
-																											GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_SOWING_YEAR.npt_name_s, &sowing_year_p);
-																											GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_HARVEST_YEAR.npt_name_s, &harvest_year_p);
-
-
-																											GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_NUM_PLOT_ROWS.npt_name_s, &num_rows_p);
-																											GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_NUM_PLOT_COLS.npt_name_s, &num_cols_p);
-																											GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_NUM_REPLICATES.npt_name_s, &num_replicates_p);
-																											GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_WIDTH.npt_name_s, &plot_width_p);
-																											GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_LENGTH.npt_name_s, &plot_length_p);
-
-
-																											GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_WEATHER_LINK.npt_name_s, &weather_s);
-
-																											GetCurrentJSONParameterValueFromParameterSet (param_set_p, STUDY_SHAPE_DATA.npt_name_s, &shape_p);
-																											GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_SHAPE_NOTES.npt_name_s, &gps_notes_s);
-
-																											GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_HGAP.npt_name_s, &plot_horizontal_gap_p);
-																											GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_VGAP.npt_name_s, &plot_vertical_gap_p);
-																											GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_PLOT_ROWS_PER_BLOCK.npt_name_s, &plots_rows_per_block_p);
-																											GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_PLOT_COLS_PER_BLOCK.npt_name_s, &plots_columns_per_block_p);
-																											GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_BLOCK_HGAP.npt_name_s, &plot_block_horizontal_gap_p);
-																											GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_BLOCK_VGAP.npt_name_s, &plot_block_vertical_gap_p);
-																											GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_PLOT_COLS_PER_BLOCK.npt_name_s, &plots_columns_per_block_p);
-
-																											GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_PHOTO.npt_name_s, &photo_s);
-																											GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_IMAGE_NOTES.npt_name_s, &image_collection_notes_s);
-
-
-
-																											study_p = AllocateStudy (study_id_p, metadata_p, name_s, data_link_s, aspect_s,
-																																							 slope_s, location_p, trial_p, MF_SHALLOW_COPY, current_crop_p, previous_crop_p,
-																																							 notes_s, design_s,
-																																							 growing_conditions_s, phenotype_notes_s,
-																																							 num_rows_p, num_cols_p, num_replicates_p, plot_width_p, plot_length_p,
-																																							 weather_s, shape_p,
-																																							 plot_horizontal_gap_p, plot_vertical_gap_p, plots_rows_per_block_p, plots_columns_per_block_p,
-																																							 plot_block_horizontal_gap_p, plot_block_vertical_gap_p,
-																																							 curator_p, contact_p,
-																																							 sowing_year_p, harvest_year_p,
-																																							 plan_changes_s, samples_collected_s, data_not_included_s,
-																																							 photo_s, image_collection_notes_s,
-																																							 gps_notes_s,
-																																							 data_p);
-
-																											if (study_p)
+																											if (GetInitialisedPermissionsGroupAndMetadata (&perms_group_p, &metadata_p, param_set_p, job_p, user_p, & (data_p -> dftsd_base_data)))
 																												{
+																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_ASPECT.npt_name_s, &aspect_s);
+																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_SLOPE.npt_name_s, &slope_s);
+																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_LINK.npt_name_s, &data_link_s);
 
-																													if (AddTreatmentFactorsToStudy (study_p, treatment_names_p, treatment_levels_p, num_treatment_levels, job_p, data_p))
+																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_PLAN_CHANGES.npt_name_s, &plan_changes_s);
+																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_PHYSICAL_SAMPLES_COLLECTED.npt_name_s, &samples_collected_s);
+																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_DATA_NOT_INCLUDED.npt_name_s, &data_not_included_s);
+
+																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_DESIGN.npt_name_s, &design_s);
+																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_GROWING_CONDITIONS.npt_name_s, &growing_conditions_s);
+																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_PHENOTYPE_GATHERING_NOTES.npt_name_s, &phenotype_notes_s);
+
+
+																													GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_SOWING_YEAR.npt_name_s, &sowing_year_p);
+																													GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_HARVEST_YEAR.npt_name_s, &harvest_year_p);
+
+
+																													GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_NUM_PLOT_ROWS.npt_name_s, &num_rows_p);
+																													GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_NUM_PLOT_COLS.npt_name_s, &num_cols_p);
+																													GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_NUM_REPLICATES.npt_name_s, &num_replicates_p);
+																													GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_WIDTH.npt_name_s, &plot_width_p);
+																													GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_LENGTH.npt_name_s, &plot_length_p);
+
+
+																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_WEATHER_LINK.npt_name_s, &weather_s);
+
+																													GetCurrentJSONParameterValueFromParameterSet (param_set_p, STUDY_SHAPE_DATA.npt_name_s, &shape_p);
+																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_SHAPE_NOTES.npt_name_s, &gps_notes_s);
+
+																													GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_HGAP.npt_name_s, &plot_horizontal_gap_p);
+																													GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_VGAP.npt_name_s, &plot_vertical_gap_p);
+																													GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_PLOT_ROWS_PER_BLOCK.npt_name_s, &plots_rows_per_block_p);
+																													GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_PLOT_COLS_PER_BLOCK.npt_name_s, &plots_columns_per_block_p);
+																													GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_BLOCK_HGAP.npt_name_s, &plot_block_horizontal_gap_p);
+																													GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_BLOCK_VGAP.npt_name_s, &plot_block_vertical_gap_p);
+																													GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_PLOT_COLS_PER_BLOCK.npt_name_s, &plots_columns_per_block_p);
+
+																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_PHOTO.npt_name_s, &photo_s);
+																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_IMAGE_NOTES.npt_name_s, &image_collection_notes_s);
+
+
+
+																													study_p = AllocateStudy (study_id_p, metadata_p, name_s, data_link_s, aspect_s,
+																																									 slope_s, location_p, trial_p, MF_SHALLOW_COPY, current_crop_p, previous_crop_p,
+																																									 notes_s, design_s,
+																																									 growing_conditions_s, phenotype_notes_s,
+																																									 num_rows_p, num_cols_p, num_replicates_p, plot_width_p, plot_length_p,
+																																									 weather_s, shape_p,
+																																									 plot_horizontal_gap_p, plot_vertical_gap_p, plots_rows_per_block_p, plots_columns_per_block_p,
+																																									 plot_block_horizontal_gap_p, plot_block_vertical_gap_p,
+																																									 curator_p, contact_p,
+																																									 sowing_year_p, harvest_year_p,
+																																									 plan_changes_s, samples_collected_s, data_not_included_s,
+																																									 photo_s, image_collection_notes_s,
+																																									 gps_notes_s,
+																																									 data_p);
+
+																													if (study_p)
 																														{
-																															status = ProcessPeople (job_p, param_set_p, ProcessPersonForStudy, study_p, data_p);
+																															OperationStatus perms_status = RunForPermissionEditor (param_set_p, metadata_p -> me_permissions_p, job_p, user_p, & (data_p -> dftsd_base_data));
 
-																															if (status == OS_SUCCEEDED)
+																															if ((perms_status == OS_SUCCEEDED) || (perms_status == OS_PARTIALLY_SUCCEEDED) || (perms_status == OS_IDLE))
 																																{
-																																	status = ProcessMeasuredVariables (job_p, param_set_p, study_p, data_p);
-
-																																	if ((status == OS_SUCCEEDED) || (status == OS_PARTIALLY_SUCCEEDED))
+																																	if (AddTreatmentFactorsToStudy (study_p, treatment_names_p, treatment_levels_p, num_treatment_levels, job_p, data_p))
 																																		{
-																																			OperationStatus s = SaveStudy (study_p, job_p, data_p, NULL);
+																																			status = ProcessPeople (job_p, param_set_p, ProcessPersonForStudy, study_p, data_p);
 
-																																			if ((s == OS_SUCCEEDED) || (s == OS_PARTIALLY_SUCCEEDED))
+																																			if (status == OS_SUCCEEDED)
 																																				{
-																																					if (param_set_p -> ps_current_level == PL_WIZARD)
+																																					status = ProcessMeasuredVariables (job_p, param_set_p, study_p, data_p);
+
+																																					if ((status == OS_SUCCEEDED) || (status == OS_PARTIALLY_SUCCEEDED))
 																																						{
-																																							/*
-																																							 * If the study doesn't currently have plots and rows
-																																							 * and columns have been specified, we generate them here.
-																																							 */
+																																							OperationStatus s = SaveStudy (study_p, job_p, data_p, NULL);
 
-																																							if (num_rows_p && num_cols_p)
+																																							if ((s == OS_SUCCEEDED) || (s == OS_PARTIALLY_SUCCEEDED))
 																																								{
-																																									const uint32 num_rows = *num_rows_p;
-																																									const uint32 num_cols = *num_cols_p;
-
-																																									if ((num_rows > 0) && (num_cols > 0))
+																																									if (param_set_p -> ps_current_level == PL_WIZARD)
 																																										{
 																																											/*
-																																											 * Check that the study doesn't already have plots
+																																											 * If the study doesn't currently have plots and rows
+																																											 * and columns have been specified, we generate them here.
 																																											 */
-																																											int64 num_existing_plots = GetNumberOfPlotsInStudy (study_p, data_p);
 
-																																											if (num_existing_plots == 0)
+																																											if (num_rows_p && num_cols_p)
 																																												{
-																																													status = GenerateAndAddSkeletonPlotsToStudy (study_p, num_rows, num_cols, job_p, data_p);
-																																												}
-																																											else
-																																												{
-																																													char *error_s = ConcatenateVarargsStrings ("Study ", study_p -> st_name_s, " already has plots", NULL);
+																																													const uint32 num_rows = *num_rows_p;
+																																													const uint32 num_cols = *num_cols_p;
 
-																																													if (error_s)
+																																													if ((num_rows > 0) && (num_cols > 0))
 																																														{
-																																															AddGeneralErrorMessageToServiceJob (job_p, error_s);
-																																															FreeCopiedString (error_s);
-																																														}
-																																													else
-																																														{
-																																															AddGeneralErrorMessageToServiceJob (job_p, "Study already has plots");
-																																														}
+																																															/*
+																																															 * Check that the study doesn't already have plots
+																																															 */
+																																															int64 num_existing_plots = GetNumberOfPlotsInStudy (study_p, data_p);
 
-																																													PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "Study \"%s\" already has plots", study_p -> st_name_s);
+																																															if (num_existing_plots == 0)
+																																																{
+																																																	status = GenerateAndAddSkeletonPlotsToStudy (study_p, num_rows, num_cols, job_p, data_p);
+																																																}
+																																															else
+																																																{
+																																																	char *error_s = ConcatenateVarargsStrings ("Study ", study_p -> st_name_s, " already has plots", NULL);
+
+																																																	if (error_s)
+																																																		{
+																																																			AddGeneralErrorMessageToServiceJob (job_p, error_s);
+																																																			FreeCopiedString (error_s);
+																																																		}
+																																																	else
+																																																		{
+																																																			AddGeneralErrorMessageToServiceJob (job_p, "Study already has plots");
+																																																		}
+
+																																																	PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "Study \"%s\" already has plots", study_p -> st_name_s);
+																																																}
+
+
+																																														}
 																																												}
-
-
 																																										}
 																																								}
+
+																																							if (s == OS_FAILED)
+																																								{
+																																									status = s;
+																																									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to save Study named \"%s\"", name_s);
+																																								}
+
 																																						}
+
 																																				}
 
-																																			if (s == OS_FAILED)
-																																				{
-																																					status = s;
-																																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to save Study named \"%s\"", name_s);
-																																				}
-
+																																		}		/* if (AddTreatmentFactorsToStudy (study_p, treatment_names_p, treatment_levels_p, num_treatment_levels, job_p, data_p)) */
+																																	else
+																																		{
+																																			status = OS_FAILED_TO_START;
 																																		}
 
+																																}		/*  if ((perms_status == OS_SUCCEEDED) || (perms_status == OS_PARTIALLY_SUCCEEDED) || (perms_status == OS_IDLE)) */
+
+
+
+																															FreeStudy (study_p);
+																															study_freed_flag = true;
+																														}		/* if (study_p) */
+
+
+																													if (!study_freed_flag)
+																														{
+																															if (contact_p)
+																																{
+																																	FreePerson (contact_p);
 																																}
-
-																														}
-																													else
-																														{
-																															status = OS_FAILED_TO_START;
 																														}
 
+																												}		/* if (GetPersonFromParameters (&contact_p, param_set_p, STUDY_CONTACT_NAME.npt_name_s, STUDY_CONTACT_EMAIL.npt_name_s)) */
+
+																												}		/* if (GetInitialisedPermissionsGroupAndMetadata (&perms_group_p, &metadata_p, param_set_p, job_p, user_p, & (data_p -> dftsd_base_data))) */
 
 
-																													FreeStudy (study_p);
-																													study_freed_flag = true;
-																												}
 
-
-																											if (!study_freed_flag)
-																												{
-																													if (contact_p)
-																														{
-																															FreePerson (contact_p);
-																														}
-																												}
-
-																										}		/* if (GetPersonFromParameters (&contact_p, param_set_p, STUDY_CONTACT_NAME.npt_name_s, STUDY_CONTACT_EMAIL.npt_name_s)) */
 
 
 																									if (!study_freed_flag)
@@ -2046,7 +2135,7 @@ OperationStatus GenerateStatisticsForAllStudies (ServiceJob *job_p,  FieldTrialS
 										char *id_s = GetBSONOidAsString (study_p->st_id_p);
 										int64 num_plots = GetNumberOfPlotsInStudy (study_p, data_p);
 
-										fprintf (stats_f, "\"%s\" %s %ld\n", study_p->st_name_s, id_s ? id_s : "_", num_plots);
+										fprintf (stats_f, "\"%s\" %s %" PRId64 "\n", study_p->st_name_s, id_s ? id_s : "_", num_plots);
 
 										if (id_s)
 											{
@@ -4583,21 +4672,32 @@ bool AddTreatmentFactorToStudy (TreatmentFactor *tf_p, Study *study_p)
 }
 
 
-static bool AddDefaultPlotsParameters (ServiceData *data_p, ParameterSet *params_p, const Study *study_p)
+static bool AddDefaultPlotsParameters (ServiceData *data_p, ParameterSet *params_p, const bool read_only_flag, const Study *study_p)
 {
 	bool success_flag = false;
 	ParameterGroup *group_p = CreateAndAddParameterGroupToParameterSet ("Default Plots data", false, data_p, params_p);
+	Parameter *param_p = EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, params_p, group_p, STUDY_NUM_PLOT_ROWS.npt_name_s, "Number of plot rows", "The number of plot rows", study_p ? study_p -> st_num_rows_p : NULL, PL_ALL_AND_WIZARD);
 
-	if (EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, params_p, group_p, STUDY_NUM_PLOT_ROWS.npt_name_s, "Number of plot rows", "The number of plot rows", study_p ? study_p -> st_num_rows_p : NULL, PL_ALL_AND_WIZARD))
+	if (param_p)
 		{
-			if (EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, params_p, group_p, STUDY_NUM_PLOT_COLS.npt_name_s, "Number of plot columns", "The number of plot columns", study_p ? study_p -> st_num_columns_p : NULL, PL_ALL_AND_WIZARD))
+			param_p -> pa_read_only_flag = read_only_flag;
+
+			if ((param_p = EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, params_p, group_p, STUDY_NUM_PLOT_COLS.npt_name_s, "Number of plot columns", "The number of plot columns", study_p ? study_p -> st_num_columns_p : NULL, PL_ALL_AND_WIZARD)) != NULL)
 				{
-					if (EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, params_p, group_p, STUDY_NUM_REPLICATES.npt_name_s, "Number of replicates", "The number of replicates", study_p ? study_p -> st_num_replicates_p : NULL, PL_ALL))
+					param_p -> pa_read_only_flag = read_only_flag;
+
+					if ((param_p = EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, params_p, group_p, STUDY_NUM_REPLICATES.npt_name_s, "Number of replicates", "The number of replicates", study_p ? study_p -> st_num_replicates_p : NULL, PL_ALL)) != NULL)
 						{
-							if (EasyCreateAndAddDoubleParameterToParameterSet (data_p, params_p, group_p, STUDY_PLOT_WIDTH.npt_type, STUDY_PLOT_WIDTH.npt_name_s, "Plot width", "The default width, in metres, of each plot", study_p ? study_p -> st_default_plot_width_p : NULL, PL_ALL))
+							param_p -> pa_read_only_flag = read_only_flag;
+
+							if ((param_p = EasyCreateAndAddDoubleParameterToParameterSet (data_p, params_p, group_p, STUDY_PLOT_WIDTH.npt_type, STUDY_PLOT_WIDTH.npt_name_s, "Plot width", "The default width, in metres, of each plot", study_p ? study_p -> st_default_plot_width_p : NULL, PL_ALL)) != NULL)
 								{
-									if (EasyCreateAndAddDoubleParameterToParameterSet (data_p, params_p, group_p, STUDY_PLOT_LENGTH.npt_type, STUDY_PLOT_LENGTH.npt_name_s, "Plot length", "The default length, in metres, of each plot", study_p ? study_p -> st_default_plot_length_p : NULL, PL_ALL))
+									param_p -> pa_read_only_flag = read_only_flag;
+
+									if ((param_p = EasyCreateAndAddDoubleParameterToParameterSet (data_p, params_p, group_p, STUDY_PLOT_LENGTH.npt_type, STUDY_PLOT_LENGTH.npt_name_s, "Plot length", "The default length, in metres, of each plot", study_p ? study_p -> st_default_plot_length_p : NULL, PL_ALL)) != NULL)
 										{
+											param_p -> pa_read_only_flag = read_only_flag;
+
 											return true;
 										}		/* if (EasyCreateAndAddUnsignedIntParameterToParameterSet (service_data_p, params_p, group_p, STUDY_NUM_PLOT_ROWS.npt_name_s, "Plot width", "The default width, in metres, of each plot", NULL, PL_ALL)) */
 
@@ -4614,7 +4714,7 @@ static bool AddDefaultPlotsParameters (ServiceData *data_p, ParameterSet *params
 }
 
 
-static bool AddCuratorSubmissionParams (const Person *curator_p, ParameterSet *params_p, ServiceData *data_p)
+static bool AddCuratorSubmissionParams (const Person *curator_p, ParameterSet *params_p, const bool read_only_flag, ServiceData *data_p)
 {
 	bool success_flag = false;
 	ParameterGroup *group_p = CreateAndAddParameterGroupToParameterSet ("Curator", false, data_p, params_p);
@@ -4622,12 +4722,20 @@ static bool AddCuratorSubmissionParams (const Person *curator_p, ParameterSet *p
 
 	if (param_p)
 		{
+			param_p -> pa_read_only_flag = read_only_flag;
+
 			if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_CURATOR_EMAIL.npt_type, STUDY_CURATOR_EMAIL.npt_name_s, "Curator email", "The email of the data curator for this Study", curator_p ? curator_p -> pe_email_s : NULL, PL_ALL)) != NULL)
 				{
+					param_p -> pa_read_only_flag = read_only_flag;
+
 					if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_CURATOR_ROLE.npt_type, STUDY_CURATOR_ROLE.npt_name_s, "Curator role", "The role of the data curator for this Study", curator_p ? curator_p -> pe_role_s : NULL, PL_ALL)) != NULL)
 						{
+							param_p -> pa_read_only_flag = read_only_flag;
+
 							if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_CURATOR_AFFILATION.npt_type, STUDY_CURATOR_AFFILATION.npt_name_s, "Curator affiliation", "The affiliation of the data curator for this Study", curator_p ? curator_p -> pe_affiliation_s : NULL, PL_ALL)) != NULL)
 								{
+									param_p -> pa_read_only_flag = read_only_flag;
+
 									if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_CURATOR_ORCID.npt_type, STUDY_CURATOR_ORCID.npt_name_s, "Curator OrCID", "The OrCID of the data curator for this Study", curator_p ? curator_p -> pe_role_s : NULL, PL_ALL)) != NULL)
 										{
 											success_flag = true;
@@ -4661,7 +4769,7 @@ static bool AddCuratorSubmissionParams (const Person *curator_p, ParameterSet *p
 }
 
 
-static bool AddContactSubmissionParams (const Person *contact_p, ParameterSet *params_p, ServiceData *data_p)
+static bool AddContactSubmissionParams (const Person *contact_p, ParameterSet *params_p, const bool read_only_flag, ServiceData *data_p)
 {
 	bool success_flag = false;
 	ParameterGroup *group_p = CreateAndAddParameterGroupToParameterSet ("Contact", false, data_p, params_p);
@@ -4669,14 +4777,24 @@ static bool AddContactSubmissionParams (const Person *contact_p, ParameterSet *p
 
 	if (param_p)
 		{
+			param_p -> pa_read_only_flag = read_only_flag;
+
 			if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_CONTACT_EMAIL.npt_type, STUDY_CONTACT_EMAIL.npt_name_s, "Contact email", "The email of the contact for this Study", contact_p ? contact_p -> pe_email_s : NULL, PL_ALL)) != NULL)
 				{
+					param_p -> pa_read_only_flag = read_only_flag;
+
 					if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_CONTACT_ROLE.npt_type, STUDY_CONTACT_ROLE.npt_name_s, "Contact role", "The role of the contact for this Study", contact_p ? contact_p -> pe_role_s : NULL, PL_ALL)) != NULL)
 						{
+							param_p -> pa_read_only_flag = read_only_flag;
+
 							if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_CONTACT_AFFILATION.npt_type, STUDY_CONTACT_AFFILATION.npt_name_s, "Contact affiliation", "The affiliation of the contact for this Study", contact_p ? contact_p -> pe_affiliation_s : NULL, PL_ALL)) != NULL)
 								{
+									param_p -> pa_read_only_flag = read_only_flag;
+
 									if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_CONTACT_ORCID.npt_type, STUDY_CONTACT_ORCID.npt_name_s, "Contact OrCID", "The OrCID of the contact for this Study", contact_p ? contact_p -> pe_role_s : NULL, PL_ALL)) != NULL)
 										{
+											param_p -> pa_read_only_flag = read_only_flag;
+
 											success_flag = true;
 										}
 									else
@@ -4740,216 +4858,222 @@ static bool AddFieldTrialSubmissionParameter (Study *active_study_p, ParameterSe
 }
 
 
-static bool AddGeneralSubmissionStudyParams (Study *active_study_p, const char *id_s, const char *trial_s, const char *location_s, ParameterSet *params_p, ParameterGroup *group_p, ServiceData *data_p)
+static bool AddGeneralSubmissionStudyParams (Study *active_study_p, const char *id_s, const char *trial_s, const char *location_s, ParameterSet *params_p, ParameterGroup *group_p, const bool read_only_flag, ServiceData *data_p)
 {
 	bool success_flag = false;
 	FieldTrialServiceData *dfw_data_p = (FieldTrialServiceData *) data_p;
-	Parameter *param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_ID.npt_type, STUDY_ID.npt_name_s, "Load Study", "Edit an existing study", id_s, PL_ALL_AND_WIZARD);
+	Parameter *param_p = NULL;
 
-	if (param_p)
+	if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_NAME.npt_type, STUDY_NAME.npt_name_s, "Name", "The name of the Study", active_study_p ? active_study_p -> st_name_s : NULL, PL_ALL_AND_WIZARD)) != NULL)
 		{
-			if (SetUpStudiesListParameter (dfw_data_p, param_p, NULL, true))
+			param_p -> pa_required_flag = true;
+			param_p -> pa_read_only_flag = read_only_flag;
+
+			param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_FIELD_TRIALS_LIST.npt_type, STUDY_FIELD_TRIALS_LIST.npt_name_s, "Field trials", "The available field trials", trial_s, PL_ALL_AND_WIZARD);
+
+			if (param_p)
 				{
-					/*
-					 * We want to update all of the values in the form
-					 * when a user selects a study from the list so
-					 * we need to make the parameter automatically
-					 * refresh the values. So we set the
-					 * pa_refresh_service_flag to true.
-					 */
-					param_p -> pa_refresh_service_flag = true;
+					char *trial_id_s = NULL;
 
-					if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_NAME.npt_type, STUDY_NAME.npt_name_s, "Name", "The name of the Study", active_study_p ? active_study_p -> st_name_s : NULL, PL_ALL_AND_WIZARD)) != NULL)
+					param_p -> pa_read_only_flag = read_only_flag;
+
+
+					if (active_study_p && (active_study_p -> st_parent_p))
 						{
-							param_p -> pa_required_flag = true;
+							trial_id_s = GetBSONOidAsString (active_study_p -> st_parent_p -> ft_id_p);
+						}
 
-							param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_FIELD_TRIALS_LIST.npt_type, STUDY_FIELD_TRIALS_LIST.npt_name_s, "Field trials", "The available field trials", trial_s, PL_ALL_AND_WIZARD);
-
-							if (param_p)
+					if (SetUpFieldTrialsListParameter (dfw_data_p, param_p, trial_id_s, false))
+						{
+							if (trial_id_s)
 								{
-									char *trial_id_s = NULL;
+									FreeBSONOidString (trial_id_s);
+								}
 
-									if (active_study_p && (active_study_p -> st_parent_p))
+							if ((param_p = EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, params_p, group_p, STUDY_SOWING_YEAR.npt_name_s, "Sowing year", "The year that the Study was started", active_study_p ? active_study_p -> st_predicted_sowing_year_p : NULL, PL_ALL)) != NULL)
+								{
+									param_p -> pa_read_only_flag = read_only_flag;
+
+									if ((param_p = EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, params_p, group_p, STUDY_HARVEST_YEAR.npt_name_s, "Harvest year", "The year that the Study was finished", active_study_p ? active_study_p -> st_predicted_harvest_year_p : NULL, PL_ALL)) != NULL)
 										{
-											trial_id_s = GetBSONOidAsString (active_study_p -> st_parent_p -> ft_id_p);
-										}
+											param_p -> pa_read_only_flag = read_only_flag;
 
-									if (SetUpFieldTrialsListParameter (dfw_data_p, param_p, trial_id_s, false))
-										{
-											if (trial_id_s)
+											if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_LOCATIONS_LIST.npt_type, STUDY_LOCATIONS_LIST.npt_name_s, "Locations", "The available locations", location_s, PL_ALL_AND_WIZARD)) != NULL)
 												{
-													FreeBSONOidString (trial_id_s);
-												}
+													param_p -> pa_read_only_flag = read_only_flag;
 
-											if ((param_p = EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, params_p, group_p, STUDY_SOWING_YEAR.npt_name_s, "Sowing year", "The year that the Study was started", active_study_p ? active_study_p -> st_predicted_sowing_year_p : NULL, PL_ALL)) != NULL)
-												{
-													if ((param_p = EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, params_p, group_p, STUDY_HARVEST_YEAR.npt_name_s, "Harvest year", "The year that the Study was finished", active_study_p ? active_study_p -> st_predicted_harvest_year_p : NULL, PL_ALL)) != NULL)
+													if (SetUpLocationsListParameter (dfw_data_p, (StringParameter *) param_p, active_study_p ? active_study_p -> st_location_p : NULL, NULL))
 														{
-															if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_LOCATIONS_LIST.npt_type, STUDY_LOCATIONS_LIST.npt_name_s, "Locations", "The available locations", location_s, PL_ALL_AND_WIZARD)) != NULL)
+															Person *curator_p = NULL;
+															Person *contact_p = NULL;
+
+															if (active_study_p)
 																{
-																	if (SetUpLocationsListParameter (dfw_data_p, (StringParameter *) param_p, active_study_p ? active_study_p -> st_location_p : NULL, NULL))
+																	curator_p = active_study_p -> st_curator_p;
+																	contact_p = active_study_p -> st_contact_p;
+																}
+
+															if (AddCuratorSubmissionParams (curator_p, params_p, read_only_flag, data_p))
+																{
+																	if (AddContactSubmissionParams (contact_p, params_p, read_only_flag, data_p))
 																		{
-																			Person *curator_p = NULL;
-																			Person *contact_p = NULL;
-
-																			if (active_study_p)
+																			if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_DESCRIPTION.npt_type, STUDY_DESCRIPTION.npt_name_s, "Description", "A description of the Study", active_study_p ? active_study_p -> st_description_s : NULL, PL_ALL_AND_WIZARD)) != NULL)
 																				{
-																					curator_p = active_study_p -> st_curator_p;
-																					contact_p = active_study_p -> st_contact_p;
-																				}
+																					param_p -> pa_read_only_flag = read_only_flag;
 
-																			if (AddCuratorSubmissionParams (curator_p, params_p, data_p))
-																				{
-																					if (AddContactSubmissionParams (contact_p, params_p, data_p))
+																					if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_DESIGN.npt_type, STUDY_DESIGN.npt_name_s, "Design", "Information about the Study design", active_study_p ? active_study_p -> st_design_s : NULL, PL_ALL)) != NULL)
 																						{
-																							if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_DESCRIPTION.npt_type, STUDY_DESCRIPTION.npt_name_s, "Description", "A description of the Study", active_study_p ? active_study_p -> st_description_s : NULL, PL_ALL_AND_WIZARD)) != NULL)
+																							param_p -> pa_read_only_flag = read_only_flag;
+
+																							if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_GROWING_CONDITIONS.npt_type, STUDY_GROWING_CONDITIONS.npt_name_s, "Growing conditions", "Information about the Growing conditions", active_study_p ? active_study_p -> st_growing_conditions_s : NULL, PL_ALL)) != NULL)
 																								{
-																									if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_DESIGN.npt_type, STUDY_DESIGN.npt_name_s, "Design", "Information about the Study design", active_study_p ? active_study_p -> st_design_s : NULL, PL_ALL)) != NULL)
+																									param_p -> pa_read_only_flag = read_only_flag;
+
+																									if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_PHENOTYPE_GATHERING_NOTES.npt_type, STUDY_PHENOTYPE_GATHERING_NOTES.npt_name_s, "Phenotype gathering notes", "Notes on how the Phenotype information was gathered", active_study_p ? active_study_p -> st_phenotype_gathering_notes_s : NULL, PL_ALL)) != NULL)
 																										{
-																											if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_GROWING_CONDITIONS.npt_type, STUDY_GROWING_CONDITIONS.npt_name_s, "Growing conditions", "Information about the Growing conditions", active_study_p ? active_study_p -> st_growing_conditions_s : NULL, PL_ALL)) != NULL)
+																											param_p -> pa_read_only_flag = read_only_flag;
+
+																											if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_WEATHER_LINK.npt_type, STUDY_WEATHER_LINK.npt_name_s, "Weather", "Link out to the weather data for this study", active_study_p ? active_study_p -> st_weather_link_s : NULL, PL_ALL)) != NULL)
 																												{
-																													if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_PHENOTYPE_GATHERING_NOTES.npt_type, STUDY_PHENOTYPE_GATHERING_NOTES.npt_name_s, "Phenotype gathering notes", "Notes on how the Phenotype information was gathered", active_study_p ? active_study_p -> st_phenotype_gathering_notes_s : NULL, PL_ALL)) != NULL)
+																													param_p -> pa_read_only_flag = read_only_flag;
+
+																													if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_PLAN_CHANGES.npt_type, STUDY_PLAN_CHANGES.npt_name_s, "Field plan changes", "Changes to the Study field experiment plan.", active_study_p ? active_study_p -> st_plan_changes_s : NULL, PL_ALL)) != NULL)
 																														{
-																															if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_WEATHER_LINK.npt_type, STUDY_WEATHER_LINK.npt_name_s, "Weather", "Link out to the weather data for this study", active_study_p ? active_study_p -> st_weather_link_s : NULL, PL_ALL)) != NULL)
+																															param_p -> pa_read_only_flag = read_only_flag;
+
+																															if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_DATA_NOT_INCLUDED.npt_type, STUDY_DATA_NOT_INCLUDED.npt_name_s, "Data not included", "Data collected but not currently stored within the Grassroots Field Trial system", active_study_p ? active_study_p -> st_data_not_included_s : NULL, PL_ALL)) != NULL)
 																																{
-																																	if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_PLAN_CHANGES.npt_type, STUDY_PLAN_CHANGES.npt_name_s, "Field plan changes", "Changes to the Study field experiment plan.", active_study_p ? active_study_p -> st_plan_changes_s : NULL, PL_ALL)) != NULL)
+																																	param_p -> pa_read_only_flag = read_only_flag;
+
+																																	if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_PHYSICAL_SAMPLES_COLLECTED.npt_type, STUDY_PHYSICAL_SAMPLES_COLLECTED.npt_name_s, "Physical samples collected", "Details about plant, soil or other samples collected",  active_study_p ? active_study_p -> st_physical_samples_collected_s : NULL, PL_ALL)) != NULL)
 																																		{
-																																			if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_DATA_NOT_INCLUDED.npt_type, STUDY_DATA_NOT_INCLUDED.npt_name_s, "Data not included", "Data collected but not currently stored within the Grassroots Field Trial system", active_study_p ? active_study_p -> st_data_not_included_s : NULL, PL_ALL)) != NULL)
+																																			param_p -> pa_read_only_flag = read_only_flag;
+
+																																			if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_PHOTO.npt_type, STUDY_PHOTO.npt_name_s, "Photo", "The web address of a photo or image to represent the study", active_study_p ? active_study_p -> st_photo_url_s : NULL, PL_ALL_AND_WIZARD)) != NULL)
 																																				{
-																																					if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_PHYSICAL_SAMPLES_COLLECTED.npt_type, STUDY_PHYSICAL_SAMPLES_COLLECTED.npt_name_s, "Physical samples collected", "Details about plant, soil or other samples collected",  active_study_p ? active_study_p -> st_physical_samples_collected_s : NULL, PL_ALL)) != NULL)
+																																					param_p -> pa_read_only_flag = read_only_flag;
+
+																																					if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_IMAGE_NOTES.npt_type, STUDY_IMAGE_NOTES.npt_name_s, "Image collection notes", "Details about any images collected",  active_study_p ? active_study_p -> st_image_collection_notes_s : NULL, PL_ALL)) != NULL)
 																																						{
-																																							if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_PHOTO.npt_type, STUDY_PHOTO.npt_name_s, "Photo", "The web address of a photo or image to represent the study", active_study_p ? active_study_p -> st_photo_url_s : NULL, PL_ALL_AND_WIZARD)) != NULL)
-																																								{
-																																									if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_IMAGE_NOTES.npt_type, STUDY_IMAGE_NOTES.npt_name_s, "Image collection notes", "Details about any images collected",  active_study_p ? active_study_p -> st_image_collection_notes_s : NULL, PL_ALL)) != NULL)
-																																										{
-																																											success_flag = true;
-																																										}
-																																									else
-																																										{
-																																											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_IMAGE_NOTES.npt_name_s);
-																																										}
-																																								}
-																																							else
-																																								{
-																																									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_PHOTO.npt_name_s);
-																																								}
+																																							param_p -> pa_read_only_flag = read_only_flag;
+
+																																							success_flag = true;
 																																						}
 																																					else
 																																						{
-																																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_PHYSICAL_SAMPLES_COLLECTED.npt_name_s);
+																																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_IMAGE_NOTES.npt_name_s);
 																																						}
 																																				}
 																																			else
 																																				{
-																																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_DATA_NOT_INCLUDED.npt_name_s);
+																																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_PHOTO.npt_name_s);
 																																				}
 																																		}
 																																	else
 																																		{
-																																			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_PLAN_CHANGES.npt_name_s);
+																																			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_PHYSICAL_SAMPLES_COLLECTED.npt_name_s);
 																																		}
-
-																																}		/* if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, param_set_p, group_p, STUDY_WEATHER_LINK.npt_type, STUDY_WEATHER_LINK.npt_name_s, "Weather", "Link out to the weather data for this study", weather_s, PL_ALL)) != NULL) */
+																																}
 																															else
 																																{
-																																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_WEATHER_LINK.npt_name_s);
+																																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_DATA_NOT_INCLUDED.npt_name_s);
 																																}
-
-
-																														}		/* if ((param_p = EasyCreateAndAddParameterToParameterSet (data_p, param_set_p, group_p, STUDY_PHENOTYPE_GATHERING_NOTES.npt_type, STUDY_PHENOTYPE_GATHERING_NOTES.npt_name_s, "Phenotype Gathering", "NOtes on hoe the Phenotype information was gathered", def, PL_ALL)) != NULL) */
+																														}
 																													else
 																														{
-																															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_GROWING_CONDITIONS.npt_name_s);
+																															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_PLAN_CHANGES.npt_name_s);
 																														}
 
-																												}		/* if ((param_p = EasyCreateAndAddParameterToParameterSet (data_p, param_set_p, group_p, STUDY_GROWING_CONDITIONS.npt_type, STUDY_GROWING_CONDITIONS.npt_name_s, "Growing Conditions", "Information about the Growing conditions", def, PL_ALL)) != NULL) */
+																												}		/* if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, param_set_p, group_p, STUDY_WEATHER_LINK.npt_type, STUDY_WEATHER_LINK.npt_name_s, "Weather", "Link out to the weather data for this study", weather_s, PL_ALL)) != NULL) */
 																											else
 																												{
-																													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_GROWING_CONDITIONS.npt_name_s);
+																													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_WEATHER_LINK.npt_name_s);
 																												}
 
-																										}		/* if ((param_p = EasyCreateAndAddParameterToParameterSet (data_p, param_set_p, group_p, STUDY_DESIGN.npt_type, STUDY_DESIGN.npt_name_s, "Design", "Information about the Study design", def, PL_ALL)) != NULL) */
+
+																										}		/* if ((param_p = EasyCreateAndAddParameterToParameterSet (data_p, param_set_p, group_p, STUDY_PHENOTYPE_GATHERING_NOTES.npt_type, STUDY_PHENOTYPE_GATHERING_NOTES.npt_name_s, "Phenotype Gathering", "NOtes on hoe the Phenotype information was gathered", def, PL_ALL)) != NULL) */
 																									else
 																										{
-																											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_DESIGN.npt_name_s);
+																											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_GROWING_CONDITIONS.npt_name_s);
 																										}
 
-																								}		/* if ((param_p = EasyCreateAndAddParameterToParameterSet (data_p, param_set_p, group_p, STUDY_NOTES.npt_type, STUDY_NOTES.npt_name_s, "Notes", "Any additional information about the study", def, PL_ALL)) != NULL) */
+																								}		/* if ((param_p = EasyCreateAndAddParameterToParameterSet (data_p, param_set_p, group_p, STUDY_GROWING_CONDITIONS.npt_type, STUDY_GROWING_CONDITIONS.npt_name_s, "Growing Conditions", "Information about the Growing conditions", def, PL_ALL)) != NULL) */
 																							else
 																								{
-																									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_DESCRIPTION.npt_name_s);
+																									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_GROWING_CONDITIONS.npt_name_s);
 																								}
 
-																						}		/* if (AddContactSubmissionParams (contact_p, params_p, data_p)) */
+																						}		/* if ((param_p = EasyCreateAndAddParameterToParameterSet (data_p, param_set_p, group_p, STUDY_DESIGN.npt_type, STUDY_DESIGN.npt_name_s, "Design", "Information about the Study design", def, PL_ALL)) != NULL) */
 																					else
 																						{
-																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddContactSubmissionParams () failed");
+																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_DESIGN.npt_name_s);
 																						}
 
-																				}		/* if (AddCuratorSubmissionParams (curator_p, params_p, data_p)) */
+																				}		/* if ((param_p = EasyCreateAndAddParameterToParameterSet (data_p, param_set_p, group_p, STUDY_NOTES.npt_type, STUDY_NOTES.npt_name_s, "Notes", "Any additional information about the study", def, PL_ALL)) != NULL) */
 																			else
 																				{
-																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddCuratorSubmissionParams () failed");
+																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_DESCRIPTION.npt_name_s);
 																				}
 
-
-																		}
+																		}		/* if (AddContactSubmissionParams (contact_p, params_p, data_p)) */
 																	else
 																		{
-																			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SetUpLocationsListParameter failed");
+																			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddContactSubmissionParams () failed");
 																		}
 
-																}		/* if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_HARVEST_YEAR.npt_type, STUDY_HARVEST_YEAR.npt_name_s, "Harvest year", "The year that the Study was finished", active_study_p ? active_study_p -> st_predicted_harvest_year_p : NULL, PL_ALL)) != NULL) */
+																}		/* if (AddCuratorSubmissionParams (curator_p, params_p, data_p)) */
 															else
 																{
-																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_HARVEST_YEAR.npt_name_s);
+																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddCuratorSubmissionParams () failed");
 																}
 
-														}		/* if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_SOWING_YEAR.npt_type, STUDY_SOWING_YEAR.npt_name_s, "Sowing year", "The year that the Study was started", active_study_p ? active_study_p -> st_predicted_sowing_year_p : NULL, PL_ALL)) != NULL) */
+
+														}
 													else
 														{
-															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_SOWING_YEAR.npt_name_s);
+															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SetUpLocationsListParameter failed");
 														}
 
-												}
+												}		/* if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_HARVEST_YEAR.npt_type, STUDY_HARVEST_YEAR.npt_name_s, "Harvest year", "The year that the Study was finished", active_study_p ? active_study_p -> st_predicted_harvest_year_p : NULL, PL_ALL)) != NULL) */
 											else
 												{
-													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_FIELD_TRIALS_LIST.npt_name_s);
+													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_HARVEST_YEAR.npt_name_s);
 												}
-										}
+
+										}		/* if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_SOWING_YEAR.npt_type, STUDY_SOWING_YEAR.npt_name_s, "Sowing year", "The year that the Study was started", active_study_p ? active_study_p -> st_predicted_sowing_year_p : NULL, PL_ALL)) != NULL) */
 									else
 										{
-											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SetUpFieldTrialsListParameter failed");
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_SOWING_YEAR.npt_name_s);
 										}
+
 								}
 							else
 								{
 									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_FIELD_TRIALS_LIST.npt_name_s);
 								}
-
-
 						}
 					else
 						{
-							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_NAME.npt_name_s);
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SetUpFieldTrialsListParameter failed");
 						}
-				}		/* if (SetUpStudiesListParameter (data_p, param_p)) */
+				}
 			else
 				{
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SetUpStudiesListParameter failed");
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_FIELD_TRIALS_LIST.npt_name_s);
 				}
 
-		}		/* if (param_p) */
+
+		}
 	else
 		{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_ID.npt_name_s);
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_NAME.npt_name_s);
 		}
 
 	return success_flag;
 }
 
 
-static bool AddTreatmentFactorParameters (ParameterSet *params_p, const Study *study_p, FieldTrialServiceData *data_p)
+static bool AddTreatmentFactorParameters (ParameterSet *params_p, const Study *study_p, const bool read_only_flag, FieldTrialServiceData *data_p)
 {
 	ParameterGroup *group_p = CreateAndAddParameterGroupToParameterSet ("Treatment Factors", true, & (data_p -> dftsd_base_data), params_p);
 
@@ -5019,6 +5143,16 @@ static bool AddTreatmentFactorParameters (ParameterSet *params_p, const Study *s
 
 											tf_json_p = factors_array_p;
 											name_param_p = EasyCreateAndAddStringArrayParameterToParameterSet (& (data_p -> dftsd_base_data), params_p, group_p, TFJ_TREATMENT_NAME.npt_name_s, tf_name_display_name_s, tf_name_description_s, values_ss, num_treatments, PL_ALL);
+
+											if (name_param_p)
+												{
+													name_param_p -> pa_read_only_flag = read_only_flag;
+												}
+											else
+												{
+													success_flag = false;
+													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "EasyCreateAndAddStringArrayParameterToParameterSet () failed");
+												}
 										}		/* if (success_flag) */
 
 								}		/* if (factors_array_p) */
@@ -5047,6 +5181,11 @@ static bool AddTreatmentFactorParameters (ParameterSet *params_p, const Study *s
 						}
 
 					name_param_p = EasyCreateAndAddStringParameterToParameterSet (& (data_p -> dftsd_base_data), params_p, group_p, TFJ_TREATMENT_NAME.npt_type, TFJ_TREATMENT_NAME.npt_name_s, tf_name_display_name_s, tf_name_description_s, active_tf_url_s, PL_ALL);
+
+					if (name_param_p)
+						{
+							name_param_p -> pa_read_only_flag = read_only_flag;
+						}
 				}
 
 			if (name_param_p)
@@ -5055,6 +5194,7 @@ static bool AddTreatmentFactorParameters (ParameterSet *params_p, const Study *s
 						{
 							if ((name_param_p = GetTreatmentFactorTableParameter (params_p, group_p, tf_json_p, data_p)) != NULL)
 								{
+									name_param_p -> pa_read_only_flag = read_only_flag;
 									return true;
 								}
 						}
@@ -5208,7 +5348,7 @@ static bool GetPersonFromParameters (Person **person_pp, ParameterSet *param_set
 }
 
 
-static bool AddMeasuredVariableParameters (ParameterSet *params_p, const Study *study_p, FieldTrialServiceData *data_p)
+static bool AddMeasuredVariableParameters (ParameterSet *params_p, const Study *study_p, const bool read_only_flag, FieldTrialServiceData *data_p)
 {
 	bool success_flag = false;
 	ParameterGroup *group_p = CreateAndAddParameterGroupToParameterSet ("Measured Variables", true, & (data_p -> dftsd_base_data), params_p);
@@ -5252,6 +5392,16 @@ static bool AddMeasuredVariableParameters (ParameterSet *params_p, const Study *
 							if (loop_success_flag)
 								{
 									param_p = EasyCreateAndAddStringArrayParameterToParameterSet (& (data_p -> dftsd_base_data), params_p, group_p, STUDY_MEASURED_VARIABLES.npt_name_s, display_name_s, description_s, mvs_ss, num_mvs, PL_ALL_AND_WIZARD);
+
+									if (param_p)
+										{
+											param_p -> pa_read_only_flag = read_only_flag;
+										}
+									else
+										{
+											loop_success_flag = false;
+											PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "EasyCreateAndAddStringArrayParameterToParameterSet () failed for Study \"%s\"", study_p -> st_name_s);
+										}
 								}
 
 							FreeMemory (mvs_ss);
@@ -5278,11 +5428,18 @@ static bool AddMeasuredVariableParameters (ParameterSet *params_p, const Study *
 
 			if (param_p)
 				{
+					param_p -> pa_read_only_flag = read_only_flag;
+
 					if (AddRepeatableParameterGroupLabelParam (group_p, param_p))
 						{
 							success_flag = true;
 						}
 				}
+			else
+				{
+					PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "EasyCreateAndAddStringArrayParameterToParameterSet () failed for Study \"%s\"", study_p -> st_name_s);
+				}
+
 		}
 
 	return success_flag;

@@ -9,7 +9,7 @@ static bool PopulateValues (LinkedList *existing_people_p, char ***existing_name
 													char ***existing_affiliations_sss, char ***existing_orcids_sss);
 
 
-bool AddMultiplePeopleParameters (ParameterSet *param_set_p, const char *group_s, LinkedList *existing_people_p, FieldTrialServiceData *ft_data_p)
+bool AddMultiplePeopleParameters (ParameterSet *param_set_p, const char *group_s, LinkedList *existing_people_p, const bool read_only_flag, FieldTrialServiceData *ft_data_p)
 {
 	bool success_flag = false;
 	ServiceData *data_p = & (ft_data_p -> dftsd_base_data);
@@ -39,17 +39,25 @@ bool AddMultiplePeopleParameters (ParameterSet *param_set_p, const char *group_s
 							if ((name_param_p = EasyCreateAndAddStringArrayParameterToParameterSet (data_p, param_set_p, group_p, PERSON_NAME.npt_name_s, "Person Name", "The name of the Person", names_ss, num_people, PL_ALL)) != NULL)
 								{
 									name_param_p -> pa_required_flag = true;
+									name_param_p -> pa_read_only_flag = read_only_flag;
 
 									if ((param_p = EasyCreateAndAddStringArrayParameterToParameterSet (data_p, param_set_p, group_p, PERSON_EMAIL.npt_name_s, "Person Email", "The email address of the Person", emails_ss, num_people, PL_ALL)) != NULL)
 										{
 											param_p -> pa_required_flag = true;
+											param_p -> pa_read_only_flag = read_only_flag;
 
 											if ((param_p = EasyCreateAndAddStringArrayParameterToParameterSet (data_p, param_set_p, group_p, PERSON_ROLE.npt_name_s, "Person Role", "The role of the Person", roles_ss, num_people, PL_ALL)) != NULL)
 												{
+													param_p -> pa_read_only_flag = read_only_flag;
+
 													if ((param_p = EasyCreateAndAddStringArrayParameterToParameterSet (data_p, param_set_p, group_p, PERSON_AFFILIATION.npt_name_s, "Person Affiliation", "The affiliation of the Person", affiliations_ss, num_people, PL_ALL)) != NULL)
 														{
+															param_p -> pa_read_only_flag = read_only_flag;
+
 															if ((param_p = EasyCreateAndAddStringArrayParameterToParameterSet (data_p, param_set_p, group_p, PERSON_ORCID.npt_name_s, "Person OrCID", "The OrCID of the Person", orcids_ss, num_people, PL_ALL)) != NULL)
 																{			
+																	param_p -> pa_read_only_flag = read_only_flag;
+
 																	success_flag = true; 
 																}
 															else
