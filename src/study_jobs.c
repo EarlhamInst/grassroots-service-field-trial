@@ -1609,13 +1609,15 @@ static bool AddStudy (ServiceJob *job_p, ParameterSet *param_set_p, FieldTrialSe
 					if (GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_DESCRIPTION.npt_name_s, &notes_s))
 						{
 							Crop *current_crop_p = NULL;
-							const char *crop_s = NULL;
+							const char *crop_s = S_UNKNOWN_CROP_OPTION_S;
 
 							GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_THIS_CROP.npt_name_s, &crop_s);
 
 							if ((strcmp (crop_s, S_UNKNOWN_CROP_OPTION_S) == 0) || (GetValidCrop (crop_s, &current_crop_p, data_p)))
 								{
 									Crop *previous_crop_p = NULL;
+
+									crop_s = S_UNKNOWN_CROP_OPTION_S;
 
 									GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_PREVIOUS_CROP.npt_name_s, &crop_s);
 
