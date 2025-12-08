@@ -76,6 +76,9 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL OperationStatus AddPeopleFromJSON (const json_t *p
 DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddPeopleAsFrictionlessData (LinkedList *people_p, const char * const key_s, json_t *json_p, const FieldTrialServiceData *data_p);
 
 
+DFW_FIELD_TRIAL_SERVICE_LOCAL PersonNode *FindPersonNodeOnList (LinkedList *people_p, Person *person_p);
+
+
 #ifdef __cplusplus
 }
 #endif

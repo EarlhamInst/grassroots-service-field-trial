@@ -75,7 +75,11 @@ typedef struct
 static NamedParameterType S_SEARCH_TRIAL_ID = { "Get all studies for this Field Trial", PT_STRING };
 
 
+static NamedParameterType S_SEARCH_STUDY_HAS_PLOTS = { "Study must have plot data", PT_BOOLEAN };
 
+static NamedParameterType S_SEARCH_STUDY_ACCESSIONS = { "Studies must have one of these accessions", PT_STRING_ARRAY };
+
+static NamedParameterType S_SEARCH_STUDY_PHENOTYPES = { "Studies must have one of these phenotypes", PT_STRING_ARRAY };
 
 
 #define S_NUM_DIRECTIONS (9)
@@ -209,6 +213,21 @@ static OperationStatus ProcessMeasuredVariables (ServiceJob *job_p, ParameterSet
 
 static bool AddFieldTrialSubmissionParameter (Study *active_study_p, ParameterSet *params_p, ParameterGroup *group_p, FieldTrialServiceData *dfw_data_p);
 
+static Parameter *ProcessTreatmentNames (ParameterSet *param_set_p, size_t *num_names_p);
+
+static Parameter *ProcessTreatmentLevels (ParameterSet *param_set_p, size_t *num_names_p);
+
+static bool UpdateStudyStringValue (char **variable_ss, const ParameterSet * const param_set_p, const NamedParameterType * const param_p, ServiceJob *job_p, const char * const study_id_s);
+
+static bool UpdateStudyUnsignedIntValue (uint32 **variable_pp, const ParameterSet * const param_set_p, const NamedParameterType * const param_p, ServiceJob *job_p, const char * const study_id_s);
+
+static bool UpdateStudyDoubleValue (double64 **variable_pp, const ParameterSet * const param_set_p, const NamedParameterType * const param_p, ServiceJob *job_p, const char * const study_id_s);
+
+
+static bool UpdateStudyJSONValue (json_t **variable_pp, const ParameterSet * const param_set_p, const NamedParameterType * const param_p, ServiceJob *job_p, const char * const study_id_s);
+
+
+static bool ProcessPersonForStudy (Person *person_p, void *user_data_p);
 
 
 #ifdef ENABLE_MARTI
@@ -1400,17 +1419,595 @@ static bool SetUpDefaultsFromExistingStudy (const Study * const study_p, char **
 }
 
 
+static bool UpdateStudyStringValue (char **variable_ss, const ParameterSet * const param_set_p, const NamedParameterType * const param_p, ServiceJob *job_p, const char * const study_id_s)
+{
+	bool success_flag = true;
+	const char *value_s = NULL;
+
+	if (GetCurrentStringParameterValueFromParameterSet (param_set_p, param_p -> npt_name_s, &value_s))
+		{
+			if (!ReplaceStringValue (variable_ss, value_s))
+				{
+					char *error_s = ConcatenateVarargsStrings ("Failed to set \"", param_p -> npt_name_s, "\" to \"", value_s, "\"", NULL);
+
+					if (error_s)
+						{
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "%s for Study \"%s\"", error_s, study_id_s);
+							AddParameterErrorMessageToServiceJob (job_p, param_p -> npt_name_s, param_p -> npt_type, error_s);
+							FreeCopiedString (error_s);
+						}
+					else
+						{
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "%s for Study \"%s\"", error_s, study_id_s);
+							AddParameterErrorMessageToServiceJob (job_p, param_p -> npt_name_s, param_p -> npt_type, error_s);
+						}
+
+					success_flag = false;
+				}
+		}
+
+	return success_flag;
+}
+
+
+static bool UpdateStudyUnsignedIntValue (uint32 **variable_pp, const ParameterSet * const param_set_p, const NamedParameterType * const param_p, ServiceJob *job_p, const char * const study_id_s)
+{
+	bool success_flag = true;
+	const uint32 *value_p = NULL;
+
+	if (GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, param_p -> npt_name_s, &value_p))
+		{
+			*variable_pp = value_p;
+		}
+
+	return success_flag;
+}
+
+
+static bool UpdateStudyDoubleValue (double64 **variable_pp, const ParameterSet * const param_set_p, const NamedParameterType * const param_p, ServiceJob *job_p, const char * const study_id_s)
+{
+	bool success_flag = true;
+	const double64 *value_p = NULL;
+
+	if (GetCurrentDoubleParameterValueFromParameterSet (param_set_p, param_p -> npt_name_s, &value_p))
+		{
+			*variable_pp = value_p;
+		}
+
+	return success_flag;
+}
+
+
+static bool UpdateStudyJSONValue (json_t **variable_pp, const ParameterSet * const param_set_p, const NamedParameterType * const param_p, ServiceJob *job_p, const char * const study_id_s)
+{
+	bool success_flag = true;
+	const json_t *value_p = NULL;
+
+	if (GetCurrentJSONParameterValueFromParameterSet (param_set_p, param_p -> npt_name_s, &value_p))
+		{
+			if (*variable_pp)
+				{
+					json_decref (*variable_pp);
+				}
+
+			*variable_pp = (json_t *) value_p;
+		}
+
+	return success_flag;
+}
+
+
 
 static bool AddStudy (ServiceJob *job_p, ParameterSet *param_set_p, FieldTrialServiceData *data_p, User *user_p)
 {
 	OperationStatus status = OS_FAILED;
-	const char *id_s = NULL;
+	const char *study_id_s = NULL;
 	const char *name_s = NULL;
 	bson_oid_t *study_id_p = NULL;
+	Study *study_p = NULL;
+	Location *location_p = NULL;
+	FieldTrial *trial_p = NULL;
+	bool study_freed_flag = false;
+	bool min_req_flag = false;
+
+	/* Are we editing an existing study? */
+	if (GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_ID.npt_name_s, &study_id_s))
+		{
+			if (strcmp (S_EMPTY_LIST_OPTION_S, study_id_s) != 0)
+				{
+					study_p = GetStudyByIdString (study_id_s, VF_CLIENT_FULL, data_p);
+
+					if (study_p)
+						{
+							min_req_flag = true;
+						}		/* if (active_study_p) */
+					else
+						{
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to find existing study with id \"%s\"", study_id_s);
+							AddParameterErrorMessageToServiceJob (job_p, STUDY_ID.npt_name_s, STUDY_ID.npt_type, "No existing study");
+						}
+
+				}		/* if (strcmp (S_EMPTY_LIST_OPTION_S, study_id_s) != 0) */
+
+		}		/* if (GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_ID.npt_name_s, &study_id_s)) */
+	else
+		{
+			if (GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_NAME.npt_name_s, &name_s))
+				{
+					const char *parent_field_trial_id_s = NULL;
+
+					if (GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_FIELD_TRIALS_LIST.npt_name_s, &parent_field_trial_id_s))
+						{
+							if (parent_field_trial_id_s)
+								{
+									trial_p = GetUniqueFieldTrialBySearchString (parent_field_trial_id_s, VF_STORAGE, data_p);
+
+									if (trial_p)
+										{
+											const char *location_s = NULL;
+
+											if (GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_LOCATIONS_LIST.npt_name_s, &location_s))
+												{
+													if (location_s)
+														{
+															location_p = GetUniqueLocationBySearchString (location_s, VF_STORAGE, data_p);
+
+															if (location_p)
+																{
+																	min_req_flag = true;
+																}		/* if (location_p) */
+															else
+																{
+																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to find Location named \"%s\"", location_s);
+																}
+
+														}		/* if (location_id_s) */
+
+
+
+												}		/* if (GetCurrentParameterValueFromParameterSet (param_set_p, STUDY_LOCATIONS_LIST.npt_name_s, &name_value)) */
+											else
+												{
+													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get study parameter %s", STUDY_LOCATIONS_LIST.npt_name_s);
+												}
+
+
+										}
+									else
+										{
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to find Field Trial named \"%s\"", parent_field_trial_id_s);
+										}
+
+								}		/* if (parent_field_trial_id_s) */
+
+
+						}
+					else
+						{
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get study parameter %s", STUDY_FIELD_TRIALS_LIST.npt_name_s);
+						}
+
+				}
+			else
+				{
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get study parameter %s", STUDY_NAME.npt_name_s);
+				}
+		}
+
+
+	if (min_req_flag)
+		{
+			size_t num_treatment_names = 0;
+			size_t num_treatment_levels = 0;
+			Parameter *treatment_names_p = ProcessTreatmentNames (param_set_p, &num_treatment_names);
+			Parameter *treatment_levels_p = ProcessTreatmentLevels (param_set_p, &num_treatment_levels);
+
+			if (num_treatment_levels == num_treatment_names)
+				{
+					const char *notes_s = NULL;
+
+					if (GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_DESCRIPTION.npt_name_s, &notes_s))
+						{
+							Crop *current_crop_p = NULL;
+							const char *crop_s = NULL;
+
+							GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_THIS_CROP.npt_name_s, &crop_s);
+
+							if ((strcmp (crop_s, S_UNKNOWN_CROP_OPTION_S) == 0) || (GetValidCrop (crop_s, &current_crop_p, data_p)))
+								{
+									Crop *previous_crop_p = NULL;
+
+									GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_PREVIOUS_CROP.npt_name_s, &crop_s);
+
+									if ((strcmp (crop_s, S_UNKNOWN_CROP_OPTION_S) == 0) || (GetValidCrop (crop_s, &previous_crop_p, data_p)))
+										{
+											Person *curator_p = NULL;
+
+											if (GetPersonFromParameters (&curator_p, param_set_p, STUDY_CURATOR_NAME.npt_name_s, STUDY_CURATOR_EMAIL.npt_name_s,
+																									 STUDY_CURATOR_ROLE.npt_name_s, STUDY_CURATOR_AFFILATION.npt_name_s,
+																									 STUDY_CURATOR_ORCID.npt_name_s))
+												{
+													Person *contact_p = NULL;
+
+													if (GetPersonFromParameters (&contact_p, param_set_p, STUDY_CONTACT_NAME.npt_name_s, STUDY_CONTACT_EMAIL.npt_name_s,
+																											 STUDY_CONTACT_ROLE.npt_name_s, STUDY_CONTACT_AFFILATION.npt_name_s,
+																											 STUDY_CONTACT_ORCID.npt_name_s))
+														{
+															const char *aspect_s = NULL;
+															const char *slope_s = NULL;
+															const char *data_link_s = NULL;
+															const char *design_s = NULL;
+															const char *growing_conditions_s = NULL;
+															const char *phenotype_notes_s = NULL;
+															const char *plan_changes_s = NULL;
+															const char *samples_collected_s = NULL;
+															const char *data_not_included_s = NULL;
+															const uint32 *num_rows_p = NULL;
+															const uint32 *num_cols_p = NULL;
+															const uint32 *num_replicates_p = NULL;
+															const double64 *plot_width_p = NULL;
+															const double64 *plot_length_p = NULL;
+															const char *weather_s = NULL;
+															const json_t *shape_p = NULL;
+
+															const double64 *plot_horizontal_gap_p = NULL;
+															const double64 *plot_vertical_gap_p = NULL;
+															const uint32 *plots_rows_per_block_p = NULL;
+															const uint32 *plots_columns_per_block_p = NULL;
+															const double64 *plot_block_horizontal_gap_p = NULL;
+															const double64 *plot_block_vertical_gap_p = NULL;
+															const uint32 *sowing_year_p = NULL;
+															const uint32 *harvest_year_p = NULL;
+
+															const char *photo_s = NULL;
+															const char *image_collection_notes_s = NULL;
+															const char *gps_notes_s = NULL;
+
+															PermissionsGroup *perms_group_p = NULL;
+															Metadata *metadata_p = NULL;
+
+															if (GetInitialisedPermissionsGroupAndMetadata (&perms_group_p, &metadata_p, param_set_p, job_p, user_p, & (data_p -> dftsd_base_data)))
+																{
+																	if (study_p)
+																		{
+																			size_t num_successes = 0;
+																			size_t num_errors = 0;
+
+																			UpdateStudyStringValue (& (study_p -> st_name_s), param_set_p, &STUDY_NAME, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+																			UpdateStudyStringValue (& (study_p -> st_description_s), param_set_p, &STUDY_DESCRIPTION, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+																			UpdateStudyStringValue (& (study_p -> st_aspect_s), param_set_p, &STUDY_ASPECT, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+																			UpdateStudyStringValue (& (study_p -> st_data_url_s), param_set_p, &STUDY_LINK, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+
+																			UpdateStudyStringValue (& (study_p -> st_plan_changes_s), param_set_p, &STUDY_PLAN_CHANGES, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+																			UpdateStudyStringValue (& (study_p -> st_physical_samples_collected_s), param_set_p, &STUDY_PHYSICAL_SAMPLES_COLLECTED, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+																			UpdateStudyStringValue (& (study_p -> st_data_not_included_s), param_set_p, &STUDY_DATA_NOT_INCLUDED, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+																			UpdateStudyStringValue (& (study_p -> st_design_s), param_set_p, &STUDY_DESIGN, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+
+																			UpdateStudyStringValue (& (study_p -> st_growing_conditions_s), param_set_p, &STUDY_GROWING_CONDITIONS, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+																			UpdateStudyStringValue (& (study_p -> st_phenotype_gathering_notes_s), param_set_p, &STUDY_PHENOTYPE_GATHERING_NOTES, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+																			UpdateStudyStringValue (& (study_p -> st_weather_link_s), param_set_p, &STUDY_WEATHER_LINK, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+																			UpdateStudyStringValue (& (study_p -> st_shape_notes_s), param_set_p, &STUDY_SHAPE_NOTES, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+
+
+																			UpdateStudyStringValue (& (study_p -> st_photo_url_s), param_set_p, &STUDY_PHOTO, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+																			UpdateStudyStringValue (& (study_p -> st_image_collection_notes_s), param_set_p, &STUDY_IMAGE_NOTES, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+
+
+																			UpdateStudyUnsignedIntValue (& (study_p -> st_predicted_sowing_year_p), param_set_p, &STUDY_SOWING_YEAR, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+																			UpdateStudyUnsignedIntValue (& (study_p -> st_predicted_harvest_year_p), param_set_p, &STUDY_HARVEST_YEAR, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+
+																			UpdateStudyUnsignedIntValue (& (study_p -> st_predicted_sowing_year_p), param_set_p, &STUDY_NUM_PLOT_ROWS, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+																			UpdateStudyUnsignedIntValue (& (study_p -> st_predicted_harvest_year_p), param_set_p, &STUDY_NUM_PLOT_COLS, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+																			UpdateStudyUnsignedIntValue (& (study_p -> st_predicted_sowing_year_p), param_set_p, &STUDY_NUM_REPLICATES, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+																			UpdateStudyUnsignedIntValue (& (study_p -> st_predicted_harvest_year_p), param_set_p, &STUDY_PLOT_ROWS_PER_BLOCK, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+																			UpdateStudyUnsignedIntValue (& (study_p -> st_predicted_sowing_year_p), param_set_p, &STUDY_PLOT_COLS_PER_BLOCK, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+
+
+																			UpdateStudyDoubleValue (& (study_p -> st_default_plot_width_p), param_set_p, &STUDY_PLOT_WIDTH, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+																			UpdateStudyDoubleValue (& (study_p -> st_default_plot_length_p), param_set_p, &STUDY_PLOT_LENGTH, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+																			UpdateStudyDoubleValue (& (study_p -> st_plot_horizontal_gap_p), param_set_p, &STUDY_PLOT_HGAP, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+																			UpdateStudyDoubleValue (& (study_p -> st_plot_vertical_gap_p), param_set_p, &STUDY_PLOT_VGAP, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+																			UpdateStudyDoubleValue (& (study_p -> st_plot_block_horizontal_gap_p), param_set_p, &STUDY_PLOT_BLOCK_HGAP, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+																			UpdateStudyDoubleValue (& (study_p -> st_plot_block_vertical_gap_p), param_set_p, &STUDY_PLOT_BLOCK_VGAP, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+
+
+																			UpdateStudyJSONValue (& (study_p -> st_shape_p), param_set_p, &STUDY_SHAPE_DATA, job_p, study_id_s) ? ++ num_successes : ++ num_errors;
+
+																			if (num_errors == 0)
+																				{
+																					status = SaveStudy (study_p, job_p, data_p, NULL);
+
+																					if (status == OS_FAILED)
+																						{
+																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to save Study named \"%s\"", name_s);
+																						}
+
+																				}
+																			else
+																				{
+																					if (num_successes > 0)
+																						{
+																							status = OS_PARTIALLY_SUCCEEDED;
+																						}
+																					else
+																						{
+																							status = OS_FAILED;
+																						}
+
+																					FreeStudy (study_p);
+																					study_p = NULL;
+																				}
+
+
+																		}
+																	else
+																		{
+																			GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_ASPECT.npt_name_s, &aspect_s);
+																			GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_SLOPE.npt_name_s, &slope_s);
+																			GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_LINK.npt_name_s, &data_link_s);
+
+																			GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_PLAN_CHANGES.npt_name_s, &plan_changes_s);
+																			GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_PHYSICAL_SAMPLES_COLLECTED.npt_name_s, &samples_collected_s);
+																			GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_DATA_NOT_INCLUDED.npt_name_s, &data_not_included_s);
+
+																			GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_DESIGN.npt_name_s, &design_s);
+																			GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_GROWING_CONDITIONS.npt_name_s, &growing_conditions_s);
+																			GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_PHENOTYPE_GATHERING_NOTES.npt_name_s, &phenotype_notes_s);
+
+
+																			GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_SOWING_YEAR.npt_name_s, &sowing_year_p);
+																			GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_HARVEST_YEAR.npt_name_s, &harvest_year_p);
+
+
+																			GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_NUM_PLOT_ROWS.npt_name_s, &num_rows_p);
+																			GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_NUM_PLOT_COLS.npt_name_s, &num_cols_p);
+																			GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_NUM_REPLICATES.npt_name_s, &num_replicates_p);
+																			GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_WIDTH.npt_name_s, &plot_width_p);
+																			GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_LENGTH.npt_name_s, &plot_length_p);
+
+
+																			GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_WEATHER_LINK.npt_name_s, &weather_s);
+
+																			GetCurrentJSONParameterValueFromParameterSet (param_set_p, STUDY_SHAPE_DATA.npt_name_s, &shape_p);
+																			GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_SHAPE_NOTES.npt_name_s, &gps_notes_s);
+
+																			GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_HGAP.npt_name_s, &plot_horizontal_gap_p);
+																			GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_VGAP.npt_name_s, &plot_vertical_gap_p);
+																			GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_PLOT_ROWS_PER_BLOCK.npt_name_s, &plots_rows_per_block_p);
+																			GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_PLOT_COLS_PER_BLOCK.npt_name_s, &plots_columns_per_block_p);
+																			GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_BLOCK_HGAP.npt_name_s, &plot_block_horizontal_gap_p);
+																			GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_BLOCK_VGAP.npt_name_s, &plot_block_vertical_gap_p);
+
+																			GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_PHOTO.npt_name_s, &photo_s);
+																			GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_IMAGE_NOTES.npt_name_s, &image_collection_notes_s);
+
+																			study_p = AllocateStudy (study_id_p, metadata_p, name_s, data_link_s, aspect_s,
+																															 slope_s, location_p, trial_p, MF_SHALLOW_COPY, current_crop_p, previous_crop_p,
+																															 notes_s, design_s,
+																															 growing_conditions_s, phenotype_notes_s,
+																															 num_rows_p, num_cols_p, num_replicates_p, plot_width_p, plot_length_p,
+																															 weather_s, shape_p,
+																															 plot_horizontal_gap_p, plot_vertical_gap_p, plots_rows_per_block_p, plots_columns_per_block_p,
+																															 plot_block_horizontal_gap_p, plot_block_vertical_gap_p,
+																															 curator_p, contact_p,
+																															 sowing_year_p, harvest_year_p,
+																															 plan_changes_s, samples_collected_s, data_not_included_s,
+																															 photo_s, image_collection_notes_s,
+																															 gps_notes_s,
+																															 data_p);
+																		}
+
+
+																	/*
+																	 * Now we have the Study, lets process its remaining metadata
+																	 */
+																	if (study_p)
+																		{
+																			OperationStatus perms_status = RunForPermissionEditor (param_set_p, metadata_p -> me_permissions_p, job_p, user_p, & (data_p -> dftsd_base_data));
+
+																			if ((perms_status == OS_SUCCEEDED) || (perms_status == OS_PARTIALLY_SUCCEEDED) || (perms_status == OS_IDLE))
+																				{
+																					if (AddTreatmentFactorsToStudy (study_p, treatment_names_p, treatment_levels_p, num_treatment_levels, job_p, data_p))
+																						{
+																							status = ProcessPeople (job_p, param_set_p, ProcessPersonForStudy, study_p, data_p);
+
+																							if (status == OS_SUCCEEDED)
+																								{
+																									status = ProcessMeasuredVariables (job_p, param_set_p, study_p, data_p);
+
+																									if ((status == OS_SUCCEEDED) || (status == OS_PARTIALLY_SUCCEEDED))
+																										{
+																											OperationStatus s = SaveStudy (study_p, job_p, data_p, NULL);
+
+																											if ((s == OS_SUCCEEDED) || (s == OS_PARTIALLY_SUCCEEDED))
+																												{
+																													if (param_set_p -> ps_current_level == PL_WIZARD)
+																														{
+																															/*
+																															 * If the study doesn't currently have plots and rows
+																															 * and columns have been specified, we generate them here.
+																															 */
+
+																															if (num_rows_p && num_cols_p)
+																																{
+																																	const uint32 num_rows = *num_rows_p;
+																																	const uint32 num_cols = *num_cols_p;
+
+																																	if ((num_rows > 0) && (num_cols > 0))
+																																		{
+																																			/*
+																																			 * Check that the study doesn't already have plots
+																																			 */
+																																			int64 num_existing_plots = GetNumberOfPlotsInStudy (study_p, data_p);
+
+																																			if (num_existing_plots == 0)
+																																				{
+																																					status = GenerateAndAddSkeletonPlotsToStudy (study_p, num_rows, num_cols, job_p, data_p);
+																																				}
+																																			else
+																																				{
+																																					char *error_s = ConcatenateVarargsStrings ("Study ", study_p -> st_name_s, " already has plots", NULL);
+
+																																					if (error_s)
+																																						{
+																																							AddGeneralErrorMessageToServiceJob (job_p, error_s);
+																																							FreeCopiedString (error_s);
+																																						}
+																																					else
+																																						{
+																																							AddGeneralErrorMessageToServiceJob (job_p, "Study already has plots");
+																																						}
+
+																																					PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "Study \"%s\" already has plots", study_p -> st_name_s);
+																																				}
+
+																																		}		/* if ((num_rows > 0) && (num_cols > 0)) */
+
+																																}		/* if (num_rows_p && num_cols_p) */
+
+																														}		/* if (param_set_p -> ps_current_level == PL_WIZARD) */
+
+																												}		/* if ((s == OS_SUCCEEDED) || (s == OS_PARTIALLY_SUCCEEDED)) */
+
+																											if (s == OS_FAILED)
+																												{
+																													status = s;
+																													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to save Study named \"%s\"", name_s);
+																												}
+
+																										}
+
+																								}
+
+																						}		/* if (AddTreatmentFactorsToStudy (study_p, treatment_names_p, treatment_levels_p, num_treatment_levels, job_p, data_p)) */
+																					else
+																						{
+																							status = OS_FAILED_TO_START;
+																						}
+
+																				}		/*  if ((perms_status == OS_SUCCEEDED) || (perms_status == OS_PARTIALLY_SUCCEEDED) || (perms_status == OS_IDLE)) */
+
+
+
+																			FreeStudy (study_p);
+																			study_freed_flag = true;
+																		}		/* if (study_p) */
+
+
+
+
+
+																	if (!study_freed_flag)
+																		{
+																			if (contact_p)
+																				{
+																					FreePerson (contact_p);
+																				}
+																		}
+
+																}		/* if (GetPersonFromParameters (&contact_p, param_set_p, STUDY_CONTACT_NAME.npt_name_s, STUDY_CONTACT_EMAIL.npt_name_s)) */
+
+														}		/* if (GetInitialisedPermissionsGroupAndMetadata (&perms_group_p, &metadata_p, param_set_p, job_p, user_p, & (data_p -> dftsd_base_data))) */
+
+
+													if (!study_freed_flag)
+														{
+															if (curator_p)
+																{
+																	FreePerson (curator_p);
+																}
+														}
+
+												}		/* if (GetPersonFromParameters (&curator_p, param_set_p, STUDY_CURATOR_NAME.npt_name_s, STUDY_CURATOR_EMAIL.npt_name_s)) */
+
+											if (!study_freed_flag)
+												{
+													if (previous_crop_p)
+														{
+															FreeCrop (previous_crop_p);
+														}
+												}
+										}		/* if (GetValidCrop (previous_crop_value.st_string_value_s, &previous_crop_p)) */
+
+
+									if (!study_freed_flag)
+										{
+											if (current_crop_p)
+												{
+													FreeCrop (current_crop_p);
+												}
+										}
+								}		/* if (GetValidCrop (current_crop_value.st_string_value_s, &current_crop_p)) */
+
+						}		/* if (GetCurrentParameterValueFromParameterSet (param_set_p, STUDY_NOTES.npt_name_s, &notes_value)) */
+					else
+						{
+
+						}
+
+				}		/* if (num_treatment_levels == num_treatment_names) */
+			else
+				{
+					const char * const error_prefix_s = "Need equal number of treatment names and sets of factors";
+					PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "%s: " UINT32_FMT " names and " UINT32_FMT " levels", error_prefix_s, num_treatment_names, num_treatment_levels);
+
+					AddParameterErrorMessageToServiceJob (job_p, TFJ_TREATMENT_NAME.npt_name_s, TFJ_TREATMENT_NAME.npt_type, error_prefix_s);
+				}
+
+		}		/* if (min_req_flag) */
+	else
+		{
+
+		}
+
+	if (!study_freed_flag)
+		{
+			FreeLocation (location_p);
+			FreeFieldTrial (trial_p);
+		}
+
+
+
+
+	SetServiceJobStatus (job_p, status);
+
+	return ((status == OS_SUCCEEDED) || (status == OS_PARTIALLY_SUCCEEDED));
+}
+
+
+
+static bool AddStudyLevelDetailParameter (ParameterSet *param_set_p, ParameterGroup *group_p, ServiceData * data_p)
+{
+	bool success_flag = false;
+
+	Parameter *param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, param_set_p, group_p, STUDY_DETAIL_LEVEL.npt_type, STUDY_DETAIL_LEVEL.npt_name_s, "Study Detail Level", "The level of detail to return for matching Studies", NULL, PL_ADVANCED);
+
+	if (param_p)
+		{
+			if (CreateAndAddStringParameterOption (param_p, S_DETAIL_LEVEL_IDS_S, S_DETAIL_LEVEL_IDS_S))
+				{
+					if (CreateAndAddStringParameterOption (param_p, S_DETAIL_LEVEL_METADATA_S, S_DETAIL_LEVEL_METADATA_S))
+						{
+							if (CreateAndAddStringParameterOption (param_p, S_DETAIL_LEVEL_FULL_S, S_DETAIL_LEVEL_FULL_S))
+								{
+									success_flag = true;
+								}
+
+						}
+
+				}
+
+		}
+
+	return success_flag;
+}
+
+
+
+static Parameter *ProcessTreatmentNames (ParameterSet *param_set_p, size_t *num_names_p)
+{
 	size_t num_treatment_names = 0;
-	size_t num_treatment_levels = 0;
 	Parameter *treatment_names_p = GetParameterFromParameterSetByName (param_set_p, TFJ_TREATMENT_NAME.npt_name_s);
-	Parameter *treatment_levels_p = GetParameterFromParameterSetByName (param_set_p, TFJ_VALUES.npt_name_s);
 
 	if (treatment_names_p)
 		{
@@ -1450,7 +2047,16 @@ static bool AddStudy (ServiceJob *job_p, ParameterSet *param_set_p, FieldTrialSe
 
 		}
 
-	treatment_levels_p = GetParameterFromParameterSetByName (param_set_p, TFJ_VALUES.npt_name_s);
+	*num_names_p = num_treatment_names;
+
+	return treatment_names_p;
+}
+
+
+static Parameter *ProcessTreatmentLevels (ParameterSet *param_set_p, size_t *num_levels_p)
+{
+	size_t num_treatment_levels = 0;
+	Parameter *treatment_levels_p = GetParameterFromParameterSetByName (param_set_p, TFJ_VALUES.npt_name_s);
 
 	if (treatment_levels_p)
 		{
@@ -1483,404 +2089,9 @@ static bool AddStudy (ServiceJob *job_p, ParameterSet *param_set_p, FieldTrialSe
 				}
 		}
 
+	*num_levels_p = num_treatment_levels;
 
-	if (num_treatment_levels == num_treatment_names)
-		{
-			/*
-			 * Get the existing study id if specified
-			 */
-			GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_ID.npt_name_s, &id_s);
-
-			if (id_s)
-				{
-					if (strcmp (S_EMPTY_LIST_OPTION_S, id_s) != 0)
-						{
-							study_id_p = GetBSONOidFromString (id_s);
-
-							if (!study_id_p)
-								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to load study \"%s\" for editing", id_s);
-									return false;
-								}
-						}
-				}		/* if (id_value.st_string_value_s) */
-
-
-			if (GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_NAME.npt_name_s, &name_s))
-				{
-					const char *parent_field_trial_id_s = NULL;
-
-					if (GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_FIELD_TRIALS_LIST.npt_name_s, &parent_field_trial_id_s))
-						{
-							if (parent_field_trial_id_s)
-								{
-									bool study_freed_flag = false;
-									FieldTrial *trial_p = GetUniqueFieldTrialBySearchString (parent_field_trial_id_s, VF_STORAGE, data_p);
-
-									if (trial_p)
-										{
-											const char *location_s = NULL;
-
-											if (GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_LOCATIONS_LIST.npt_name_s, &location_s))
-												{
-													if (location_s)
-														{
-															Location *location_p = GetUniqueLocationBySearchString (location_s, VF_STORAGE, data_p);
-
-															if (location_p)
-																{
-																	const char *notes_s = NULL;
-
-																	if (GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_DESCRIPTION.npt_name_s, &notes_s))
-																		{
-																			Crop *current_crop_p = NULL;
-																			const char *crop_s = NULL;
-
-																			GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_THIS_CROP.npt_name_s, &crop_s);
-
-																			if ((strcmp (crop_s, S_UNKNOWN_CROP_OPTION_S) == 0) || (GetValidCrop (crop_s, &current_crop_p, data_p)))
-																				{
-																					Crop *previous_crop_p = NULL;
-
-																					GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_PREVIOUS_CROP.npt_name_s, &crop_s);
-
-																					if ((strcmp (crop_s, S_UNKNOWN_CROP_OPTION_S) == 0) || (GetValidCrop (crop_s, &previous_crop_p, data_p)))
-																						{
-																							Person *curator_p = NULL;
-
-																							if (GetPersonFromParameters (&curator_p, param_set_p, STUDY_CURATOR_NAME.npt_name_s, STUDY_CURATOR_EMAIL.npt_name_s,
-																																					 STUDY_CURATOR_ROLE.npt_name_s, STUDY_CURATOR_AFFILATION.npt_name_s,
-																																					 STUDY_CURATOR_ORCID.npt_name_s))
-																								{
-																									Person *contact_p = NULL;
-
-																									if (GetPersonFromParameters (&contact_p, param_set_p, STUDY_CONTACT_NAME.npt_name_s, STUDY_CONTACT_EMAIL.npt_name_s,
-																																							 STUDY_CONTACT_ROLE.npt_name_s, STUDY_CONTACT_AFFILATION.npt_name_s,
-																																							 STUDY_CONTACT_ORCID.npt_name_s))
-																										{
-																											Study *study_p = NULL;
-																											const char *aspect_s = NULL;
-																											const char *slope_s = NULL;
-																											const char *data_link_s = NULL;
-																											const char *design_s = NULL;
-																											const char *growing_conditions_s = NULL;
-																											const char *phenotype_notes_s = NULL;
-																											const char *plan_changes_s = NULL;
-																											const char *samples_collected_s = NULL;
-																											const char *data_not_included_s = NULL;
-																											const uint32 *num_rows_p = NULL;
-																											const uint32 *num_cols_p = NULL;
-																											const uint32 *num_replicates_p = NULL;
-																											const double64 *plot_width_p = NULL;
-																											const double64 *plot_length_p = NULL;
-																											const char *weather_s = NULL;
-																											const json_t *shape_p = NULL;
-
-																											const double64 *plot_horizontal_gap_p = NULL;
-																											const double64 *plot_vertical_gap_p = NULL;
-																											const uint32 *plots_rows_per_block_p = NULL;
-																											const uint32 *plots_columns_per_block_p = NULL;
-																											const double64 *plot_block_horizontal_gap_p = NULL;
-																											const double64 *plot_block_vertical_gap_p = NULL;
-																											const uint32 *sowing_year_p = NULL;
-																											const uint32 *harvest_year_p = NULL;
-
-																											const char *photo_s = NULL;
-																											const char *image_collection_notes_s = NULL;
-																											const char *gps_notes_s = NULL;
-
-																											PermissionsGroup *perms_group_p = NULL;
-																											Metadata *metadata_p = NULL;
-
-																											if (GetInitialisedPermissionsGroupAndMetadata (&perms_group_p, &metadata_p, param_set_p, job_p, user_p, & (data_p -> dftsd_base_data)))
-																												{
-																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_ASPECT.npt_name_s, &aspect_s);
-																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_SLOPE.npt_name_s, &slope_s);
-																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_LINK.npt_name_s, &data_link_s);
-
-																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_PLAN_CHANGES.npt_name_s, &plan_changes_s);
-																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_PHYSICAL_SAMPLES_COLLECTED.npt_name_s, &samples_collected_s);
-																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_DATA_NOT_INCLUDED.npt_name_s, &data_not_included_s);
-
-																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_DESIGN.npt_name_s, &design_s);
-																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_GROWING_CONDITIONS.npt_name_s, &growing_conditions_s);
-																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_PHENOTYPE_GATHERING_NOTES.npt_name_s, &phenotype_notes_s);
-
-
-																													GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_SOWING_YEAR.npt_name_s, &sowing_year_p);
-																													GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_HARVEST_YEAR.npt_name_s, &harvest_year_p);
-
-
-																													GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_NUM_PLOT_ROWS.npt_name_s, &num_rows_p);
-																													GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_NUM_PLOT_COLS.npt_name_s, &num_cols_p);
-																													GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_NUM_REPLICATES.npt_name_s, &num_replicates_p);
-																													GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_WIDTH.npt_name_s, &plot_width_p);
-																													GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_LENGTH.npt_name_s, &plot_length_p);
-
-
-																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_WEATHER_LINK.npt_name_s, &weather_s);
-
-																													GetCurrentJSONParameterValueFromParameterSet (param_set_p, STUDY_SHAPE_DATA.npt_name_s, &shape_p);
-																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_SHAPE_NOTES.npt_name_s, &gps_notes_s);
-
-																													GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_HGAP.npt_name_s, &plot_horizontal_gap_p);
-																													GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_VGAP.npt_name_s, &plot_vertical_gap_p);
-																													GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_PLOT_ROWS_PER_BLOCK.npt_name_s, &plots_rows_per_block_p);
-																													GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_PLOT_COLS_PER_BLOCK.npt_name_s, &plots_columns_per_block_p);
-																													GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_BLOCK_HGAP.npt_name_s, &plot_block_horizontal_gap_p);
-																													GetCurrentDoubleParameterValueFromParameterSet (param_set_p, STUDY_PLOT_BLOCK_VGAP.npt_name_s, &plot_block_vertical_gap_p);
-																													GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, STUDY_PLOT_COLS_PER_BLOCK.npt_name_s, &plots_columns_per_block_p);
-
-																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_PHOTO.npt_name_s, &photo_s);
-																													GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_IMAGE_NOTES.npt_name_s, &image_collection_notes_s);
-
-
-
-																													study_p = AllocateStudy (study_id_p, metadata_p, name_s, data_link_s, aspect_s,
-																																									 slope_s, location_p, trial_p, MF_SHALLOW_COPY, current_crop_p, previous_crop_p,
-																																									 notes_s, design_s,
-																																									 growing_conditions_s, phenotype_notes_s,
-																																									 num_rows_p, num_cols_p, num_replicates_p, plot_width_p, plot_length_p,
-																																									 weather_s, shape_p,
-																																									 plot_horizontal_gap_p, plot_vertical_gap_p, plots_rows_per_block_p, plots_columns_per_block_p,
-																																									 plot_block_horizontal_gap_p, plot_block_vertical_gap_p,
-																																									 curator_p, contact_p,
-																																									 sowing_year_p, harvest_year_p,
-																																									 plan_changes_s, samples_collected_s, data_not_included_s,
-																																									 photo_s, image_collection_notes_s,
-																																									 gps_notes_s,
-																																									 data_p);
-
-																													if (study_p)
-																														{
-																															OperationStatus perms_status = RunForPermissionEditor (param_set_p, metadata_p -> me_permissions_p, job_p, user_p, & (data_p -> dftsd_base_data));
-
-																															if ((perms_status == OS_SUCCEEDED) || (perms_status == OS_PARTIALLY_SUCCEEDED) || (perms_status == OS_IDLE))
-																																{
-																																	if (AddTreatmentFactorsToStudy (study_p, treatment_names_p, treatment_levels_p, num_treatment_levels, job_p, data_p))
-																																		{
-																																			status = ProcessPeople (job_p, param_set_p, ProcessPersonForStudy, study_p, data_p);
-
-																																			if (status == OS_SUCCEEDED)
-																																				{
-																																					status = ProcessMeasuredVariables (job_p, param_set_p, study_p, data_p);
-
-																																					if ((status == OS_SUCCEEDED) || (status == OS_PARTIALLY_SUCCEEDED))
-																																						{
-																																							OperationStatus s = SaveStudy (study_p, job_p, data_p, NULL);
-
-																																							if ((s == OS_SUCCEEDED) || (s == OS_PARTIALLY_SUCCEEDED))
-																																								{
-																																									if (param_set_p -> ps_current_level == PL_WIZARD)
-																																										{
-																																											/*
-																																											 * If the study doesn't currently have plots and rows
-																																											 * and columns have been specified, we generate them here.
-																																											 */
-
-																																											if (num_rows_p && num_cols_p)
-																																												{
-																																													const uint32 num_rows = *num_rows_p;
-																																													const uint32 num_cols = *num_cols_p;
-
-																																													if ((num_rows > 0) && (num_cols > 0))
-																																														{
-																																															/*
-																																															 * Check that the study doesn't already have plots
-																																															 */
-																																															int64 num_existing_plots = GetNumberOfPlotsInStudy (study_p, data_p);
-
-																																															if (num_existing_plots == 0)
-																																																{
-																																																	status = GenerateAndAddSkeletonPlotsToStudy (study_p, num_rows, num_cols, job_p, data_p);
-																																																}
-																																															else
-																																																{
-																																																	char *error_s = ConcatenateVarargsStrings ("Study ", study_p -> st_name_s, " already has plots", NULL);
-
-																																																	if (error_s)
-																																																		{
-																																																			AddGeneralErrorMessageToServiceJob (job_p, error_s);
-																																																			FreeCopiedString (error_s);
-																																																		}
-																																																	else
-																																																		{
-																																																			AddGeneralErrorMessageToServiceJob (job_p, "Study already has plots");
-																																																		}
-
-																																																	PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "Study \"%s\" already has plots", study_p -> st_name_s);
-																																																}
-
-
-																																														}
-																																												}
-																																										}
-																																								}
-
-																																							if (s == OS_FAILED)
-																																								{
-																																									status = s;
-																																									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to save Study named \"%s\"", name_s);
-																																								}
-
-																																						}
-
-																																				}
-
-																																		}		/* if (AddTreatmentFactorsToStudy (study_p, treatment_names_p, treatment_levels_p, num_treatment_levels, job_p, data_p)) */
-																																	else
-																																		{
-																																			status = OS_FAILED_TO_START;
-																																		}
-
-																																}		/*  if ((perms_status == OS_SUCCEEDED) || (perms_status == OS_PARTIALLY_SUCCEEDED) || (perms_status == OS_IDLE)) */
-
-
-
-																															FreeStudy (study_p);
-																															study_freed_flag = true;
-																														}		/* if (study_p) */
-
-
-																													if (!study_freed_flag)
-																														{
-																															if (contact_p)
-																																{
-																																	FreePerson (contact_p);
-																																}
-																														}
-
-																												}		/* if (GetPersonFromParameters (&contact_p, param_set_p, STUDY_CONTACT_NAME.npt_name_s, STUDY_CONTACT_EMAIL.npt_name_s)) */
-
-																												}		/* if (GetInitialisedPermissionsGroupAndMetadata (&perms_group_p, &metadata_p, param_set_p, job_p, user_p, & (data_p -> dftsd_base_data))) */
-
-
-
-
-
-																									if (!study_freed_flag)
-																										{
-																											if (curator_p)
-																												{
-																													FreePerson (curator_p);
-																												}
-																										}
-
-																								}		/* if (GetPersonFromParameters (&curator_p, param_set_p, STUDY_CURATOR_NAME.npt_name_s, STUDY_CURATOR_EMAIL.npt_name_s)) */
-
-																							if (!study_freed_flag)
-																								{
-																									if (previous_crop_p)
-																										{
-																											FreeCrop (previous_crop_p);
-																										}
-																								}
-																						}		/* if (GetValidCrop (previous_crop_value.st_string_value_s, &previous_crop_p)) */
-
-
-																					if (!study_freed_flag)
-																						{
-																							if (current_crop_p)
-																								{
-																									FreeCrop (current_crop_p);
-																								}
-																						}
-																				}		/* if (GetValidCrop (current_crop_value.st_string_value_s, &current_crop_p)) */
-
-																		}		/* if (GetCurrentParameterValueFromParameterSet (param_set_p, STUDY_NOTES.npt_name_s, &notes_value)) */
-																	else
-																		{
-
-																		}
-
-
-
-																	if (!study_freed_flag)
-																		{
-																			FreeLocation (location_p);
-																		}
-																}		/* if (location_p) */
-															else
-																{
-																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to find Location named \"%s\"", location_s);
-																}
-
-														}		/* if (location_id_s) */
-
-
-
-												}		/* if (GetCurrentParameterValueFromParameterSet (param_set_p, STUDY_LOCATIONS_LIST.npt_name_s, &name_value)) */
-											else
-												{
-													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get study parameter %s", STUDY_LOCATIONS_LIST.npt_name_s);
-												}
-
-											if (!study_freed_flag)
-												{
-													FreeFieldTrial (trial_p);
-												}
-										}
-									else
-										{
-											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to find Field Trial named \"%s\"", parent_field_trial_id_s);
-										}
-
-								}		/* if (parent_field_trial_id_s) */
-
-
-						}
-					else
-						{
-							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get study parameter %s", STUDY_FIELD_TRIALS_LIST.npt_name_s);
-						}
-
-				}
-			else
-				{
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get study parameter %s", STUDY_NAME.npt_name_s);
-				}
-
-
-		}		/* if (num_treatment_levels == num_treatment_names) */
-	else
-		{
-			const char * const error_prefix_s = "Need equal number of treatment names and sets of factors";
-			PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "%s: " UINT32_FMT " names and " UINT32_FMT " levels", error_prefix_s, num_treatment_names, num_treatment_levels);
-
-			AddParameterErrorMessageToServiceJob (job_p, TFJ_TREATMENT_NAME.npt_name_s, TFJ_TREATMENT_NAME.npt_type, error_prefix_s);
-		}
-
-
-	SetServiceJobStatus (job_p, status);
-
-	return ((status == OS_SUCCEEDED) || (status == OS_PARTIALLY_SUCCEEDED));
-}
-
-
-static bool AddStudyLevelDetailParameter (ParameterSet *param_set_p, ParameterGroup *group_p, ServiceData * data_p)
-{
-	bool success_flag = false;
-
-	Parameter *param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, param_set_p, group_p, STUDY_DETAIL_LEVEL.npt_type, STUDY_DETAIL_LEVEL.npt_name_s, "Study Detail Level", "The level of detail to return for matching Studies", NULL, PL_ADVANCED);
-
-	if (param_p)
-		{
-			if (CreateAndAddStringParameterOption (param_p, S_DETAIL_LEVEL_IDS_S, S_DETAIL_LEVEL_IDS_S))
-				{
-					if (CreateAndAddStringParameterOption (param_p, S_DETAIL_LEVEL_METADATA_S, S_DETAIL_LEVEL_METADATA_S))
-						{
-							if (CreateAndAddStringParameterOption (param_p, S_DETAIL_LEVEL_FULL_S, S_DETAIL_LEVEL_FULL_S))
-								{
-									success_flag = true;
-								}
-
-						}
-
-				}
-
-		}
-
-	return success_flag;
+	return treatment_levels_p;
 }
 
 
@@ -5308,9 +5519,16 @@ static void ReportTreatmentFactorError (Study *study_p, const char *name_s, cons
 
 static bool ProcessPersonForStudy (Person *person_p, void *user_data_p)
 {
+	bool success_flag = true;
 	Study *study_p = (Study *) user_data_p;
+	PersonNode *node_p = FindPersonNodeOnList (study_p -> st_contributors_p, person_p);
 
-	return AddStudyContributor (study_p, person_p, MF_SHALLOW_COPY);
+	if (!node_p)
+		{
+			success_flag = AddStudyContributor (study_p, person_p, MF_SHALLOW_COPY);
+		}
+
+	return success_flag;
 }
 
 

@@ -251,6 +251,7 @@ OperationStatus ProcessPeople (ServiceJob *job_p, ParameterSet *param_set_p, boo
 
 							if ((*name_ss) && (*email_ss))
 								{
+									/* Is the Person already on the Study's list? */
 									Person *person_p = AllocatePerson (*name_ss, *email_ss, *role_ss, *affiliation_ss, *orcid_ss);
 
 									if (person_p)
@@ -310,6 +311,30 @@ OperationStatus ProcessPeople (ServiceJob *job_p, ParameterSet *param_set_p, boo
 		}
 		
 	return status;
+}
+
+
+
+PersonNode *FindPersonNodeOnList (LinkedList *people_p, Person *person_p)
+{
+	if (people_p)
+		{
+			PersonNode *node_p = (PersonNode *) (people_p -> ll_head_p);
+
+			while (node_p)
+				{
+					if (ComparePeople (person_p, node_p -> pn_person_p) == 0)
+						{
+							return node_p;
+						}
+					else
+						{
+							node_p = (PersonNode *) (node_p -> pn_node.ln_next_p);
+						}
+				}
+		}
+
+	return NULL;
 }
 
 

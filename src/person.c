@@ -171,6 +171,19 @@ Person *CopyPerson (const Person * const src_p)
 
 
 
+int ComparePeople (const Person *person_0_p, const Person *person_1_p)
+{
+	int res = strcmp (person_0_p -> pe_name_s, person_1_p -> pe_name_s);
+
+	if (res != 0)
+		{
+			res = strcmp (person_0_p -> pe_email_s, person_1_p -> pe_email_s);
+		}
+
+	return res;
+}
+
+
 bool AddPersonToCompoundJSON (const Person *person_p, json_t *parent_json_p, const char * const key_s,  const ViewFormat format, const FieldTrialServiceData *data_p)
 {
 	bool success_flag = false;
