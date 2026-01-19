@@ -1530,7 +1530,9 @@ static bool AddStudy (ServiceJob *job_p, ParameterSet *param_set_p, FieldTrialSe
 				}		/* if (strcmp (S_EMPTY_LIST_OPTION_S, study_id_s) != 0) */
 
 		}		/* if (GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_ID.npt_name_s, &study_id_s)) */
-	else
+
+
+	if (!min_req_flag)
 		{
 			if (GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_NAME.npt_name_s, &name_s))
 				{
@@ -1592,7 +1594,8 @@ static bool AddStudy (ServiceJob *job_p, ParameterSet *param_set_p, FieldTrialSe
 				{
 					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get study parameter %s", STUDY_NAME.npt_name_s);
 				}
-		}
+
+		}		/* if (!min_req_flag) */
 
 
 	if (min_req_flag)
@@ -1941,6 +1944,7 @@ static bool AddStudy (ServiceJob *job_p, ParameterSet *param_set_p, FieldTrialSe
 										}
 								}		/* if (GetValidCrop (current_crop_value.st_string_value_s, &current_crop_p)) */
 
+
 						}		/* if (GetCurrentParameterValueFromParameterSet (param_set_p, STUDY_NOTES.npt_name_s, &notes_value)) */
 					else
 						{
@@ -1964,8 +1968,15 @@ static bool AddStudy (ServiceJob *job_p, ParameterSet *param_set_p, FieldTrialSe
 
 	if (!study_freed_flag)
 		{
-			FreeLocation (location_p);
-			FreeFieldTrial (trial_p);
+			if (location_p)
+				{
+					FreeLocation (location_p);
+				}
+
+			if (trial_p)
+				{
+					FreeFieldTrial (trial_p);
+				}
 		}
 
 
