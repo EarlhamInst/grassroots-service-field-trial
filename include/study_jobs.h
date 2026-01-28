@@ -251,6 +251,13 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL OperationStatus RemoveStudyPhenotypesFromStudyById
 DFW_FIELD_TRIAL_SERVICE_LOCAL bool RemoveCachedStudyById (const char * const id_s, FieldTrialServiceData *data_p);
 
 
+DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddStudyLevelDetailParameter (ParameterSet *param_set_p, ParameterGroup *group_p, ServiceData * data_p);
+
+
+DFW_FIELD_TRIAL_SERVICE_LOCAL bool GetStudyLevelDetailParameterValue (ParameterSet *param_set_p, ViewFormat *format_p);
+
+
+
 #ifdef __cplusplus
 }
 #endif

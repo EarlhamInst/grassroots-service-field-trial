@@ -204,7 +204,6 @@ static bool AddContactSubmissionParams (const Person *curator_p, ParameterSet *p
 
 static bool ProcessPersonForStudy (Person *person_p, void *user_data_p);
 
-static bool AddStudyLevelDetailParameter (ParameterSet *param_set_p, ParameterGroup *group_p, ServiceData * data_p);
 
 static bool AddMeasuredVariableParameters (ParameterSet *params_p, const Study *study_p, const bool read_only_flag, FieldTrialServiceData *data_p);
 
@@ -1157,26 +1156,8 @@ bool RunForSearchStudyParams (FieldTrialServiceData *data_p, ParameterSet *param
 			if ((search_flag_p != NULL) && (*search_flag_p == true))
 				{
 					const char *id_s = NULL;
-					const char *level_s = NULL;
 
-					if (GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_DETAIL_LEVEL.npt_name_s, &level_s))
-						{
-							if (!IsStringEmpty (level_s))
-								{
-									if (strcmp (level_s, S_DETAIL_LEVEL_FULL_S) == 0)
-										{
-											format = VF_CLIENT_FULL;
-										}
-									else if (strcmp (level_s, S_DETAIL_LEVEL_METADATA_S) == 0)
-										{
-											format = VF_CLIENT_MINIMAL;
-										}
-									if (strcmp (level_s, S_DETAIL_LEVEL_IDS_S) == 0)
-										{
-											format = VF_REFERENCE;
-										}
-								}
-						}
+					GetStudyLevelDetailParameterValue (param_set_p, &format);
 
 					/*
 					 * Are we searching for all studies within a trial?
@@ -1191,8 +1172,6 @@ bool RunForSearchStudyParams (FieldTrialServiceData *data_p, ParameterSet *param
 										{
 
 										}
-
-
 
 									/*
 									 * We're building up a query for the given parameters
@@ -1989,7 +1968,7 @@ static bool AddStudy (ServiceJob *job_p, ParameterSet *param_set_p, FieldTrialSe
 
 
 
-static bool AddStudyLevelDetailParameter (ParameterSet *param_set_p, ParameterGroup *group_p, ServiceData * data_p)
+bool AddStudyLevelDetailParameter (ParameterSet *param_set_p, ParameterGroup *group_p, ServiceData * data_p)
 {
 	bool success_flag = false;
 
@@ -2010,6 +1989,38 @@ static bool AddStudyLevelDetailParameter (ParameterSet *param_set_p, ParameterGr
 
 				}
 
+		}
+
+	return success_flag;
+}
+
+
+bool GetStudyLevelDetailParameterValue (ParameterSet *param_set_p, ViewFormat *format_p)
+{
+	const char *level_s = NULL;
+	bool success_flag = false;
+
+
+	if (GetCurrentStringParameterValueFromParameterSet (param_set_p, STUDY_DETAIL_LEVEL.npt_name_s, &level_s))
+		{
+			if (!IsStringEmpty (level_s))
+				{
+					if (strcmp (level_s, S_DETAIL_LEVEL_FULL_S) == 0)
+						{
+							*format_p = VF_CLIENT_FULL;
+							success_flag = true;
+						}
+					else if (strcmp (level_s, S_DETAIL_LEVEL_METADATA_S) == 0)
+						{
+							*format_p = VF_CLIENT_MINIMAL;
+							success_flag = true;
+						}
+					if (strcmp (level_s, S_DETAIL_LEVEL_IDS_S) == 0)
+						{
+							*format_p = VF_REFERENCE;
+							success_flag = true;
+						}
+				}
 		}
 
 	return success_flag;

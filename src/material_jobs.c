@@ -68,6 +68,7 @@ static NamedParameterType S_GENE_BANKS_LIST = { "MA Gene Bank", PT_STRING };
 
 static NamedParameterType S_MATERIAL_ACCESSION = { "MA Accession", PT_STRING };
 static NamedParameterType S_MATERIAL_ACCESSION_CASE_SENSITIVE = { "MA Accession case-sensitive", PT_BOOLEAN };
+static NamedParameterType S_MATERIAL_SEARCH_STUDY_FORMAT = { "MA Search Study format", PT_BOOLEAN };
 
 static const bool S_DEFAULT_SEARCH_CASE_SENSITIVITY_FLAG = true;
 
@@ -233,7 +234,8 @@ bool GetSubmissionMaterialParameterTypeForNamedParameter (const char *param_name
 bool AddSearchMaterialParams (ServiceData *data_p, ParameterSet *param_set_p)
 {
 	bool success_flag = false;
-	ParameterGroup *group_p = CreateAndAddParameterGroupToParameterSet ("Materials Search", false, data_p, param_set_p);
+	const char * const group_name_s = "Materials Search";
+	ParameterGroup *group_p = CreateAndAddParameterGroupToParameterSet (group_name_s, false, data_p, param_set_p);
 
 	if (group_p)
 		{
@@ -245,11 +247,32 @@ bool AddSearchMaterialParams (ServiceData *data_p, ParameterSet *param_set_p)
 
 					if ((param_p = EasyCreateAndAddBooleanParameterToParameterSet (data_p, param_set_p, group_p, S_MATERIAL_ACCESSION_CASE_SENSITIVE.npt_name_s, "Case sensitive", "Do a case-sensitive search for the accession", &case_sensitivity_flag, PL_ADVANCED)) != NULL)
 						{
-							success_flag = true;
-						}
-				}
-		}		/* if (group_p) */
+							if (AddStudyLevelDetailParameter (param_set_p, group_p, data_p))
+								{
+									success_flag = true;
+								}
+							else
+								{
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddStudyLevelDetailParameter () failed");
+								}
 
+						}		/* if ((param_p = EasyCreateAndAddBooleanParameterToParameterSet (data_p, param_set_p, group_p, S_MATERIAL_ACCESSION_CASE_SENSITIVE.npt_name_s, "Case sensitive", "Do a case-sensitive search for the accession", &case_sensitivity_flag, PL_ADVANCED)) != NULL) */
+					else
+						{
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", S_MATERIAL_ACCESSION_CASE_SENSITIVE.npt_name_s);
+						}
+
+				}		/* if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, param_set_p, group_p, S_MATERIAL_ACCESSION.npt_type, S_MATERIAL_ACCESSION.npt_name_s, "Accession", "Accession to search for", NULL, PL_ADVANCED)) != NULL) */
+			else
+				{
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", S_MATERIAL_ACCESSION.npt_name_s);
+				}
+
+		}		/* if (group_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "CreateAndAddParameterGroupToParameterSet () failed for %s", group_name_s);
+		}
 
 	return success_flag;
 }
@@ -281,7 +304,10 @@ bool RunForSearchMaterialParams (FieldTrialServiceData *data_p, ParameterSet *pa
 
 					if (material_p)
 						{
-							ViewFormat format = VF_CLIENT_FULL;
+							ViewFormat format = VF_CLIENT_MINIMAL; // VF_CLIENT_FULL;
+
+							GetStudyLevelDetailParameterValue (param_set_p, &format);
+
 							status = GetAllStudiesContainingMaterial (material_p, job_p, format, data_p);
 
 							FreeMaterial (material_p);
@@ -347,13 +373,13 @@ OperationStatus GetAllStudiesContainingMaterial (Material *material_p, ServiceJo
 
 													while ((i < num_results) && success_flag)
 														{
-															json_t *row_json_p = json_array_get (results_p, i);
+															json_t *plot_json_p = json_array_get (results_p, i);
 															bson_oid_t oid;
 
 															/*
 															 * Get the study id
 															 */
-															if (GetNamedIdFromJSON (row_json_p, RO_STUDY_ID_S, &oid))
+															if (GetNamedIdFromJSON (plot_json_p, PL_PARENT_STUDY_S, &oid))
 																{
 																	char *id_s = GetBSONOidAsString (&oid);
 
