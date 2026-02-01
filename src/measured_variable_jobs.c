@@ -27,7 +27,11 @@
 #include "crop_ontology_tool.h"
 #include "dfw_util.h"
 #include "io_utils.h"
-
+#include "string_int_pair.h"
+#include "study.h"
+#include "study_jobs.h"
+#include "plot.h"
+#include "row_processor.h"
 
 #include "char_parameter.h"
 #include "json_parameter.h"
@@ -642,6 +646,103 @@ OperationStatus RunForCropOntologyAPIImport (ParameterSet *param_set_p, ServiceJ
 
 	return status;
 }
+
+
+
+OperationStatus GetAllStudiesContainingMeasuredVariable (const MeasuredVariable * const mv_p, ServiceJob *job_p, const ViewFormat format, FieldTrialServiceData *data_p)
+{
+	OperationStatus status = OS_FAILED;
+	bool success_flag = true;
+
+
+	bson_t *query_p = BCON_NEW (ST_PHENOTYPES_S, BCON_OID (mv_p -> mv_variable_term_p -> st_name_s));
+
+	if (query_p)
+		{
+			if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_PLOT]))
+				{
+					json_t *results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, NULL);
+
+					if (results_p)
+						{
+							json_t *studies_cache_p = json_object ();
+
+							if (studies_cache_p)
+								{
+									if (json_is_array (results_p))
+										{
+											const size_t num_results = json_array_size (results_p);
+											size_t i = 0;
+
+											while ((i < num_results) && success_flag)
+												{
+													json_t *plot_json_p = json_array_get (results_p, i);
+													bson_oid_t oid;
+
+													/*
+													 * Get the study id
+													 */
+													if (GetNamedIdFromJSON (plot_json_p, PL_PARENT_STUDY_S, &oid))
+														{
+															char *id_s = GetBSONOidAsString (&oid);
+
+															if (id_s)
+																{
+																	json_int_t count = 0;
+
+																	GetJSONInteger (studies_cache_p, id_s, &count);
+
+																	++ count;
+
+																	if (!SetJSONInteger (studies_cache_p, id_s, count))
+																		{
+																			success_flag = false;
+																		}
+
+																	FreeBSONOidString (id_s);
+																}		/* if (id_s) */
+
+														}
+
+													if (success_flag)
+														{
+															++ i;
+														}
+
+												}		/* while ((i < num_results) && success_flag) */
+
+
+											if (success_flag)
+												{
+													/*
+													 * Now we sort the studies by how many times the material appears
+													 */
+													size_t num_studies = json_object_size (studies_cache_p);
+													if (num_studies > 0)
+														{
+
+
+														}		/* if (studies_cache_p -> ht_size > 0) */
+
+												}		/* if (success_flag) */
+
+										}		/* if (json_is_array (results_p)) */
+
+									json_decref (studies_cache_p);
+								}		/* if (studies_cache_p */
+
+							json_decref (results_p);
+						}		/* if (results_p) */
+
+				}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_ROW] */
+
+			bson_free (query_p);
+		}		/* if (query_p) */
+
+
+	return status;
+}
+
 
 
 /*

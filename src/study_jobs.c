@@ -126,8 +126,6 @@ static bool AddStudyLocationCriteria (bson_t *query_p, ParameterSet *param_set_p
 static bool AddStudyDateCriteria (bson_t *query_p, ParameterSet *param_set_p);
 
 
-static bool GetMatchingStudies (bson_t *query_p, FieldTrialServiceData *data_p, ServiceJob *job_p, ViewFormat format);
-
 
 static Parameter *GetAndAddAspectParameter (const char *aspect_s, FieldTrialServiceData *data_p, ParameterSet *param_set_p, ParameterGroup *group_p);
 
@@ -2357,47 +2355,47 @@ OperationStatus GenerateStatisticsForAllStudies (ServiceJob *job_p,  FieldTrialS
 			if (stats_filename_s)
 				{
 					json_array_foreach (all_studies_p, i, study_json_p)
-							{
-						Study *study_p = GetStudyFromJSON (study_json_p, VF_STORAGE, data_p);
+						{
+							Study *study_p = GetStudyFromJSON (study_json_p, VF_STORAGE, data_p);
 
-						if (study_p)
-							{
-								OperationStatus stats_status = GenerateStatisticsForStudy (study_p, job_p, data_p);
+							if (study_p)
+								{
+									OperationStatus stats_status = GenerateStatisticsForStudy (study_p, job_p, data_p);
 
-								FILE *stats_f = fopen (stats_filename_s, "a");
-								if (stats_f)
-									{
-										char *id_s = GetBSONOidAsString (study_p->st_id_p);
-										int64 num_plots = GetNumberOfPlotsInStudy (study_p, data_p);
+									FILE *stats_f = fopen (stats_filename_s, "a");
+									if (stats_f)
+										{
+											char *id_s = GetBSONOidAsString (study_p->st_id_p);
+											int64 num_plots = GetNumberOfPlotsInStudy (study_p, data_p);
 
-										fprintf (stats_f, "\"%s\" %s %" PRId64 "\n", study_p->st_name_s, id_s ? id_s : "_", num_plots);
+											fprintf (stats_f, "\"%s\" %s %" PRId64 "\n", study_p->st_name_s, id_s ? id_s : "_", num_plots);
 
-										if (id_s)
-											{
-												FreeBSONOidString (id_s);
-											}
+											if (id_s)
+												{
+													FreeBSONOidString (id_s);
+												}
 
-										fclose (stats_f);
-									}
+											fclose (stats_f);
+										}
 
 
-								if (stats_status == OS_SUCCEEDED)
-									{
-										++num_successes;
-									}
-								else
-									{
-										PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GenerateStatisticsForStudy () failed for \"%s\"", study_p->st_name_s);
-									}
+									if (stats_status == OS_SUCCEEDED)
+										{
+											++num_successes;
+										}
+									else
+										{
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GenerateStatisticsForStudy () failed for \"%s\"", study_p->st_name_s);
+										}
 
-								FreeStudy (study_p);
-							}		/* if (study_p) */
-						else
-							{
-								PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "GetStudyFromJSON () failed");
-							}
+									FreeStudy (study_p);
+								}		/* if (study_p) */
+							else
+								{
+									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "GetStudyFromJSON () failed");
+								}
 
-							}		/* json_array_foreach (all_studies_p, i, study_json_p) */
+						}		/* json_array_foreach (all_studies_p, i, study_json_p) */
 
 
 					FreeCopiedString (stats_filename_s);
@@ -4033,7 +4031,7 @@ void FindAndAddStudyToServiceJob (const char *id_s, const ViewFormat format, Ser
 }
 
 
-static bool GetMatchingStudies (bson_t *query_p, FieldTrialServiceData *data_p, ServiceJob *job_p, ViewFormat format)
+bool GetMatchingStudies (bson_t *query_p, FieldTrialServiceData *data_p, ServiceJob *job_p, ViewFormat format)
 {
 	bool job_done_flag = false;
 

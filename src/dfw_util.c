@@ -434,7 +434,7 @@ static bool RunVersionSearch (const char * const collection_s, const char * cons
 						{
 							if ((timestamp_s == NULL) || (BSON_APPEND_UTF8 (query_p, MONGO_TIMESTAMP_S, timestamp_s)))
 								{
-									if (PopulateJSONWithAllMongoResults (data_p -> dftsd_mongo_p, query_p, extra_opts_p, results_p))
+									if (PopulateJSONWithAllMongoResults (data_p -> dftsd_mongo_p, query_p, NULL, extra_opts_p, results_p))
 										{
 											success_flag = true;
 										}		/* if (temp_p) */

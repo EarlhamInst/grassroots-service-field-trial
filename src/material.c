@@ -511,6 +511,33 @@ static Material *SearchForMaterial (bson_t *query_p, const FieldTrialServiceData
 {
 	Material *material_p = NULL;
 
+	query_p = bson_new ();
+
+	if (query_p)
+		{
+			bson_oid_t oid;
+
+			bson_oid_init_from_string (&oid, "5dc425bede68e746ad54a263");
+
+			if (BSON_APPEND_OID (query_p, "parent_study_id", &oid))
+				{
+					json_t *results_p = DistinctMatchingMongoDocumentsByBSON (data_p -> dftsd_mongo_p, data_p -> dftsd_database_s, data_p -> dftsd_collection_ss [DFTD_PLOT], "rows.material_id", query_p);
+
+					if (results_p)
+						{
+
+							json_decref (results_p);
+						}
+				}
+			else
+				{
+				}
+
+			bson_destroy (query_p);
+		}
+
+
+
 	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_MATERIAL]))
 		{
 			json_t *results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, NULL);

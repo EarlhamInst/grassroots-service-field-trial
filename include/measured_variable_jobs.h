@@ -105,6 +105,9 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL OperationStatus RunForCropOntologyAPIImport (Param
 DFW_FIELD_TRIAL_SERVICE_LOCAL json_t *GetAllMeasuredVariableIds (Service *service_p);
 
 
+DFW_FIELD_TRIAL_SERVICE_LOCAL OperationStatus GetAllStudiesContainingMeasuredVariable (const MeasuredVariable * const mv_p, ServiceJob *job_p, const ViewFormat format, FieldTrialServiceData *data_p);
+
+
 #ifdef __cplusplus
 }
 #endif

@@ -907,15 +907,23 @@ bool AreObservationsMatchingByParts (const Observation *observation_p, const Mea
 
 	if (bson_oid_equal (variable_p -> mv_id_p, observation_p -> ob_phenotype_p -> mv_id_p))
 		{
-			int res = CompareObservationMetadata (observation_p -> ob_metadata_p, metadata_p);
+			int res = 0;
 
-			if (res == 0)
+			if (metadata_p)
 				{
-					if (observation_p -> ob_index == metadata_p -> om_index)
+					res = CompareObservationMetadata (observation_p -> ob_metadata_p, metadata_p);
+
+					if (res == 0)
 						{
-							match_flag = true;
+							if (observation_p -> ob_index == metadata_p -> om_index)
+								{
+									match_flag = true;
+								}
 						}
+
 				}
+
+
 		}
 
 	return match_flag;

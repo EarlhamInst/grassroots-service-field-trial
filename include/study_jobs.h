@@ -257,6 +257,8 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddStudyLevelDetailParameter (ParameterSet *p
 DFW_FIELD_TRIAL_SERVICE_LOCAL bool GetStudyLevelDetailParameterValue (ParameterSet *param_set_p, ViewFormat *format_p);
 
 
+DFW_FIELD_TRIAL_SERVICE_LOCAL bool GetMatchingStudies (bson_t *query_p, FieldTrialServiceData *data_p, ServiceJob *job_p, ViewFormat format);
+
 
 #ifdef __cplusplus
 }

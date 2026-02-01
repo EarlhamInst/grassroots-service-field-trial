@@ -283,6 +283,7 @@ bool RunForSearchMaterialParams (FieldTrialServiceData *data_p, ParameterSet *pa
 	bool job_done_flag = false;
 	const char *accession_s = NULL;
 
+
 	if (GetCurrentStringParameterValueFromParameterSet (param_set_p, S_MATERIAL_ACCESSION.npt_name_s, &accession_s))
 		{
 			if (!IsStringEmpty (accession_s))
@@ -358,7 +359,8 @@ OperationStatus GetAllStudiesContainingMaterial (Material *material_p, ServiceJo
 				{
 					if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_PLOT]))
 						{
-							json_t *results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, NULL);
+							const char *fields_ss [2] = { PL_PARENT_STUDY_S, NULL };
+							json_t *results_p = GetAllMongoResultsWithNamedFieldsAsJSON (data_p -> dftsd_mongo_p, query_p, fields_ss, NULL);
 
 							if (results_p)
 								{
@@ -415,6 +417,9 @@ OperationStatus GetAllStudiesContainingMaterial (Material *material_p, ServiceJo
 															 * Now we sort the studies by how many times the material appears
 															 */
 															size_t num_studies = json_object_size (studies_cache_p);
+
+															PrintLog (STM_LEVEL_INFO, __FILE__, __LINE__, "Found %u studies containing \"%s\"", num_studies, material_p -> ma_accession_s);
+
 															if (num_studies > 0)
 																{
 																	StringIntPairArray *ids_with_counts_p = AllocateStringIntPairArray (num_studies);
@@ -451,7 +456,7 @@ OperationStatus GetAllStudiesContainingMaterial (Material *material_p, ServiceJo
 
 																					if (study_p)
 																						{
-																							if (AddStudyToServiceJob (job_p, study_p, format, processor_p, data_p))
+																							if (AddStudyToServiceJob (job_p, study_p, /*format*/VF_REFERENCE, processor_p, data_p))
 																								{
 																									++ added_count;
 																								}
