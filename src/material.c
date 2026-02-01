@@ -507,26 +507,23 @@ Material *GetMaterialById (const bson_oid_t *material_id_p, const FieldTrialServ
 }
 
 
-static Material *SearchForMaterial (bson_t *query_p, const FieldTrialServiceData *data_p)
-{
-	Material *material_p = NULL;
 
-	query_p = bson_new ();
+json_t *GetAlStudyMaaterialIdss (const Study * const study_p, const FieldTrialServiceData *data_p)
+{
+	json_t *results_p = NULL;
+	bson_t *query_p = bson_new ();
 
 	if (query_p)
 		{
-			bson_oid_t oid;
-
-			bson_oid_init_from_string (&oid, "5dc425bede68e746ad54a263");
-
-			if (BSON_APPEND_OID (query_p, "parent_study_id", &oid))
+			if (BSON_APPEND_OID (query_p, PL_PARENT_STUDY_S, study_p -> st_id_p))
 				{
-					json_t *results_p = DistinctMatchingMongoDocumentsByBSON (data_p -> dftsd_mongo_p, data_p -> dftsd_database_s, data_p -> dftsd_collection_ss [DFTD_PLOT], "rows.material_id", query_p);
+					char *key_s = ConcatenateVarargsStrings (PL_ROWS_S, ".", SR_MATERIAL_ID_S, NULL);
 
-					if (results_p)
+					if (key_s)
 						{
+							results_p = DistinctMatchingMongoDocumentsByBSON (data_p -> dftsd_mongo_p, data_p -> dftsd_database_s, data_p -> dftsd_collection_ss [DFTD_PLOT], key_s, query_p);
 
-							json_decref (results_p);
+							FreeCopiedString (key_s);
 						}
 				}
 			else
@@ -536,6 +533,13 @@ static Material *SearchForMaterial (bson_t *query_p, const FieldTrialServiceData
 			bson_destroy (query_p);
 		}
 
+	return results_p;
+}
+
+
+static Material *SearchForMaterial (bson_t *query_p, const FieldTrialServiceData *data_p)
+{
+	Material *material_p = NULL;
 
 
 	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_MATERIAL]))

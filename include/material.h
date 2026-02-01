@@ -243,6 +243,9 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL Material *GetMaterialByAccession (const char *acce
 DFW_FIELD_TRIAL_SERVICE_LOCAL bool IsMaterialComplete (const Material * const material_p);
 
 
+DFW_FIELD_TRIAL_SERVICE_LOCAL json_t *GetAlStudyMaaterialIdss (const Study * const study_p, const FieldTrialServiceData *data_p);
+
+
 #ifdef __cplusplus
 }
 #endif
