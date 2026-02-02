@@ -260,6 +260,9 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL bool GetStudyLevelDetailParameterValue (ParameterS
 DFW_FIELD_TRIAL_SERVICE_LOCAL bool GetMatchingStudies (bson_t *query_p, FieldTrialServiceData *data_p, ServiceJob *job_p, ViewFormat format);
 
 
+DFW_FIELD_TRIAL_SERVICE_LOCAL json_t *GetAllStudyMaterialIds (const Study * const study_p, const FieldTrialServiceData *data_p);
+
+
 #ifdef __cplusplus
 }
 #endif

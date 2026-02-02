@@ -77,9 +77,12 @@ static NamedParameterType S_SEARCH_TRIAL_ID = { "Get all studies for this Field 
 
 static NamedParameterType S_SEARCH_STUDY_HAS_PLOTS = { "Study must have plot data", PT_BOOLEAN };
 
-static NamedParameterType S_SEARCH_STUDY_ACCESSIONS = { "Studies must have one of these accessions", PT_STRING_ARRAY };
 
-static NamedParameterType S_SEARCH_STUDY_PHENOTYPES = { "Studies must have one of these phenotypes", PT_STRING_ARRAY };
+static NamedParameterType S_SEARCH_STUDIES_ACCESSIONS STUDY_JOB_STRUCT_VAL("ST Search Study Accessions", PT_STRING);
+static NamedParameterType S_SEARCH_STUDIES_PHENOTYPES STUDY_JOB_STRUCT_VAL("ST Search Study Phenotypes", PT_STRING);
+
+
+
 
 
 #define S_NUM_DIRECTIONS (9)
@@ -230,6 +233,12 @@ static bool ProcessPersonForStudy (Person *person_p, void *user_data_p);
 #ifdef ENABLE_MARTI
 static OperationStatus SearchMarti (const double64 *latitude_p, const double64 *longitude_p, const struct tm *date_p, FieldTrialServiceData *ft_service_data_p);
 #endif
+
+
+static bool RunForAdvancedSearchStudyParams (FieldTrialServiceData *data_p, ParameterSet *param_set_p, ServiceJob *job_p);
+
+
+static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, ParameterSet *param_set_p, ServiceJob *job_p);
 
 
 /*
@@ -1051,11 +1060,15 @@ bool GetSearchStudyParameterTypeForNamedParameter (const char *param_name_s, Par
 					STUDY_HARVEST_YEAR,
 					STUDY_SOWING_YEAR,
 					S_SEARCH_TRIAL_ID,
+					S_SEARCH_STUDIES_ACCESSIONS,
+					S_SEARCH_STUDIES_PHENOTYPES,
 					NULL
 			};
 
 	return DefaultGetParameterTypeForNamedParameter (param_name_s, pt_p, params);
 }
+
+
 
 
 bool AddSearchStudyParams (ServiceData *data_p, ParameterSet *param_set_p)
@@ -1083,17 +1096,31 @@ bool AddSearchStudyParams (ServiceData *data_p, ParameterSet *param_set_p)
 														{
 															uint32 year = 2017;
 
-															if ((param_p = EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, param_set_p, group_p, STUDY_SOWING_YEAR.npt_name_s, "Sowing year", "Year that the Study was/will be sown", &year, PL_ADVANCED)) != NULL)																{
-
+															if ((param_p = EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, param_set_p, group_p, STUDY_SOWING_YEAR.npt_name_s, "Sowing year", "Year that the Study was/will be sown", &year, PL_ADVANCED)) != NULL)
+																{
 																	if ((param_p = EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, param_set_p, group_p, STUDY_HARVEST_YEAR.npt_name_s, "Harvest year", "Year that the Study was/will be harvested", &year, PL_ADVANCED)) != NULL)
 																		{
-																			success_flag = true;
+																			if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, param_set_p, group_p, S_SEARCH_STUDIES_ACCESSIONS.npt_type, S_SEARCH_STUDIES_ACCESSIONS.npt_name_s, "Accessions", "Search for Studies containing these accessions", NULL, PL_WIZARD)) != NULL)
+																				{
+																					if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, param_set_p, group_p, S_SEARCH_STUDIES_PHENOTYPES.npt_type, S_SEARCH_STUDIES_PHENOTYPES.npt_name_s, "Phenotypes", "Search for Studies containing these phenotypes", NULL, PL_WIZARD)) != NULL)
+																						{
+																							success_flag = true;
+																						}
+																					else
+																						{
+																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", S_SEARCH_STUDIES_PHENOTYPES.npt_name_s);
+																						}
+																				}
+																			else
+																				{
+																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", S_SEARCH_STUDIES_ACCESSIONS.npt_name_s);
+																				}
 																		}
 																	else
 																		{
 																			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_HARVEST_YEAR.npt_name_s);
 																		}
-															}
+																}
 															else
 																{
 																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_SOWING_YEAR.npt_name_s);
@@ -1143,7 +1170,9 @@ bool AddSearchStudyParams (ServiceData *data_p, ParameterSet *param_set_p)
 }
 
 
-bool RunForSearchStudyParams (FieldTrialServiceData *data_p, ParameterSet *param_set_p, ServiceJob *job_p)
+
+
+static bool RunForAdvancedSearchStudyParams (FieldTrialServiceData *data_p, ParameterSet *param_set_p, ServiceJob *job_p)
 {
 	bool job_done_flag = false;
 	const bool *search_flag_p = NULL;
@@ -1264,6 +1293,104 @@ bool RunForSearchStudyParams (FieldTrialServiceData *data_p, ParameterSet *param
 				}
 		}
 
+
+	return job_done_flag;
+
+}
+
+
+bool RunForSearchStudyParams (FieldTrialServiceData *data_p, ParameterSet *param_set_p, ServiceJob *job_p)
+{
+	bool run_flag = false;
+
+	switch (param_set_p -> ps_current_level)
+		{
+			case PL_ADVANCED:
+				run_flag = RunForAdvancedSearchStudyParams (data_p, param_set_p, job_p);
+				break;
+
+			case PL_WIZARD:
+				run_flag = RunForWizardSearchStudyParams (data_p, param_set_p, job_p);
+				break;
+
+			case PL_SIMPLE:
+			default:
+				break;
+		}
+
+	return run_flag;
+}
+
+
+
+static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, ParameterSet *param_set_p, ServiceJob *job_p)
+{
+	bool job_done_flag = false;
+	const bool *search_flag_p = NULL;
+
+	const char *accession_s = NULL;
+	const char *phenotype_s = NULL;
+
+	GetCurrentStringParameterValueFromParameterSet (param_set_p, S_SEARCH_STUDIES_ACCESSIONS.npt_name_s, &accession_s);
+	GetCurrentStringParameterValueFromParameterSet (param_set_p, S_SEARCH_STUDIES_PHENOTYPES.npt_name_s, &phenotype_s);
+
+
+	if ((!IsStringEmpty (accession_s)) || (!IsStringEmpty (phenotype_s)))
+		{
+			ViewFormat format = VF_CLIENT_MINIMAL;
+
+			GetStudyLevelDetailParameterValue (param_set_p, &format);
+
+
+			/*
+			 * We're building up a query for the given parameters
+			 */
+			bson_t *query_p = bson_new ();
+
+			if (query_p)
+				{
+					bool built_query_success_flag = true;
+
+					if (!IsStringEmpty (accession_s))
+						{
+							if (!BSON_APPEND_UTF8 (query_p, ST_ACCESSIONS_S, accession_s))
+								{
+									built_query_success_flag = false;
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_ACCESSIONS_S, accession_s);
+								}
+						}		/* if (!IsStringEmpty (accession_s)) */
+
+
+					if (built_query_success_flag)
+						{
+							if (!IsStringEmpty (phenotype_s))
+								{
+									if (!BSON_APPEND_UTF8 (query_p, ST_PHENOTYPES_S, phenotype_s))
+										{
+											built_query_success_flag = false;
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_PHENOTYPES_S, phenotype_s);
+										}
+								}		/* if (!IsStringEmpty (accession_s)) */
+
+
+							if (built_query_success_flag)
+								{
+									/*
+									 * Search with our given criteria
+									 */
+									if (GetMatchingStudies (query_p, data_p, job_p, format))
+										{
+
+										}
+
+								}		/* if (built_query_success_flag) */
+
+						}		/* if (built_query_success_flag) */
+
+				}		/* if (query_p) */
+
+			job_done_flag = true;
+		}		/* if ((!IsStringEmpty (accession_s)) || (!IsStringEmpty (accession_s))) */
 
 	return job_done_flag;
 }
@@ -3113,6 +3240,47 @@ OperationStatus CalculateStudyStatistics (Study *study_p, const FieldTrialServic
 
 	return status;
 }
+
+
+
+
+json_t *GetAllStudyMaterialIds (const Study * const study_p, const FieldTrialServiceData *data_p)
+{
+	json_t *results_p = NULL;
+	bson_t *query_p = bson_new ();
+
+	if (query_p)
+		{
+			if (BSON_APPEND_OID (query_p, PL_PARENT_STUDY_S, study_p -> st_id_p))
+				{
+					char *key_s = ConcatenateVarargsStrings (PL_ROWS_S, ".", SR_MATERIAL_ID_S, NULL);
+
+					if (key_s)
+						{
+							results_p = DistinctMatchingMongoDocumentsByBSON (data_p -> dftsd_mongo_p, data_p -> dftsd_database_s, data_p -> dftsd_collection_ss [DFTD_PLOT], key_s, query_p);
+
+							FreeCopiedString (key_s);
+						}
+					else
+						{
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "ConcatenateVarargsStrings () failed for \"%s\", \".\", \"%s\" for study \"%s\"", PL_ROWS_S, SR_MATERIAL_ID_S, study_p -> st_name_s);
+						}
+				}
+			else
+				{
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "BSON_APPEND_OID () failed for \"%s\"", study_p -> st_name_s);
+				}
+
+			bson_destroy (query_p);
+		}
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "bson_new () failed for \"%s\"", study_p -> st_name_s);
+		}
+
+	return results_p;
+}
+
 
 
 static bool ProcessStudyPhenotype (const char *phenotype_oid_s, void *user_data_p, const FieldTrialServiceData *service_data_p)

@@ -530,14 +530,14 @@ static ServiceJobSet *RunDFWFieldTrialSearchService (Service *service_p, Paramet
 								}
 
 						}
-					else if (param_set_p -> ps_current_level == PL_ADVANCED)
+					else
 						{
 							/*
 							 * check for the advanced search
 							 */
 							if (!RunForSearchFieldTrialParams (data_p, param_set_p, job_p))
 								{
-									if (!RunForSearchStudyParams (data_p, param_set_p, job_p))
+									if (!RunForAdvancedSearchStudyParams (data_p, param_set_p, job_p))
 										{
 											if (!RunForSearchPlotParams (data_p, param_set_p, job_p))
 												{
@@ -561,7 +561,6 @@ static ServiceJobSet *RunDFWFieldTrialSearchService (Service *service_p, Paramet
 								}		/* if (!RunForFieldTrialParams (data_p, param_set_p, job_p)) */
 
 						}		/* if (!ran_flag) */
-
 
 				}		/* if (param_set_p) */
 
