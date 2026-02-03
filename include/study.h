@@ -292,6 +292,15 @@ typedef struct Study
 	 */
 	LinkedList *st_contributors_p;
 
+
+
+	/**
+	 * A JSON object where the keys are the ObjectIDs of the
+	 * materials within this Study and the values are how many
+	 * times that they appear.
+	 */
+	json_t *st_accessions_p;
+
 } Study;
 
 

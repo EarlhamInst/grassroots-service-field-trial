@@ -2542,7 +2542,6 @@ OperationStatus GenerateStatisticsForAllStudies (ServiceJob *job_p,  FieldTrialS
 		}
 
 
-
 	MergeServiceJobStatus (job_p, status);
 
 	return status;
@@ -2572,17 +2571,27 @@ OperationStatus GenerateStatisticsForStudy (Study *study_p, ServiceJob *job_p,  
 
 					if (status == OS_SUCCEEDED)
 						{
-							OperationStatus old_status = job_p -> sj_status;
+							status = CalculateStudyAccessions (study_p, data_p);
 
-							status = SaveStudy (study_p, job_p, data_p, NULL);
-
-							if (status != OS_SUCCEEDED)
+							if (status == OS_SUCCEEDED)
 								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SaveStudy () for \"%s\" had status %d", study_p -> st_name_s, status);
+
+									OperationStatus old_status = job_p -> sj_status;
+
+									status = SaveStudy (study_p, job_p, data_p, NULL);
+
+									if (status != OS_SUCCEEDED)
+										{
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SaveStudy () for \"%s\" had status %d", study_p -> st_name_s, status);
+										}
+
+
+									MergeServiceJobStatus (job_p, old_status);
 								}
-
-
-							MergeServiceJobStatus (job_p, old_status);
+							else
+								{
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "CalculateStudyAccessions () failed for \"%s\"", study_p -> st_name_s);
+								}
 						}
 					else
 						{
@@ -3242,6 +3251,19 @@ OperationStatus CalculateStudyStatistics (Study *study_p, const FieldTrialServic
 }
 
 
+OperationStatus CalculateStudyAccessions (Study *study_p, const FieldTrialServiceData *service_data_p)
+{
+	OperationStatus status = OS_FAILED;
+	json_t *ids_p = GetAllStudyMaterialIds (study_p, service_data_p);
+
+	if (ids_p)
+		{
+
+		}
+
+
+	return status;
+}
 
 
 json_t *GetAllStudyMaterialIds (const Study * const study_p, const FieldTrialServiceData *data_p)

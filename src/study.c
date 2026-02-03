@@ -78,7 +78,7 @@ static bool AddTreatmentsToJSON (const Study *study_p, json_t *study_json_p, con
 static bool AddTreatmentsFromJSON (Study *study_p, const json_t *study_json_p, const FieldTrialServiceData *data_p);
 
 
-static bool AddAccessionsToJSON (const Study *study_p, json_t *study_json_p, const ViewFormat format, const FieldTrialServiceData *data_p);
+static bool AddAccessionsToJSON (Study *study_p, json_t *study_json_p, const ViewFormat format, const FieldTrialServiceData *data_p);
 
 
 static bool AddStatisticsFromJSON (Study *study_p, const json_t *study_json_p, const FieldTrialServiceData *data_p);
@@ -312,6 +312,8 @@ Study *AllocateStudy (bson_oid_t *id_p,  Metadata *metadata_p,  const char *name
 																																																																					study_p -> st_phenotypes_p = stats_p;
 
 																																																																					study_p -> st_contributors_p = contributors_p;
+																																																																					study_p -> st_accessions_p = NULL;
+
 																																																																					return study_p;
 																																																																				}
 
@@ -768,6 +770,10 @@ void FreeStudy (Study *study_p)
 			FreeLinkedList (study_p -> st_contributors_p);
 		}
 
+	if (study_p -> st_accessions_p)
+		{
+			json_decref (study_p -> st_accessions_p);
+		}
 
 	FreeMemory (study_p);
 }
@@ -1411,7 +1417,6 @@ Study *GetStudyWithParentTrialFromJSON (const json_t *json_p, FieldTrial *parent
 
 													const json_t *shape_p = json_object_get (json_p, ST_SHAPE_S);
 
-
 													Metadata *metadata_p = GetMetadataFromDefaultChildJSON (json_p, & (data_p -> dftsd_base_data));
 
 													/* use NULL rather than json's the_null */
@@ -1478,6 +1483,7 @@ Study *GetStudyWithParentTrialFromJSON (const json_t *json_p, FieldTrial *parent
 
 													if (study_p)
 														{
+															const json_t *accessions_p = json_object_get (json_p, ST_ACCESSIONS_S);
 															const json_t *contributors_json_p = json_object_get (json_p, ST_CONTRIBUTORS_S);
 
 															if (!AddStatisticsFromJSON (study_p, json_p, data_p))
@@ -1498,6 +1504,16 @@ Study *GetStudyWithParentTrialFromJSON (const json_t *json_p, FieldTrial *parent
 																		{
 																			PrintJSONToErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, json_p, "AddPeopleFromJSON () failed");
 																		}
+																}
+
+															if (accessions_p)
+																{
+																	if (study_p -> st_accessions_p)
+																		{
+																			json_decref (study_p -> st_accessions_p);
+																		}
+
+																	study_p -> st_accessions_p = accessions_p;
 																}
 														}
 
@@ -2415,15 +2431,21 @@ static bool AddHandbookLinks (const Study * const study_p, json_t *study_json_p,
 
 
 
-static bool AddAccessionsToJSON (const Study *study_p, json_t *study_json_p, const ViewFormat format, const FieldTrialServiceData *data_p)
+static bool AddAccessionsToJSON (Study *study_p, json_t *study_json_p, const ViewFormat format, const FieldTrialServiceData *data_p)
 {
 	bool success_flag = false;
 
-	/*
-	 * Are there any phenotypes?
-	 */
-	if ((study_p -> st_plots_p) && (study_p -> st_plots_p -> ll_size > 0))
+
+	if (study_p -> st_accessions_p)
 		{
+
+		}
+	else if ((study_p -> st_plots_p) && (study_p -> st_plots_p -> ll_size > 0))
+		{
+			/*
+			 * Are there any phenotypes?
+			 */
+
 			json_t *accessions_p = json_object ();
 
 			if (accessions_p)
@@ -2453,15 +2475,19 @@ static bool AddAccessionsToJSON (const Study *study_p, json_t *study_json_p, con
 
 													if (accession_s)
 														{
-															if (!GetJSONString (accessions_p, accession_s))
-																{
-																	if (!SetJSONString (accessions_p, accession_s, "1"))
-																		{
-																			success_flag = false;
-																		}
-																}
+															json_int_t count = 0;
 
+															GetJSONInteger (accessions_p, ST_ACCESSIONS_S, &count);
+
+															++ count;
+
+
+															if (!SetJSONInteger (accessions_p, ST_ACCESSIONS_S, count))
+																{
+																	success_flag = false;
+																}
 														}
+
 												}
 										}
 
@@ -2474,51 +2500,17 @@ static bool AddAccessionsToJSON (const Study *study_p, json_t *study_json_p, con
 
 					if (success_flag)
 						{
-							json_t *accessions_array_p = json_array ();
-
-							if (accessions_array_p)
+							if (study_p -> st_accessions_p)
 								{
-									/*
-									 * Transform the accession table into an array
-									 */
-									const char *key_s;
-									json_t *value_p;
+									json_decref (study_p -> st_accessions_p);
+								}
 
-									json_object_foreach (accessions_p, key_s, value_p)
-										{
-											json_t *accession_p = json_string (key_s);
-
-											if (accession_p)
-												{
-													if (json_array_append_new (accessions_array_p, accession_p) != 0)
-														{
-															success_flag = false;
-															PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "Failed to add \"%s\" to accessions array", key_s);
-														}
-												}
-
-										}		/*while (iterator_p && success_flag) */
-
-									if (success_flag)
-										{
-											if (json_object_set_new (study_json_p, ST_ACCESSIONS_S, accessions_array_p) != 0)
-												{
-													success_flag = false;
-													PrintJSONToErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, accessions_array_p, "Failed to accessions array to study");
-												}
-										}
-
-
-									if (!success_flag)
-										{
-											json_decref (accessions_array_p);
-										}
-
-								}		/* if (accessions_array_p) */
-
+							study_p -> st_accessions_p = accessions_p;
 						}
-
-					json_decref (accessions_p);
+					else
+						{
+							json_decref (accessions_p);
+						}
 				}		/* if (accessions_p) */
 			else
 				{
@@ -2811,6 +2803,23 @@ Study *CopyStudy (const Study * const src_p, const char * const new_name_s, cons
 																		}		/* if (src_p -> st_contributors_p -> ll_size > 0) */
 
 																}		/* if (success_flag) */
+
+
+															if (success_flag)
+																{
+																	if (src_p -> st_accessions_p)
+																		{
+																			dest_p -> st_accessions_p = json_deep_copy (src_p -> st_accessions_p);
+
+																			if (! (dest_p -> st_accessions_p))
+																				{
+																					success_flag = false;
+																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, src_p -> st_accessions_p, "Failed to copy accessions from  \"%s\" to \"%s\"",
+																											 src_p -> st_name_s, dest_p -> st_name_s);
+																				}
+
+																		}
+																}
 
 
 															if (success_flag)

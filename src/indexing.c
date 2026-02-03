@@ -115,7 +115,7 @@ static NamedParameterType S_UPDATE_SCALE_TERMS = { "SS Update Scale Classes", PT
 
 static NamedParameterType S_ROTHAMSTED_TERMS = { "SS Roth Upload", PT_JSON_TABLE };
 
-static NamedParameterType S_GENERATE_STUDY_STATISTICS = { "SS Generate Phenotypes", PT_LARGE_STRING };
+static NamedParameterType S_GENERATE_STUDY_METADATA = { "SS Generate Phenotypes & Accessions", PT_LARGE_STRING };
 
 
 static NamedParameterType S_ADD_MONGODB_INDEXES = { "SS Add MongoDB Indexes", PT_BOOLEAN };
@@ -1275,7 +1275,7 @@ static ServiceJobSet *RunFieldTrialIndexingService (Service *service_p, Paramete
 					/*
 					 * Generate Study Statistics
 					 */
-					if (GetCurrentStringParameterValueFromParameterSet (param_set_p, S_GENERATE_STUDY_STATISTICS.npt_name_s, &id_s))
+					if (GetCurrentStringParameterValueFromParameterSet (param_set_p, S_GENERATE_STUDY_METADATA.npt_name_s, &id_s))
 						{
 							if (!IsStringEmpty (id_s))
 								{
@@ -1312,7 +1312,7 @@ static ServiceJobSet *RunFieldTrialIndexingService (Service *service_p, Paramete
 
 																			if (error_s)
 																				{
-																					AddParameterErrorMessageToServiceJob (job_p, S_GENERATE_STUDY_STATISTICS.npt_name_s, S_GENERATE_STUDY_STATISTICS.npt_type, error_s);
+																					AddParameterErrorMessageToServiceJob (job_p, S_GENERATE_STUDY_METADATA.npt_name_s, S_GENERATE_STUDY_METADATA.npt_type, error_s);
 																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, error_s);
 																					FreeCopiedString (error_s);
 																				}
@@ -1320,7 +1320,7 @@ static ServiceJobSet *RunFieldTrialIndexingService (Service *service_p, Paramete
 																				{
 																					const char * const default_error_s = "Could not generate statistics for study by id";
 
-																					AddParameterErrorMessageToServiceJob (job_p, S_GENERATE_STUDY_STATISTICS.npt_name_s, S_GENERATE_STUDY_STATISTICS.npt_type, default_error_s);
+																					AddParameterErrorMessageToServiceJob (job_p, S_GENERATE_STUDY_METADATA.npt_name_s, S_GENERATE_STUDY_METADATA.npt_type, default_error_s);
 																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, default_error_s);
 																				}
 
@@ -1334,7 +1334,7 @@ static ServiceJobSet *RunFieldTrialIndexingService (Service *service_p, Paramete
 
 																	if (error_s)
 																		{
-																			AddParameterErrorMessageToServiceJob (job_p, S_GENERATE_STUDY_STATISTICS.npt_name_s, S_GENERATE_STUDY_STATISTICS.npt_type, error_s);
+																			AddParameterErrorMessageToServiceJob (job_p, S_GENERATE_STUDY_METADATA.npt_name_s, S_GENERATE_STUDY_METADATA.npt_type, error_s);
 																			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, error_s);
 																			FreeCopiedString (error_s);
 																		}
@@ -1342,7 +1342,7 @@ static ServiceJobSet *RunFieldTrialIndexingService (Service *service_p, Paramete
 																		{
 																			const char * const default_error_s = "Could not find study by id";
 
-																			AddParameterErrorMessageToServiceJob (job_p, S_GENERATE_STUDY_STATISTICS.npt_name_s, S_GENERATE_STUDY_STATISTICS.npt_type, default_error_s);
+																			AddParameterErrorMessageToServiceJob (job_p, S_GENERATE_STUDY_METADATA.npt_name_s, S_GENERATE_STUDY_METADATA.npt_type, default_error_s);
 																			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, default_error_s);
 																		}
 
@@ -1526,7 +1526,7 @@ static bool GetIndexingParameterTypeForNamedParameter (const Service * UNUSED_PA
 			S_GENERATE_HANDBOOK,
 			S_UPDATE_SCALE_TERMS,
 			S_ROTHAMSTED_TERMS,
-			S_GENERATE_STUDY_STATISTICS,
+			S_GENERATE_STUDY_METADATA,
 			S_ADD_MONGODB_INDEXES,
 			NULL
 		};
@@ -1582,7 +1582,7 @@ static ParameterSet *GetFieldTrialIndexingServiceParameters (Service *service_p,
 																																{
 																																	AddParameterKeyStringValuePair (param_p, PA_TABLE_ADD_COLUMNS_FLAG_S, "true");
 
-																																	if ((param_p = EasyCreateAndAddJSONParameterToParameterSet (data_p, params_p, manager_group_p, S_GENERATE_STUDY_STATISTICS.npt_type, S_GENERATE_STUDY_STATISTICS.npt_name_s, "Generate Statistics", "Generate the Phenotype statistics for the given Study Ids. Use * to generate them all.", NULL, PL_ALL)) != NULL)
+																																	if ((param_p = EasyCreateAndAddJSONParameterToParameterSet (data_p, params_p, manager_group_p, S_GENERATE_STUDY_METADATA.npt_type, S_GENERATE_STUDY_METADATA.npt_name_s, "Generate Metadata", "Generate the Phenotype statistics and accessions cache for the given Study Ids. Use * to generate them all.", NULL, PL_ALL)) != NULL)
 																																		{
 																																			if ((param_p = EasyCreateAndAddBooleanParameterToParameterSet (data_p, params_p, manager_group_p, S_ADD_MONGODB_INDEXES.npt_name_s, "Add MongoDB Indexes", "Add MongoDB Indexes for faster data handling", &b, PL_ALL)) != NULL)
 																																				{
