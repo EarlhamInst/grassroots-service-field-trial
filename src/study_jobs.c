@@ -1332,6 +1332,7 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 	GetCurrentStringParameterValueFromParameterSet (param_set_p, S_SEARCH_STUDIES_PHENOTYPES.npt_name_s, &phenotype_s);
 
 
+
 	if ((!IsStringEmpty (accession_s)) || (!IsStringEmpty (phenotype_s)))
 		{
 			ViewFormat format = VF_CLIENT_MINIMAL;
@@ -1350,11 +1351,28 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 
 					if (!IsStringEmpty (accession_s))
 						{
-							if (!BSON_APPEND_UTF8 (query_p, ST_ACCESSIONS_S, accession_s))
+							/*
+							 * The mongodb accessions are stored as lower case to get
+							 * around case sensitivity so make the query lower case too
+							 */
+							char *lower_case_accession_s = GetStringAsLowerCase (accession_s);
+
+							if (lower_case_accession_s)
+								{
+									if (!BSON_APPEND_UTF8 (query_p, ST_ACCESSIONS_S, lower_case_accession_s))
+										{
+											built_query_success_flag = false;
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_ACCESSIONS_S, lower_case_accession_s);
+										}
+
+									FreeCopiedString (lower_case_accession_s);
+								}		/* if (lower_case_accession_s) */
+							else
 								{
 									built_query_success_flag = false;
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_ACCESSIONS_S, accession_s);
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetStringAsLowerCase () failed for \"%s\"", accession_s);
 								}
+
 						}		/* if (!IsStringEmpty (accession_s)) */
 
 
@@ -1392,6 +1410,24 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 	return job_done_flag;
 }
 
+
+
+char *GetStudiesAccessionsNameKey (void)
+{
+	const char * const name_s = "so:name";
+	char *key_s = ConcatenateVarargsStrings (ST_ACCESSIONS_S, ".", name_s, NULL);
+
+	if (key_s)
+		{
+			return key_s;
+		}
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "ConcatenateVarargsStrings () failed for \"%s\", \".\" and \"%s\"", ST_ACCESSIONS_S, name_s);
+		}
+
+	return NULL;
+}
 
 /*
  * STATIC DEFINITIONS
@@ -3361,7 +3397,7 @@ json_t *GetStudyMaterialCounts (const Study * const study_p, const FieldTrialSer
 									plot_node_p = (const PlotNode *) (plot_node_p -> pn_node.ln_next_p);
 								}		/* while (plot_node_p) */
 
-							if (success_flag)
+							if (loop_flag)
 								{
 									char *key_s;
 									json_t *value_p;
@@ -3380,27 +3416,48 @@ json_t *GetStudyMaterialCounts (const Study * const study_p, const FieldTrialSer
 														{
 															bool added_flag = false;
 
-															if (SetJSONString (entry_p, "so:name", key_s))
+															/* Make the accession lower case for ease of searching */
+															char *accession_s = GetStringAsLowerCase (key_s);
+
+															if (accession_s)
 																{
-																	if (SetJSONInteger (entry_p, "count", count))
+																	if (SetJSONString (entry_p, "so:name", accession_s))
 																		{
-																			if (json_array_append_new (accessions_p, entry_p) == 0)
+																			if (SetJSONInteger (entry_p, "count", count))
 																				{
-																					added_flag = true;
+																					if (json_array_append_new (accessions_p, entry_p) == 0)
+																						{
+																							added_flag = true;
+																						}
+																					else
+																						{
+																							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, accessions_p, "Failed to set \"%s\": " INT64_FMT "", key_s, count);
+
+																							json_decref (entry_p);
+																						}
+
 																				}
 																			else
 																				{
-																					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, accessions_p, "Failed to set \"%s\": " INT64_FMT "", key_s, count);
-
-																					json_decref (entry_p);
-
+																					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, cache_p, "Failed to set \"count\": " INT64_FMT, count);
 																				}
 
+
+																		}		/* if (SetJSONString (entry_p, "so:name", key_s)) */
+																	else
+																		{
+																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, cache_p, "Failed to set \"so:name\": \"%s\"", key_s);
 																		}
 
+																	FreeCopiedString (accession_s);
+																}		/* if (accession_s) */
+															else
+																{
+																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get \"%s\" as lower case string", key_s);
 																}
 
-															if (!success_flag)
+
+															if (!added_flag)
 																{
 																	json_decref (entry_p);
 																}
@@ -3408,10 +3465,9 @@ json_t *GetStudyMaterialCounts (const Study * const study_p, const FieldTrialSer
 														}
 												}
 
+										}		/* json_object_foreach (cache_p, key_s, value_p) */
 
-
-										}
-								}
+								}		/* if (loop_flag) */
 
 							cache_size = json_object_size (cache_p);
 							accessions_size = json_array_size (accessions_p);

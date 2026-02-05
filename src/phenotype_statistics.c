@@ -16,6 +16,7 @@
 
 static const char * const S_MV_ID_S = "measured_variable_id";
 
+static json_t *GetMeasuredVariableAsJSONForStudyStorage (const MeasuredVariable *mv_p);
 
 PhenotypeStatisticsNode *AllocatePhenotypeStatisticsNode (const char *measured_variable_name_s, const Statistics *src_p)
 {
@@ -106,18 +107,7 @@ bool AddPhenotypeStatisticsNodeAsJSON (const PhenotypeStatisticsNode *psn_p, jso
 
 					if (format == VF_STORAGE)
 						{
-							mv_json_p = json_object ();
-
-							if (mv_json_p)
-								{
-									if (!AddNamedCompoundIdToJSON (mv_json_p, mv_p -> mv_id_p, S_MV_ID_S))
-										{
-											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, mv_json_p, "Failed to add id  \"%s\":  for \"%s\"", S_MV_ID_S, GetMeasuredVariableName (mv_p));
-											json_decref (mv_json_p);
-											mv_json_p = NULL;
-										}
-								}
-
+							mv_json_p = GetMeasuredVariableAsJSONForStudyStorage (mv_p);
 						}
 					else
 						{
@@ -170,7 +160,24 @@ bool AddPhenotypeStatisticsNodeAsJSON (const PhenotypeStatisticsNode *psn_p, jso
 
 									if (success_flag)
 										{
-											if (json_object_set_new (parent_p, psn_p -> psn_measured_variable_name_s, phenotype_p) == 0)
+											int res = -1;
+											/*
+											 * On the front ends have the phenotypes as objects to allow for quick lookup
+											 * On the server , to take advantage of using an index for fast searching, the
+											 * phenotypes need to be in an array
+											 */
+											if (format == VF_STORAGE)
+												{
+
+													res = json_array_append_new (parent_p, phenotype_p);
+												}
+											else
+												{
+													res = json_object_set_new (parent_p, psn_p -> psn_measured_variable_name_s, phenotype_p);
+												}
+
+
+											if (res == 0)
 												{
 													success_flag = true;
 												}
@@ -291,4 +298,38 @@ bool AddPhenotypeStatisticsNodeFromJSON (Study *study_p, const json_t *phenotype
 		}		/* if (mv_json_p) */
 
 	return success_flag;
+}
+
+
+
+static json_t *GetMeasuredVariableAsJSONForStudyStorage (const MeasuredVariable *mv_p)
+{
+	json_t *mv_json_p = json_object ();
+
+	if (mv_json_p)
+		{
+			if (SetJSONString (mv_json_p, MV_NAME_S, mv_p -> mv_variable_term_p -> st_name_s))
+				{
+					if (AddNamedCompoundIdToJSON (mv_json_p, mv_p -> mv_id_p, S_MV_ID_S))
+						{
+							return mv_json_p;
+						}		/* if (AddCompoundIdToJSON (mv_json_p, mv_p -> mv_id_p)) */
+					else
+						{
+							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, mv_json_p, "Failed to add \"%s\": \"%s\"", MV_NAME_S, mv_p -> mv_variable_term_p -> st_name_s);
+						}
+				}		/* if (SetJSONString (mv_json_p, MV_NAME_S, mv_p -> mv_variable_term_p -> st_name_s)) */
+			else
+				{
+					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, mv_json_p, "Failed to add \"%s\": \"%s\"", MV_NAME_S, mv_p -> mv_variable_term_p -> st_name_s);
+				}
+
+			json_decref (mv_json_p);
+		}		/* if (mv_json_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, mv_json_p, "Failed to allocate json for \"%s\"", mv_p -> mv_variable_term_p -> st_name_s);
+		}
+
+	return NULL;
 }

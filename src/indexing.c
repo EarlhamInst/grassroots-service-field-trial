@@ -1940,6 +1940,20 @@ static OperationStatus CreateMongoIndexes (FieldTrialServiceData *data_p)
 											FreeRowsNameKey (key_s);
 										}
 
+									/* Studies */
+									key_s = GetRowsNameKey ();
+
+									if (key_s)
+										{
+											if (AddCollectionSingleIndex (mongo_p, NULL, data_p -> dftsd_collection_ss [DFTD_PLOT], key_s, NULL, true, false))
+												{
+													++ i;
+												}
+
+											FreeRowsNameKey (key_s);
+										}
+
+
 									status = (i == num_keys) ? OS_SUCCEEDED : OS_PARTIALLY_SUCCEEDED;
 
 									revisions_status = CreateMongoRevisionsCollections (data_p);

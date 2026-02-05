@@ -2539,7 +2539,22 @@ bool AddPhenotypesToJSON (const Study *study_p, json_t *study_json_p, const View
 	 */
 	if ((study_p -> st_phenotypes_p) && (study_p -> st_phenotypes_p -> ll_size > 0))
 		{
-			json_t *phenotypes_p = json_object ();
+			json_t *phenotypes_p = NULL;
+
+			/*
+			 * On tghe front ends have the phenotypes as objects to allow for quick lookup
+			 * On the server , to take advantage of using an index for fast searching, the
+			 * phenotypes need to be in an array
+			 */
+			if (format == VF_STORAGE)
+				{
+					phenotypes_p = json_array ();
+				}
+			else
+				{
+					phenotypes_p = json_object ();
+				}
+
 
 			if (phenotypes_p)
 				{
@@ -2900,28 +2915,64 @@ static bool AddStatisticsFromJSON (Study *study_p, const json_t *study_json_p, c
 
 	if (phenotypes_p)
 		{
-			const size_t size = json_object_size (phenotypes_p);
-			const char *key_s;
-			json_t *phenotype_json_p;
-			size_t num_added = 0;
-
-			json_object_foreach (phenotypes_p, key_s, phenotype_json_p)
+			if (json_is_object (phenotypes_p))
 				{
-					if (AddPhenotypeStatisticsNodeFromJSON (study_p, phenotype_json_p, service_data_p))
+					const size_t size = json_object_size (phenotypes_p);
+					const char *key_s;
+					json_t *phenotype_json_p;
+					size_t num_added = 0;
+
+					json_object_foreach (phenotypes_p, key_s, phenotype_json_p)
 						{
-							++ num_added;
-						}
-					else
+							if (AddPhenotypeStatisticsNodeFromJSON (study_p, phenotype_json_p, service_data_p))
+								{
+									++ num_added;
+								}
+							else
+								{
+									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, phenotype_json_p, "AddPhenotypeStatisticsNodeFromJSON () failed for \"%s\"", key_s);
+								}
+
+
+						}		/* json_object_foreach (statistics_p, key_s, value_p) */
+
+					if (num_added != size)
 						{
-							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, phenotype_json_p, "AddPhenotypeStatisticsNodeFromJSON () failed for \"%s\"", key_s);
+							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, phenotypes_p, "Failed to get all statistics from json");
+							success_flag = false;
 						}
-
-
-				}		/* json_object_foreach (statistics_p, key_s, value_p) */
-
-			if (num_added != size)
+				}
+			else if (json_is_array (phenotypes_p))
 				{
-					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, phenotypes_p, "Failed to get all statistics from json");
+					const size_t size = json_array_size (phenotypes_p);
+					size_t index = 0;
+					json_t *phenotype_json_p;
+					size_t num_added = 0;
+
+					json_array_foreach (phenotypes_p, index, phenotype_json_p)
+						{
+							if (AddPhenotypeStatisticsNodeFromJSON (study_p, phenotype_json_p, service_data_p))
+								{
+									++ num_added;
+								}
+							else
+								{
+									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, phenotype_json_p, "AddPhenotypeStatisticsNodeFromJSON () failed for " SIZET_FMT, index);
+								}
+
+
+						}		/* json_object_foreach (statistics_p, key_s, value_p) */
+
+					if (num_added != size)
+						{
+							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, phenotypes_p, "Failed to get all statistics from json");
+							success_flag = false;
+						}
+				}
+			else
+				{
+					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, phenotypes_p, "Unspported JSON type");
+
 					success_flag = false;
 				}
 
