@@ -595,29 +595,42 @@ json_t *GetAllFieldTrialsAsJSON (const FieldTrialServiceData *data_p, const bool
 {
 	json_t *results_p = NULL;
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL]))
+
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+	if (mongo_p)
 		{
-			bson_t *query_p = NULL;
-			bson_t *opts_p = NULL;
-
-			if (full_data_flag)
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL]))
 				{
-					opts_p =  BCON_NEW ( "sort", "{", FT_NAME_S, BCON_INT32 (1), "}");
-				}
-			else
-				{
-					opts_p =  BCON_NEW ("projection", "{", FT_NAME_S, BCON_BOOL (true), "}",
-															"sort", "{", FT_NAME_S, BCON_INT32 (1), "}");
-				}
+					bson_t *query_p = NULL;
+					bson_t *opts_p = NULL;
 
-			results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, opts_p);
+					if (full_data_flag)
+						{
+							opts_p =  BCON_NEW ( "sort", "{", FT_NAME_S, BCON_INT32 (1), "}");
+						}
+					else
+						{
+							opts_p =  BCON_NEW ("projection", "{", FT_NAME_S, BCON_BOOL (true), "}",
+																	"sort", "{", FT_NAME_S, BCON_INT32 (1), "}");
+						}
 
-			if (opts_p)
-				{
-					bson_destroy (opts_p);
-				}
+					results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, opts_p);
 
-		}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_LOCATION])) */
+					if (opts_p)
+						{
+							bson_destroy (opts_p);
+						}
+
+				}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_LOCATION])) */
+
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+		}
 
 	return results_p;
 }
@@ -995,83 +1008,94 @@ bool SearchFieldTrials (ServiceJob *job_p, const char *name_s, const char *team_
 {
 	bool success_flag = false;
 	OperationStatus status = OS_FAILED_TO_START;
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL]))
+	if (mongo_p)
 		{
-			bson_t *query_p = bson_new ();
-
-			/*
-			 * Make the query to get the matching field trials
-			 */
-			if (query_p)
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL]))
 				{
-					bool ok_flag = AddQueryTerm (query_p, FT_NAME_S, name_s, regex_flag);
+					bson_t *query_p = bson_new ();
 
-					if (ok_flag)
+					/*
+					 * Make the query to get the matching field trials
+					 */
+					if (query_p)
 						{
-							ok_flag = AddQueryTerm (query_p, FT_TEAM_S, team_s, regex_flag);
-						}
+							bool ok_flag = AddQueryTerm (query_p, FT_NAME_S, name_s, regex_flag);
 
-					if (ok_flag)
-						{
-							bson_t *opts_p =  BCON_NEW ( "sort", "{", FT_TEAM_S, BCON_INT32 (1), "}");
-
-							if (opts_p)
+							if (ok_flag)
 								{
-									json_t *results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, opts_p);
+									ok_flag = AddQueryTerm (query_p, FT_TEAM_S, team_s, regex_flag);
+								}
 
-									if (results_p)
+							if (ok_flag)
+								{
+									bson_t *opts_p =  BCON_NEW ( "sort", "{", FT_TEAM_S, BCON_INT32 (1), "}");
+
+									if (opts_p)
 										{
-											if (json_is_array (results_p))
+											json_t *results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, opts_p);
+
+											if (results_p)
 												{
-													size_t i;
-													const size_t num_results = json_array_size (results_p);
-
-													success_flag = true;
-
-													if (num_results > 0)
+													if (json_is_array (results_p))
 														{
-															json_t *trial_json_p;
+															size_t i;
+															const size_t num_results = json_array_size (results_p);
 
-															json_array_foreach (results_p, i, trial_json_p)
+															success_flag = true;
+
+															if (num_results > 0)
 																{
-																	if (!AddFieldTrialToServiceJobFromJSON (job_p, trial_json_p, format, data_p))
+																	json_t *trial_json_p;
+
+																	json_array_foreach (results_p, i, trial_json_p)
 																		{
-																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, trial_json_p, "Failed to add FieldTrial to ServiceJob");
-																		}
-																}		/* json_array_foreach (results_p, i, entry_p) */
+																			if (!AddFieldTrialToServiceJobFromJSON (job_p, trial_json_p, format, data_p))
+																				{
+																					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, trial_json_p, "Failed to add FieldTrial to ServiceJob");
+																				}
+																		}		/* json_array_foreach (results_p, i, entry_p) */
 
-															i = GetNumberOfServiceJobResults (job_p);
-
-
-														}		/* if (num_results > 0) */
-
-													if (i == num_results)
-														{
-															status = OS_SUCCEEDED;
-														}
-													else if (i == 0)
-														{
-															status = OS_FAILED;
-														}
-													else
-														{
-															status = OS_PARTIALLY_SUCCEEDED;
-														}
+																	i = GetNumberOfServiceJobResults (job_p);
 
 
-												}		/* if (json_is_array (results_p)) */
+																}		/* if (num_results > 0) */
 
-											json_decref (results_p);
-										}		/* if (results_p) */
+															if (i == num_results)
+																{
+																	status = OS_SUCCEEDED;
+																}
+															else if (i == 0)
+																{
+																	status = OS_FAILED;
+																}
+															else
+																{
+																	status = OS_PARTIALLY_SUCCEEDED;
+																}
 
-									bson_destroy (opts_p);
-								}		/* if (opts_p) */
-						}
 
-					bson_destroy (query_p);
-				}		/* if (query_p) */
+														}		/* if (json_is_array (results_p)) */
 
+													json_decref (results_p);
+												}		/* if (results_p) */
+
+											bson_destroy (opts_p);
+										}		/* if (opts_p) */
+								}
+
+							bson_destroy (query_p);
+						}		/* if (query_p) */
+
+				}
+
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 		}
 
 	if (!success_flag)

@@ -127,7 +127,7 @@ typedef struct /*DFW_FIELD_TRIAL_SERVICE_LOCAL*/ FieldTrialServiceData
 	 *
 	 * The MongoTool to connect to the database where our data is stored.
 	 */
-	MongoTool *dftsd_mongo_p;
+//	MongoTool *dftsd_mongo_p;
 
 
 	/**
@@ -551,6 +551,10 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL bool HasTreatmentCache (FieldTrialServiceData *dat
 
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL char *GetFullCacheFilename (const char *name_s, const FieldTrialServiceData *data_p);
+
+
+DFW_FIELD_TRIAL_SERVICE_LOCAL MongoTool *GetConfiguredMongoTool (const FieldTrialServiceData *data_p, GrassrootsServer *grassroots_p);
+
 
 
 #ifdef __cplusplus

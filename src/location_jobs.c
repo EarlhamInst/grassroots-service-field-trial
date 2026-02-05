@@ -910,13 +910,26 @@ json_t *GetLocationIndexingData (Service *service_p)
 json_t *GetAllLocationsAsJSON (const FieldTrialServiceData *data_p, bson_t *opts_p)
 {
 	json_t *results_p = NULL;
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_LOCATION]))
+	if (mongo_p)
 		{
-			bson_t *query_p = NULL;
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_LOCATION]))
+				{
+					bson_t *query_p = NULL;
 
-			results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, opts_p);
-		}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_LOCATION])) */
+					results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, opts_p);
+				}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_LOCATION])) */
+
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+		}
+
+
 
 	return results_p;
 }

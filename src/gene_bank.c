@@ -256,13 +256,24 @@ bool SaveGeneBank (GeneBank *gene_bank_p, FieldTrialServiceData *data_p)
 
 			if (gene_bank_json_p)
 				{
-					if (SaveAndBackupMongoDataWithTimestamp (data_p -> dftsd_mongo_p, gene_bank_json_p, data_p -> dftsd_collection_ss [DFTD_GENE_BANK], data_p -> dftsd_backup_collection_ss [DFTD_GENE_BANK], DFT_BACKUPS_ID_KEY_S, selector_p, MONGO_TIMESTAMP_S))
+					MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+					if (mongo_p)
 						{
-							success_flag = true;
-						}
+							if (SaveAndBackupMongoDataWithTimestamp (mongo_p, gene_bank_json_p, data_p -> dftsd_collection_ss [DFTD_GENE_BANK], data_p -> dftsd_backup_collection_ss [DFTD_GENE_BANK], DFT_BACKUPS_ID_KEY_S, selector_p, MONGO_TIMESTAMP_S))
+								{
+									success_flag = true;
+								}
+							else
+								{
+									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, gene_bank_json_p, "Failed to save GeneBank");
+								}
+
+							FreeMongoTool (mongo_p);
+						}		/* if (mongo_p) */
 					else
 						{
-							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, gene_bank_json_p, "Failed to save GeneBank");
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 						}
 
 					json_decref (gene_bank_json_p);
@@ -310,49 +321,63 @@ GeneBank *GetGeneBankByName (const char *name_s, const FieldTrialServiceData *da
 static GeneBank *SearchForGeneBank (bson_t *query_p, const FieldTrialServiceData *data_p)
 {
 	GeneBank *gene_bank_p = NULL;
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_GENE_BANK]))
+	if (mongo_p)
 		{
-			json_t *results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, NULL);
-
-			if (results_p)
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_GENE_BANK]))
 				{
-					if (json_is_array (results_p))
+					json_t *results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, NULL);
+
+					if (results_p)
 						{
-							if (json_array_size (results_p) == 1)
+							if (json_is_array (results_p))
 								{
-									json_t *result_p = json_array_get (results_p, 0);
-
-									gene_bank_p = GetGeneBankFromJSON (result_p);
-
-									if (!gene_bank_p)
+									if (json_array_size (results_p) == 1)
 										{
-											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, result_p, "Failed to get GeneBank from JSON");
+											json_t *result_p = json_array_get (results_p, 0);
+
+											gene_bank_p = GetGeneBankFromJSON (result_p);
+
+											if (!gene_bank_p)
+												{
+													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, result_p, "Failed to get GeneBank from JSON");
+												}
+
+										}		/* if (json_array_size (results_p) == 1) */
+									else
+										{
+											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "GeneBanks array does not contain just a single item");
 										}
 
-								}		/* if (json_array_size (results_p) == 1) */
+								}		/* if (json_is_array (results_p)) */
 							else
 								{
-									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "GeneBanks array does not contain just a single item");
+									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "results are not an array");
 								}
 
-						}		/* if (json_is_array (results_p)) */
+							json_decref (results_p);
+						}		/* if (results_p) */
 					else
 						{
-							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "results are not an array");
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "No results returned");
 						}
-
-					json_decref (results_p);
-				}		/* if (results_p) */
+				}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_MATERIAL])) */
 			else
 				{
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "No results returned");
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set mongo collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_GENE_BANK]);
 				}
-		}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_MATERIAL])) */
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
 	else
 		{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set mongo collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_GENE_BANK]);
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 		}
+
+
+
+
 
 	return gene_bank_p;
 }

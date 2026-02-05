@@ -357,156 +357,172 @@ OperationStatus GetAllStudiesContainingMaterial (Material *material_p, ServiceJo
 
 			if (query_p)
 				{
-					if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_PLOT]))
+
+					MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+					if (mongo_p)
 						{
-							const char *fields_ss [2] = { PL_PARENT_STUDY_S, NULL };
-							json_t *results_p = GetAllMongoResultsWithNamedFieldsAsJSON (data_p -> dftsd_mongo_p, query_p, fields_ss, NULL);
-
-							if (results_p)
+							if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_PLOT]))
 								{
-									json_t *studies_cache_p = json_object ();
+									const char *fields_ss [2] = { PL_PARENT_STUDY_S, NULL };
+									json_t *results_p = GetAllMongoResultsWithNamedFieldsAsJSON (mongo_p, query_p, fields_ss, NULL);
 
-									if (studies_cache_p)
+									if (results_p)
 										{
-											if (json_is_array (results_p))
+											json_t *studies_cache_p = json_object ();
+
+											if (studies_cache_p)
 												{
-													const size_t num_results = json_array_size (results_p);
-													size_t i = 0;
-
-													while ((i < num_results) && success_flag)
+													if (json_is_array (results_p))
 														{
-															json_t *plot_json_p = json_array_get (results_p, i);
-															bson_oid_t oid;
+															const size_t num_results = json_array_size (results_p);
+															size_t i = 0;
 
-															/*
-															 * Get the study id
-															 */
-															if (GetNamedIdFromJSON (plot_json_p, PL_PARENT_STUDY_S, &oid))
+															while ((i < num_results) && success_flag)
 																{
-																	char *id_s = GetBSONOidAsString (&oid);
+																	json_t *plot_json_p = json_array_get (results_p, i);
+																	bson_oid_t oid;
 
-																	if (id_s)
+																	/*
+																	 * Get the study id
+																	 */
+																	if (GetNamedIdFromJSON (plot_json_p, PL_PARENT_STUDY_S, &oid))
 																		{
-																			json_int_t count = 0;
+																			char *id_s = GetBSONOidAsString (&oid);
 
-																			GetJSONInteger (studies_cache_p, id_s, &count);
-
-																			++ count;
-
-																			if (!SetJSONInteger (studies_cache_p, id_s, count))
+																			if (id_s)
 																				{
-																					success_flag = false;
-																				}
+																					json_int_t count = 0;
 
-																			FreeBSONOidString (id_s);
-																		}		/* if (id_s) */
+																					GetJSONInteger (studies_cache_p, id_s, &count);
 
-																}
+																					++ count;
+
+																					if (!SetJSONInteger (studies_cache_p, id_s, count))
+																						{
+																							success_flag = false;
+																						}
+
+																					FreeBSONOidString (id_s);
+																				}		/* if (id_s) */
+
+																		}
+
+																	if (success_flag)
+																		{
+																			++ i;
+																		}
+
+																}		/* while ((i < num_results) && success_flag) */
+
 
 															if (success_flag)
 																{
-																	++ i;
-																}
+																	/*
+																	 * Now we sort the studies by how many times the material appears
+																	 */
+																	size_t num_studies = json_object_size (studies_cache_p);
 
-														}		/* while ((i < num_results) && success_flag) */
+																	PrintLog (STM_LEVEL_INFO, __FILE__, __LINE__, "Found %u studies containing \"%s\"", num_studies, material_p -> ma_accession_s);
 
-
-													if (success_flag)
-														{
-															/*
-															 * Now we sort the studies by how many times the material appears
-															 */
-															size_t num_studies = json_object_size (studies_cache_p);
-
-															PrintLog (STM_LEVEL_INFO, __FILE__, __LINE__, "Found %u studies containing \"%s\"", num_studies, material_p -> ma_accession_s);
-
-															if (num_studies > 0)
-																{
-																	StringIntPairArray *ids_with_counts_p = AllocateStringIntPairArray (num_studies);
-
-																	if (ids_with_counts_p)
+																	if (num_studies > 0)
 																		{
-																			uint32 added_count = 0;
-																			const char *key_s;
-																			json_t *value_p;
-																			JSONProcessor *processor_p = AllocateRowProcessor (material_p);
-																			StringIntPair *pair_p = ids_with_counts_p -> sipa_values_p;
+																			StringIntPairArray *ids_with_counts_p = AllocateStringIntPairArray (num_studies);
 
-																			json_object_foreach (studies_cache_p, key_s, value_p)
+																			if (ids_with_counts_p)
 																				{
-																					int count = json_integer_value (value_p);
+																					uint32 added_count = 0;
+																					const char *key_s;
+																					json_t *value_p;
+																					JSONProcessor *processor_p = AllocateRowProcessor (material_p);
+																					StringIntPair *pair_p = ids_with_counts_p -> sipa_values_p;
 
-																					if (!SetStringIntPair (pair_p, (char *) key_s, MF_SHADOW_USE, count))
+																					json_object_foreach (studies_cache_p, key_s, value_p)
 																						{
-																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "");
-																						}
+																							int count = json_integer_value (value_p);
 
-																					++ pair_p;
-																				}		/* json_object_foreach (studies_cache_p, key_s, value_p) */
-
-																			/*
-																			 * Sort by the counts of how many times each material appears
-																			 * in each study
-																			 */
-																			SortStringIntPairsByCountDescending (ids_with_counts_p);
-
-																			for (i = num_studies, pair_p = ids_with_counts_p -> sipa_values_p; i > 0; -- i, ++ pair_p)
-																				{
-																					Study *study_p = GetStudyByIdString (pair_p -> sip_string_s, format, data_p);
-
-																					if (study_p)
-																						{
-																							if (AddStudyToServiceJob (job_p, study_p, /*format*/VF_REFERENCE, processor_p, data_p))
+																							if (!SetStringIntPair (pair_p, (char *) key_s, MF_SHADOW_USE, count))
 																								{
-																									++ added_count;
+																									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "");
 																								}
+
+																							++ pair_p;
+																						}		/* json_object_foreach (studies_cache_p, key_s, value_p) */
+
+																					/*
+																					 * Sort by the counts of how many times each material appears
+																					 * in each study
+																					 */
+																					SortStringIntPairsByCountDescending (ids_with_counts_p);
+
+																					for (i = num_studies, pair_p = ids_with_counts_p -> sipa_values_p; i > 0; -- i, ++ pair_p)
+																						{
+																							Study *study_p = GetStudyByIdString (pair_p -> sip_string_s, format, data_p);
+
+																							if (study_p)
+																								{
+																									if (AddStudyToServiceJob (job_p, study_p, /*format*/VF_REFERENCE, processor_p, data_p))
+																										{
+																											++ added_count;
+																										}
+																									else
+																										{
+																											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add study \"%s\" to results for job \"%s\"", study_p -> st_name_s, job_p -> sj_name_s);
+																										}
+
+																								}		/* if (study_p) */
 																							else
 																								{
-																									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add study \"%s\" to results for job \"%s\"", study_p -> st_name_s, job_p -> sj_name_s);
+																									FreeStudy (study_p);
 																								}
 
-																						}		/* if (study_p) */
-																					else
+																						}		/* for ( ; num_studies > 0; -- num_studies, ++ key_ss) */
+
+																					if (processor_p)
 																						{
-																							FreeStudy (study_p);
+																							FreeJSONProcessor (processor_p);
 																						}
 
-																				}		/* for ( ; num_studies > 0; -- num_studies, ++ key_ss) */
+																					if (added_count == num_studies)
+																						{
+																							status = OS_SUCCEEDED;
+																						}
+																					else if (added_count > 0)
+																						{
+																							status = OS_PARTIALLY_SUCCEEDED;
+																						}
+																					else
+																						{
+																							status = OS_FAILED;
+																						}
 
-																			if (processor_p)
-																				{
-																					FreeJSONProcessor (processor_p);
-																				}
+																					FreeStringIntPairArray (ids_with_counts_p);
+																				}		/* if (ids_with_counts_p) */
 
-																			if (added_count == num_studies)
-																				{
-																					status = OS_SUCCEEDED;
-																				}
-																			else if (added_count > 0)
-																				{
-																					status = OS_PARTIALLY_SUCCEEDED;
-																				}
-																			else
-																				{
-																					status = OS_FAILED;
-																				}
+																		}		/* if (studies_cache_p -> ht_size > 0) */
 
-																			FreeStringIntPairArray (ids_with_counts_p);
-																		}		/* if (ids_with_counts_p) */
+																}		/* if (success_flag) */
 
-																}		/* if (studies_cache_p -> ht_size > 0) */
+														}		/* if (json_is_array (results_p)) */
 
-														}		/* if (success_flag) */
+													json_decref (studies_cache_p);
+												}		/* if (studies_cache_p */
 
-												}		/* if (json_is_array (results_p)) */
+											json_decref (results_p);
+										}		/* if (results_p) */
 
-											json_decref (studies_cache_p);
-										}		/* if (studies_cache_p */
+								}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_ROW] */
 
-									json_decref (results_p);
-								}		/* if (results_p) */
 
-						}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_ROW] */
+							FreeMongoTool (mongo_p);
+						}		/* if (mongo_p) */
+					else
+						{
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+						}
+
+
+
 
 					bson_free (query_p);
 				}		/* if (query_p) */

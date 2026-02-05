@@ -45,7 +45,7 @@ static bool AppendSchemaTermQuery (bson_t *query_p, const char *parent_key_s, co
 
 static bool AddCommonTermsToJSON (const MeasuredVariable *mv_p, json_t *phenotype_json_p);
 
-static MeasuredVariable *GetMeasuredVariable (const bson_t *query_p, const FieldTrialServiceData *data_p);
+static MeasuredVariable *GetMeasuredVariable (const bson_t *query_p, FieldTrialServiceData *data_p);
 
 /*
 static UnitTerm *GetUnitTermFromJSON (const json_t *phenotype_json_p, const FieldTrialServiceData *data_p)
@@ -328,6 +328,7 @@ MeasuredVariable *GetMeasuredVariableFromJSON (const json_t *phenotype_json_p, c
 
 							if (success_flag)
 								{
+									MeasuredVariable *mv_p = NULL;
 									bson_oid_t *id_p = GetNewUnitialisedBSONOid ();
 
 									if (id_p)
@@ -337,7 +338,7 @@ MeasuredVariable *GetMeasuredVariableFromJSON (const json_t *phenotype_json_p, c
 													CropOntology *ontology_p = NULL;
 													MEM_FLAG ontology_mem = MF_ALREADY_FREED;
 													const ScaleClass *class_p = NULL;
-													MeasuredVariable *treatment_p = NULL;
+
 													const json_t *scale_json_p = json_object_get (phenotype_json_p, MV_SCALE_S);
 													bson_oid_t *ontology_id_p = GetNewUnitialisedBSONOid ();
 
@@ -371,11 +372,11 @@ MeasuredVariable *GetMeasuredVariableFromJSON (const json_t *phenotype_json_p, c
 																}
 														}
 
-													treatment_p = AllocateMeasuredVariable (id_p, trait_p, measurement_p, unit_p, variable_p, class_p, ontology_p, ontology_mem);
+													mv_p = AllocateMeasuredVariable (id_p, trait_p, measurement_p, unit_p, variable_p, class_p, ontology_p, ontology_mem);
 
-													if (treatment_p)
+													if (mv_p)
 														{
-															return treatment_p;
+															return mv_p;
 														}
 													else
 														{
@@ -446,36 +447,52 @@ OperationStatus SaveMeasuredVariable (MeasuredVariable *mv_p, ServiceJob *job_p,
 
 			if (phenotype_json_p)
 				{
-					if (SaveAndBackupMongoDataWithTimestamp (data_p -> dftsd_mongo_p, phenotype_json_p, data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE],
-																									 data_p -> dftsd_backup_collection_ss [DFTD_MEASURED_VARIABLE], DFT_BACKUPS_ID_KEY_S, selector_p, MONGO_TIMESTAMP_S))
+
+					MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+					if (mongo_p)
 						{
-							json_t *index_json_p = GetMeasuredVariableAsJSON (mv_p, VF_INDEXING, data_p);
-
-							if (index_json_p)
+							if (SaveAndBackupMongoDataWithTimestamp (mongo_p, phenotype_json_p, data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE],
+																											 data_p -> dftsd_backup_collection_ss [DFTD_MEASURED_VARIABLE], DFT_BACKUPS_ID_KEY_S, selector_p, MONGO_TIMESTAMP_S))
 								{
-									status = IndexData (job_p, index_json_p, job_name_s);
+									json_t *index_json_p = GetMeasuredVariableAsJSON (mv_p, VF_INDEXING, data_p);
 
-									if (status != OS_SUCCEEDED)
+									if (index_json_p)
 										{
-											status = OS_PARTIALLY_SUCCEEDED;
-											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, index_json_p, "Failed to index Measured Variable \"%s\" as JSON to Lucene", mv_p -> mv_variable_term_p -> st_name_s);
+											status = IndexData (job_p, index_json_p, job_name_s);
+
+											if (status != OS_SUCCEEDED)
+												{
+													status = OS_PARTIALLY_SUCCEEDED;
+													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, index_json_p, "Failed to index Measured Variable \"%s\" as JSON to Lucene", mv_p -> mv_variable_term_p -> st_name_s);
+													AddGeneralErrorMessageToServiceJob (job_p, "Measured Variable saved but failed to index for searching");
+												}
+
+											json_decref (index_json_p);
+										}
+									else
+										{
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to index generate Measured Variable \"%s\" as JSON for Lucene", mv_p -> mv_variable_term_p -> st_name_s);
 											AddGeneralErrorMessageToServiceJob (job_p, "Measured Variable saved but failed to index for searching");
 										}
 
-									json_decref (index_json_p);
 								}
 							else
 								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to index generate Measured Variable \"%s\" as JSON for Lucene", mv_p -> mv_variable_term_p -> st_name_s);
-									AddGeneralErrorMessageToServiceJob (job_p, "Measured Variable saved but failed to index for searching");
+									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, phenotype_json_p, "SaveAndBackupMongoDataWithTimestamp () failed for Measured Variable \"%s\" as JSON to Lucene", mv_p -> mv_variable_term_p -> st_name_s);
+									AddGeneralErrorMessageToServiceJob (job_p, "Failed to save Measured Variable");
 								}
 
-						}
+
+							FreeMongoTool (mongo_p);
+						}		/* if (mongo_p) */
 					else
 						{
-							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, phenotype_json_p, "SaveAndBackupMongoDataWithTimestamp () failed for Measured Variable \"%s\" as JSON to Lucene", mv_p -> mv_variable_term_p -> st_name_s);
-							AddGeneralErrorMessageToServiceJob (job_p, "Failed to save Measured Variable");
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 						}
+
+
+
 
 					json_decref (phenotype_json_p);
 				}		/* if (phenotype_json_p) */
@@ -815,63 +832,79 @@ static bool AddCommonTermsToJSON (const MeasuredVariable *mv_p, json_t *phenotyp
 }
 
 
-static MeasuredVariable *GetMeasuredVariable (const bson_t *query_p, const FieldTrialServiceData *data_p)
+static MeasuredVariable *GetMeasuredVariable (const bson_t *query_p, FieldTrialServiceData *data_p)
 {
-	MeasuredVariable *treatment_p = NULL;
+	MeasuredVariable *phenotype_p = NULL;
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE]))
+	/*
+	 * Get a new MongoTool in case we're being called from data_p's MongoTool as we don't want to overwrite
+	 * its state, cursor, etc.
+	 */
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+	if (mongo_p)
 		{
-			json_t *results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, NULL);
-
-			if (results_p)
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE]))
 				{
-					if (json_is_array (results_p))
+					json_t *results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, NULL);
+
+					if (results_p)
 						{
-							const size_t num_results = json_array_size (results_p);
-
-							if (num_results == 1)
+							if (json_is_array (results_p))
 								{
-									json_t *entry_p = json_array_get (results_p, 0);
+									const size_t num_results = json_array_size (results_p);
 
-									treatment_p = GetMeasuredVariableFromJSON (entry_p, data_p);
-
-									if (!treatment_p)
+									if (num_results == 1)
 										{
-											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, entry_p, "GetMeasuredVariableFromJSON () failed");
-										}		/* if (!treatment_p) */
+											json_t *entry_p = json_array_get (results_p, 0);
 
-								}		/* if (num_results == 1) */
-							else if (num_results == 0)
-								{
-									PrintBSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, query_p, "No results");
-								}
+											phenotype_p = GetMeasuredVariableFromJSON (entry_p, data_p);
+
+											if (!phenotype_p)
+												{
+													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, entry_p, "GetMeasuredVariableFromJSON () failed");
+												}		/* if (!treatment_p) */
+
+										}		/* if (num_results == 1) */
+									else if (num_results == 0)
+										{
+											PrintBSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, query_p, "No results");
+										}
+									else
+										{
+											PrintBSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, query_p, SIZET_FMT " results", num_results);
+										}
+
+								}		/* if (json_is_array (results_p)) */
 							else
 								{
-									PrintBSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, query_p, SIZET_FMT " results", num_results);
+									PrintBSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, query_p, "Results is not an array");
+									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "Results is not an array");
 								}
 
-						}		/* if (json_is_array (results_p)) */
+							json_decref (results_p);
+						}		/* if (results_p) */
 					else
 						{
-							PrintBSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, query_p, "Results is not an array");
-							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "Results is not an array");
+							PrintBSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, query_p, "No Results");
 						}
 
-					json_decref (results_p);
-				}		/* if (results_p) */
+
+				}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_PHENOTYPE])) */
 			else
 				{
-					PrintBSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, query_p, "No Results");
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SetMongoToolCollection () to phenotypes failed");
 				}
 
-
-		}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_PHENOTYPE])) */
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
 	else
 		{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SetMongoToolCollection () to phenotypes failed");
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () for phenotypes failed");
 		}
 
-	return treatment_p;
+
+	return phenotype_p;
 }
 
 

@@ -391,6 +391,10 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddPhenotypeStatisticsToStudy (Study * const 
 DFW_FIELD_TRIAL_SERVICE_LOCAL bool CopyAllPhenotypeStatistics (const Study * const src_p, Study *dest_p, const bool remove_existing_entries_flag);
 
 
+DFW_FIELD_TRIAL_SERVICE_LOCAL bool SetStudyAccessions (Study * const study_p, json_t *accessions_p);
+
+
+
 #ifdef __cplusplus
 }
 #endif

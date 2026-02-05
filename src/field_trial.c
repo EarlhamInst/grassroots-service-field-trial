@@ -154,39 +154,52 @@ bool SaveFieldTrial (FieldTrial *trial_p, ServiceJob *job_p, FieldTrialServiceDa
 
 			if (field_trial_json_p)
 				{
-					if (SaveAndBackupMongoDataWithTimestamp (data_p -> dftsd_mongo_p, field_trial_json_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL], data_p -> dftsd_backup_collection_ss [DFTD_FIELD_TRIAL], DFT_BACKUPS_ID_KEY_S,  selector_p, MONGO_TIMESTAMP_S))
+					MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+					if (mongo_p)
 						{
-							char *id_s = GetBSONOidAsString (trial_p -> ft_id_p);
-							status = IndexData (job_p, field_trial_json_p, NULL);
-
-							if (status != OS_SUCCEEDED)
+							if (SaveAndBackupMongoDataWithTimestamp (mongo_p, field_trial_json_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL], data_p -> dftsd_backup_collection_ss [DFTD_FIELD_TRIAL], DFT_BACKUPS_ID_KEY_S,  selector_p, MONGO_TIMESTAMP_S))
 								{
-									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, field_trial_json_p, "Failed to index FieldTrial \"%s\" as JSON to Lucene", trial_p -> ft_name_s);
-									AddGeneralErrorMessageToServiceJob (job_p, "Trial saved but failed to index for searching");
+									char *id_s = GetBSONOidAsString (trial_p -> ft_id_p);
+									status = IndexData (job_p, field_trial_json_p, NULL);
 
-									status = OS_PARTIALLY_SUCCEEDED;
-								}
-
-							if (id_s)
-								{
-									/*
-									 * If we have the front-end web address to view the trial,
-									 * save it to the ServiceJob.
-									 */
-									if (data_p -> dftsd_view_trial_url_s)
+									if (status != OS_SUCCEEDED)
 										{
-											SetFieldTrialServiceJobURL (job_p, data_p -> dftsd_view_trial_url_s, id_s);
+											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, field_trial_json_p, "Failed to index FieldTrial \"%s\" as JSON to Lucene", trial_p -> ft_name_s);
+											AddGeneralErrorMessageToServiceJob (job_p, "Trial saved but failed to index for searching");
+
+											status = OS_PARTIALLY_SUCCEEDED;
 										}
 
-									FreeBSONOidString (id_s);
-								}
-							else
-								{
-									PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "Failed to get bson oid string for trial \"%s\"", trial_p -> ft_name_s);
-								}
+									if (id_s)
+										{
+											/*
+											 * If we have the front-end web address to view the trial,
+											 * save it to the ServiceJob.
+											 */
+											if (data_p -> dftsd_view_trial_url_s)
+												{
+													SetFieldTrialServiceJobURL (job_p, data_p -> dftsd_view_trial_url_s, id_s);
+												}
+
+											FreeBSONOidString (id_s);
+										}
+									else
+										{
+											PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "Failed to get bson oid string for trial \"%s\"", trial_p -> ft_name_s);
+										}
 
 
-						}		/* if (SaveMongoData (data_p -> dftsd_mongo_p, field_trial_json_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL], selector_p)) */
+								}		/* if (SaveMongoData (data_p -> dftsd_mongo_p, field_trial_json_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL], selector_p)) */
+
+							FreeMongoTool (mongo_p);
+						}
+					else
+						{
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+						}
+
+
 
 					json_decref (field_trial_json_p);
 				}		/* if (field_trial_json_p) */
@@ -640,84 +653,94 @@ FieldTrial *GetVersionedFieldTrial (const char *field_trial_id_s, const char *ti
 FieldTrial *GetFieldTrialByIdString (const char *field_trial_id_s, const ViewFormat format, const FieldTrialServiceData *data_p)
 {
 	FieldTrial *trial_p = NULL;
-	MongoTool *tool_p = data_p -> dftsd_mongo_p;
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-	if (bson_oid_is_valid (field_trial_id_s, strlen (field_trial_id_s)))
+	if (mongo_p)
 		{
-			if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL]))
+			if (bson_oid_is_valid (field_trial_id_s, strlen (field_trial_id_s)))
 				{
-					bson_t *query_p = bson_new ();
-
-					if (query_p)
+					if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL]))
 						{
-							bson_oid_t oid;
+							bson_t *query_p = bson_new ();
 
-							bson_oid_init_from_string (&oid, field_trial_id_s);
-
-							if (BSON_APPEND_OID (query_p, MONGO_ID_S, &oid))
+							if (query_p)
 								{
-									json_t *results_p = GetAllMongoResultsAsJSON (tool_p, query_p, NULL);
+									bson_oid_t oid;
 
-									if (results_p)
+									bson_oid_init_from_string (&oid, field_trial_id_s);
+
+									if (BSON_APPEND_OID (query_p, MONGO_ID_S, &oid))
 										{
-											if (json_is_array (results_p))
+											json_t *results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, NULL);
+
+											if (results_p)
 												{
-													size_t num_results = json_array_size (results_p);
-
-													if (num_results == 1)
+													if (json_is_array (results_p))
 														{
-															json_t *res_p = json_array_get (results_p, 0);
+															size_t num_results = json_array_size (results_p);
 
-															trial_p = GetFieldTrialFromJSON (res_p, format, data_p);
-
-															if (!trial_p)
+															if (num_results == 1)
 																{
-																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, res_p, "failed to create field trial for id \"%s\"", field_trial_id_s);
+																	json_t *res_p = json_array_get (results_p, 0);
+
+																	trial_p = GetFieldTrialFromJSON (res_p, format, data_p);
+
+																	if (!trial_p)
+																		{
+																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, res_p, "failed to create field trial for id \"%s\"", field_trial_id_s);
+																		}
+
+																}		/* if (num_results == 1) */
+															else
+																{
+																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "" SIZET_FMT " results when searching for field trial with id \"%s\"", num_results, field_trial_id_s);
 																}
 
-														}		/* if (num_results == 1) */
+														}		/* if (json_is_array (results_p) */
 													else
 														{
-															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "" SIZET_FMT " results when searching for field trial with id \"%s\"", num_results, field_trial_id_s);
+															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "Results are not an array");
 														}
 
-												}		/* if (json_is_array (results_p) */
+													json_decref (results_p);
+												}		/* if (results_p) */
 											else
 												{
-													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "Results are not an array");
+													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get results searching for field trial with id \"%s\"", field_trial_id_s);
 												}
 
-											json_decref (results_p);
-										}		/* if (results_p) */
+										}		/* if (BSON_APPEND_OID (query_p, MONGO_ID_S, &oid)) */
 									else
 										{
-											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get results searching for field trial with id \"%s\"", field_trial_id_s);
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for field trial with id \"%s\"", field_trial_id_s);
 										}
 
-								}		/* if (BSON_APPEND_OID (query_p, MONGO_ID_S, &oid)) */
+									bson_destroy (query_p);
+								}		/* if (query_p) */
 							else
 								{
 									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for field trial with id \"%s\"", field_trial_id_s);
 								}
 
-							bson_destroy (query_p);
-						}		/* if (query_p) */
+						}		/* if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL])) */
 					else
 						{
-							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for field trial with id \"%s\"", field_trial_id_s);
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL]);
 						}
 
-				}		/* if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL])) */
+				}		/* if (bson_oid_is_valid (field_trial_id_s, strlen (field_trial_id_s))) */
 			else
 				{
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL]);
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "\"%s\" is not a valid oid", field_trial_id_s);
 				}
 
-		}		/* if (bson_oid_is_valid (field_trial_id_s, strlen (field_trial_id_s))) */
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
 	else
 		{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "\"%s\" is not a valid oid", field_trial_id_s);
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 		}
+
 
 	return trial_p;
 }
@@ -774,55 +797,66 @@ bool GetAllFieldTrialStudies (FieldTrial *trial_p, const ViewFormat format, cons
 		{
 			if (BSON_APPEND_OID (query_p, ST_PARENT_FIELD_TRIAL_S, trial_p -> ft_id_p))
 				{
-					if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_STUDY]))
+					MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+					if (mongo_p)
 						{
-							bson_t *opts_p =  BCON_NEW ( "sort", "{", ST_HARVEST_YEAR_S, BCON_INT32 (1), "}");
-
-							if (opts_p)
+							if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_STUDY]))
 								{
-									json_t *results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, opts_p);
+									bson_t *opts_p = BCON_NEW ( "sort", "{", ST_HARVEST_YEAR_S, BCON_INT32 (1), "}");
 
-									if (results_p)
+									if (opts_p)
 										{
-											if (json_is_array (results_p))
+											json_t *results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, opts_p);
+
+											if (results_p)
 												{
-													const size_t num_results = json_array_size (results_p);
-
-													success_flag = true;
-
-													if (num_results > 0)
+													if (json_is_array (results_p))
 														{
-															size_t i;
-															json_t *study_json_p;
+															const size_t num_results = json_array_size (results_p);
 
-															json_array_foreach (results_p, i, study_json_p)
+															success_flag = true;
+
+															if (num_results > 0)
 																{
-																	Study *study_p = GetStudyWithParentTrialFromJSON (study_json_p, trial_p, format, data_p);
+																	size_t i;
+																	json_t *study_json_p;
 
-																	if (study_p)
+																	json_array_foreach (results_p, i, study_json_p)
 																		{
-																			if (!AddFieldTrialStudy (trial_p, study_p, MF_SHADOW_USE))
+																			Study *study_p = GetStudyWithParentTrialFromJSON (study_json_p, trial_p, format, data_p);
+
+																			if (study_p)
 																				{
-																					FreeStudy (study_p);
+																					if (!AddFieldTrialStudy (trial_p, study_p, MF_SHADOW_USE))
+																						{
+																							FreeStudy (study_p);
+																							success_flag = false;
+																						}
+																				}
+																			else
+																				{
 																					success_flag = false;
 																				}
-																		}
-																	else
-																		{
-																			success_flag = false;
-																		}
-																}		/* json_array_foreach (results_p, i, study_json_p) */
+																		}		/* json_array_foreach (results_p, i, study_json_p) */
 
+																}
 														}
-												}
 
-											json_decref (results_p);
-										}		/* if (results_p) */
+													json_decref (results_p);
+												}		/* if (results_p) */
 
-									bson_destroy (opts_p);
-								}		/* if (opts_p) */
+											bson_destroy (opts_p);
+										}		/* if (opts_p) */
 
-						}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_EXPERIMENTAL_AREA])) */
+								}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_EXPERIMENTAL_AREA])) */
+
+							FreeMongoTool (mongo_p);
+						}		/* if (mongo_p) */
+					else
+						{
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+						}
 
 				}		/* if (BSON_APPEND_OID (query_p, ST_PARENT_FIELD_TRIAL_S, trial_p -> ft_id_p)) */
 

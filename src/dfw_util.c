@@ -268,83 +268,93 @@ char *GetFrictionlessDataFilename (const char * const name_s, const FieldTrialSe
 void *GetDFWObjectByNamedId (const bson_oid_t *id_p, FieldTrialDatatype collection_type, const char *id_key_s, void *(*get_obj_from_json_fn) (const json_t *json_p, const ViewFormat format, const FieldTrialServiceData *data_p), const ViewFormat format, const FieldTrialServiceData *data_p)
 {
 	void *result_p = NULL;
-	MongoTool *tool_p = data_p -> dftsd_mongo_p;
+	MongoTool *tool_p = GetConfiguredMongoTool (data_p, NULL);
 
-	if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [collection_type]))
+	if (tool_p)
 		{
-			bson_t *query_p = bson_new ();
-			char id_s [MONGO_OID_STRING_BUFFER_SIZE];
-
-			bson_oid_to_string (id_p, id_s);
-
-			if (query_p)
+			if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [collection_type]))
 				{
-					if (BSON_APPEND_OID (query_p, id_key_s, id_p))
+					bson_t *query_p = bson_new ();
+					char id_s [MONGO_OID_STRING_BUFFER_SIZE];
+
+					bson_oid_to_string (id_p, id_s);
+
+					if (query_p)
 						{
-							json_t *results_p = NULL;
-
-							#if DFW_UTIL_DEBUG >= STM_LEVEL_FINER
+							if (BSON_APPEND_OID (query_p, id_key_s, id_p))
 								{
-									PrintBSONToLog (STM_LEVEL_FINER, __FILE__, __LINE__, query_p, "GetDFWObjectById query ");
-								}
-							#endif
+									json_t *results_p = NULL;
 
-							results_p = GetAllMongoResultsAsJSON (tool_p, query_p, NULL);
-
-							if (results_p)
-								{
-									if (json_is_array (results_p))
+									#if DFW_UTIL_DEBUG >= STM_LEVEL_FINER
 										{
-											size_t num_results = json_array_size (results_p);
+											PrintBSONToLog (STM_LEVEL_FINER, __FILE__, __LINE__, query_p, "GetDFWObjectById query ");
+										}
+									#endif
 
-											if (num_results == 1)
+									results_p = GetAllMongoResultsAsJSON (tool_p, query_p, NULL);
+
+									if (results_p)
+										{
+											if (json_is_array (results_p))
 												{
-													json_t *res_p = json_array_get (results_p, 0);
+													size_t num_results = json_array_size (results_p);
 
-													result_p = get_obj_from_json_fn (res_p, format, data_p);
-
-													if (!result_p)
+													if (num_results == 1)
 														{
-															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, res_p, "failed to create object for id \"%s\"", id_s);
+															json_t *res_p = json_array_get (results_p, 0);
+
+															result_p = get_obj_from_json_fn (res_p, format, data_p);
+
+															if (!result_p)
+																{
+																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, res_p, "failed to create object for id \"%s\"", id_s);
+																}
+
+														}		/* if (num_results == 1) */
+													else
+														{
+															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, SIZET_FMT " results when searching for object_id_s with id \"%s\"", num_results, id_s);
 														}
 
-												}		/* if (num_results == 1) */
+												}		/* if (json_is_array (results_p) */
 											else
 												{
-													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, SIZET_FMT " results when searching for object_id_s with id \"%s\"", num_results, id_s);
+													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "Results are not an array");
 												}
 
-										}		/* if (json_is_array (results_p) */
+											json_decref (results_p);
+										}		/* if (results_p) */
 									else
 										{
-											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "Results are not an array");
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get results searching for object_id_s with id \"%s\"", id_s);
 										}
 
-									json_decref (results_p);
-								}		/* if (results_p) */
+								}		/* if (BSON_APPEND_OID (query_p, MONGO_ID_S, id_p)) */
 							else
 								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get results searching for object_id_s with id \"%s\"", id_s);
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for object_id_s with id \"%s\"", id_s);
 								}
 
-						}		/* if (BSON_APPEND_OID (query_p, MONGO_ID_S, id_p)) */
+							bson_destroy (query_p);
+						}		/* if (query_p) */
 					else
 						{
 							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for object_id_s with id \"%s\"", id_s);
 						}
 
-					bson_destroy (query_p);
-				}		/* if (query_p) */
+				}		/* if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [collection_type])) */
 			else
 				{
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for object_id_s with id \"%s\"", id_s);
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set collection to \"%s\"", data_p -> dftsd_collection_ss [collection_type]);
 				}
 
-		}		/* if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [collection_type])) */
+			FreeMongoTool (tool_p);
+		}		/* if (tool_p) */
 	else
 		{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set collection to \"%s\"", data_p -> dftsd_collection_ss [collection_type]);
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 		}
+
 
 	return result_p;
 }
@@ -420,52 +430,63 @@ static bool RunVersionSearch (const char * const collection_s, const char * cons
 {
 	bool success_flag = false;
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, collection_s))
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+	if (mongo_p)
 		{
-			bson_t *query_p = bson_new ();
-
-			if (query_p)
+			if (SetMongoToolCollection (mongo_p, collection_s))
 				{
-					bson_oid_t oid;
+					bson_t *query_p = bson_new ();
 
-					bson_oid_init_from_string (&oid, id_s);
-
-					if (BSON_APPEND_OID (query_p, key_s, &oid))
+					if (query_p)
 						{
-							if ((timestamp_s == NULL) || (BSON_APPEND_UTF8 (query_p, MONGO_TIMESTAMP_S, timestamp_s)))
+							bson_oid_t oid;
+
+							bson_oid_init_from_string (&oid, id_s);
+
+							if (BSON_APPEND_OID (query_p, key_s, &oid))
 								{
-									if (PopulateJSONWithAllMongoResults (data_p -> dftsd_mongo_p, query_p, NULL, extra_opts_p, results_p))
+									if ((timestamp_s == NULL) || (BSON_APPEND_UTF8 (query_p, MONGO_TIMESTAMP_S, timestamp_s)))
 										{
-											success_flag = true;
-										}		/* if (temp_p) */
+											if (PopulateJSONWithAllMongoResults (mongo_p, query_p, NULL, extra_opts_p, results_p))
+												{
+													success_flag = true;
+												}		/* if (temp_p) */
+											else
+												{
+													PrintBSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, query_p, "Failed to get results searching for key \"%s\" value \"%s\"", key_s, id_s);
+												}
+										}
 									else
 										{
-											PrintBSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, query_p, "Failed to get results searching for key \"%s\" value \"%s\"", key_s, id_s);
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to append query for key \"%s\" value \"%s\"", MONGO_TIMESTAMP_S, timestamp_s);
 										}
-								}
+
+								}		/* if (BSON_APPEND_OID (query_p, MONGO_ID_S, &oid)) */
 							else
 								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to append query for key \"%s\" value \"%s\"", MONGO_TIMESTAMP_S, timestamp_s);
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to append query for key \"%s\" value \"%s\"", key_s, id_s);
 								}
 
-						}		/* if (BSON_APPEND_OID (query_p, MONGO_ID_S, &oid)) */
+							bson_destroy (query_p);
+						}		/* if (query_p) */
 					else
 						{
-							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to append query for key \"%s\" value \"%s\"", key_s, id_s);
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for key \"%s\" value \"%s\"", key_s, id_s);
 						}
 
-					bson_destroy (query_p);
-				}		/* if (query_p) */
+				}		/* if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL])) */
 			else
 				{
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for key \"%s\" value \"%s\"", key_s, id_s);
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set collection to \"%s\"", collection_s);
 				}
 
-		}		/* if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL])) */
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
 	else
 		{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set collection to \"%s\"", collection_s);
-		}	
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+		}
 
 	return success_flag;
 }
@@ -986,34 +1007,45 @@ LinkedList *SearchObjects (const FieldTrialServiceData *data_p, const FieldTrial
 
 					if (success_flag)
 						{
-							if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [collection_type]))
+							MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+							if (mongo_p)
 								{
-									json_t *results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, NULL);
-
-									if (results_p)
+									if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [collection_type]))
 										{
-											const size_t size = json_array_size (results_p);
-											size_t i = 0;
+											json_t *results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, NULL);
 
-											for (i = 0; i < size; ++ i)
+											if (results_p)
 												{
-													json_t *result_p = json_array_get (results_p, i);
+													const size_t size = json_array_size (results_p);
+													size_t i = 0;
 
-													if (!add_result_to_list_fn (result_p, results_list_p, data_p))
+													for (i = 0; i < size; ++ i)
 														{
-															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, result_p, "Failed to add result to list");
-														}
+															json_t *result_p = json_array_get (results_p, i);
 
-												}		/* for (i = 0; i < size; ++ i) */
+															if (!add_result_to_list_fn (result_p, results_list_p, data_p))
+																{
+																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, result_p, "Failed to add result to list");
+																}
 
-											json_decref (results_p);
-										}		/* if (results_p) */
+														}		/* for (i = 0; i < size; ++ i) */
+
+													json_decref (results_p);
+												}		/* if (results_p) */
 
 
-								}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [collection_type])) */
+										}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [collection_type])) */
+									else
+										{
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set MongoTool collection to \"%s\"", data_p -> dftsd_collection_ss [collection_type]);
+										}
+
+									FreeMongoTool (mongo_p);
+								}		/* if (mongo_p) */
 							else
 								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set MongoTool collection to \"%s\"", data_p -> dftsd_collection_ss [collection_type]);
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 								}
 
 						}		/* if (success_flag) */

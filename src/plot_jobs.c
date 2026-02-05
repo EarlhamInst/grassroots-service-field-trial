@@ -2003,17 +2003,32 @@ static bool RemoveExistingPlotsForStudy (Study *study_p, const FieldTrialService
 {
 	bool success_flag = false;
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_PLOT]))
+
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+	if (mongo_p)
 		{
-			bson_t *query_p = BCON_NEW (PL_PARENT_STUDY_S, BCON_OID (study_p -> st_id_p));
-
-			if (query_p)
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_PLOT]))
 				{
-					success_flag = RemoveMongoDocumentsByBSON (data_p -> dftsd_mongo_p, query_p, false);
+					bson_t *query_p = BCON_NEW (PL_PARENT_STUDY_S, BCON_OID (study_p -> st_id_p));
 
-					bson_destroy (query_p);
-				}		/* if (query_p) */
+					if (query_p)
+						{
+							success_flag = RemoveMongoDocumentsByBSON (mongo_p, query_p, false);
+
+							bson_destroy (query_p);
+						}		/* if (query_p) */
+				}
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 		}
+
+
+
 
 	return success_flag;
 }
@@ -2023,47 +2038,62 @@ static Plot *GetUniquePlot (bson_t *query_p, Study *study_p, const ViewFormat fo
 {
 	Plot *plot_p = NULL;
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_PLOT]))
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+	if (mongo_p)
 		{
-			json_t *results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, NULL);
-
-			if (results_p)
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_PLOT]))
 				{
-					if (json_is_array (results_p))
+					json_t *results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, NULL);
+
+					if (results_p)
 						{
-							const size_t num_results = json_array_size (results_p);
-
-							if (num_results == 1)
+							if (json_is_array (results_p))
 								{
-									size_t i = 0;
-									json_t *entry_p = json_array_get (results_p, i);
+									const size_t num_results = json_array_size (results_p);
 
-									plot_p = GetPlotFromJSON (entry_p, study_p, format, data_p);
-
-									if (!plot_p)
+									if (num_results == 1)
 										{
-											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, entry_p, "GetPlotFromJSON () failed");
+											size_t i = 0;
+											json_t *entry_p = json_array_get (results_p, i);
+
+											plot_p = GetPlotFromJSON (entry_p, study_p, format, data_p);
+
+											if (!plot_p)
+												{
+													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, entry_p, "GetPlotFromJSON () failed");
+												}
+
+										}		/* if (num_results == 1) */
+									else
+										{
+											if (must_exist_flag)
+												{
+													PrintBSONToLog (STM_LEVEL_WARNING, __FILE__, __LINE__, query_p, "query produced " SIZET_FMT " results for study \"%s\"", num_results, study_p ? study_p -> st_name_s : "NULL");
+												}
 										}
 
-								}		/* if (num_results == 1) */
-							else
-								{
-									if (must_exist_flag)
-										{
-											PrintBSONToLog (STM_LEVEL_WARNING, __FILE__, __LINE__, query_p, "query produced " SIZET_FMT " results for study \"%s\"", num_results, study_p ? study_p -> st_name_s : "NULL");
-										}
-								}
+								}		/* if (json_is_array (results_p)) */
 
-						}		/* if (json_is_array (results_p)) */
+							json_decref (results_p);
+						}		/* if (results_p) */
 
-					json_decref (results_p);
-				}		/* if (results_p) */
+				}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_PLOT])) */
+			else
+				{
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SetMongoToolCollection () failed for \"%s\"", data_p -> dftsd_collection_ss [DFTD_PLOT]);
+				}
 
-		}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_PLOT])) */
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
 	else
 		{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SetMongoToolCollection () failed for \"%s\"", data_p -> dftsd_collection_ss [DFTD_PLOT]);
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 		}
+
+
+
 
 	return plot_p;
 }

@@ -799,24 +799,36 @@ OperationStatus StoreAllScaleUnits (FieldTrialServiceData *data_p)
 
 	if (curl_tool_p)
 		{
-			json_t *query_p = json_object ();
+			MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-			if (query_p)
+			if (mongo_p)
 				{
-					COToolData tool_data;
+					json_t *query_p = json_object ();
 
-					tool_data.cotd_service_data_p = data_p;
-					tool_data.cotd_query_p = query_p;
-					tool_data.cotd_curl_p = curl_tool_p;
-					tool_data.cotd_query_key_s = "variable.so:sameAs";
-
-					if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE]))
+					if (query_p)
 						{
-							status = ProcessMongoResults (data_p -> dftsd_mongo_p, NULL, NULL, UpdateScaleTerms, &tool_data);
+							COToolData tool_data;
+
+							tool_data.cotd_service_data_p = data_p;
+							tool_data.cotd_query_p = query_p;
+							tool_data.cotd_curl_p = curl_tool_p;
+							tool_data.cotd_query_key_s = "variable.so:sameAs";
+
+							if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE]))
+								{
+									status = ProcessMongoResults (mongo_p, NULL, NULL, UpdateScaleTerms, &tool_data);
+								}
+
+							json_decref (query_p);
 						}
 
-					json_decref (query_p);
+					FreeMongoTool (mongo_p);
+				}		/* if (mongo_p) */
+			else
+				{
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 				}
+
 
 			FreeCurlTool (curl_tool_p);
 		}
@@ -855,10 +867,22 @@ static bool UpdateScaleTerms (const bson_t *document_p, void *data_p)
 												{
 													if (SetJSONString (tool_data_p -> cotd_query_p, tool_data_p -> cotd_query_key_s, var_url_s))
 														{
-															if (UpdateMongoDocumentsByJSON (tool_data_p -> cotd_service_data_p -> dftsd_mongo_p, tool_data_p -> cotd_query_p, scale_class_json_p, false))
+															MongoTool *mongo_p = GetConfiguredMongoTool (tool_data_p -> cotd_service_data_p, NULL);
+
+															if (mongo_p)
 																{
-																	success_flag = true;
+																	if (UpdateMongoDocumentsByJSON (mongo_p, tool_data_p -> cotd_query_p, scale_class_json_p, false))
+																		{
+																			success_flag = true;
+																		}
+
+																	FreeMongoTool (mongo_p);
 																}
+															else
+																{
+																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+																}
+
 														}
 
 													json_decref (scale_class_json_p);

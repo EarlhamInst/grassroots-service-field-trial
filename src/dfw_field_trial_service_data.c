@@ -82,7 +82,6 @@ FieldTrialServiceData *AllocateFieldTrialServiceData (void)
 
 	if (data_p)
 		{
-			data_p -> dftsd_mongo_p =  NULL;
 			data_p -> dftsd_database_s = NULL;
 			data_p -> dftsd_facet_key_s = NULL;
 			data_p -> dftsd_study_cache_path_s = NULL;
@@ -185,11 +184,6 @@ void ClearTreatmentsCache (FieldTrialServiceData *data_p)
 
 void FreeFieldTrialServiceData (FieldTrialServiceData *data_p)
 {
-	if (data_p -> dftsd_mongo_p)
-		{
-			FreeMongoTool (data_p -> dftsd_mongo_p);
-		}
-
 	if (data_p -> dftsd_measured_variables_cache_p)
 		{
 			FreeLinkedList (data_p -> dftsd_measured_variables_cache_p);
@@ -205,6 +199,42 @@ void FreeFieldTrialServiceData (FieldTrialServiceData *data_p)
 }
 
 
+MongoTool *GetConfiguredMongoTool (const FieldTrialServiceData *data_p, GrassrootsServer *grassroots_p)
+{
+	if (data_p -> dftsd_database_s)
+		{
+			if (!grassroots_p)
+				{
+					if (data_p -> dftsd_base_data.sd_service_p)
+						{
+							grassroots_p = data_p -> dftsd_base_data.sd_service_p -> se_grassroots_p;
+						}
+				}
+
+			if (grassroots_p)
+				{
+					MongoTool *mongo_p = AllocateMongoTool (NULL, grassroots_p -> gs_mongo_manager_p);
+
+					if (mongo_p)
+						{
+							if (SetMongoToolDatabase (mongo_p, data_p -> dftsd_database_s))
+								{
+									return mongo_p;
+								}
+							else
+								{
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set db to \"%s\"", data_p -> dftsd_database_s);
+								}
+
+							FreeMongoTool (mongo_p);
+						}
+				}
+		}
+
+	return NULL;
+}
+
+
 bool ConfigureFieldTrialService (FieldTrialServiceData *data_p, GrassrootsServer *grassroots_p)
 {
 	bool success_flag = false;
@@ -214,137 +244,119 @@ bool ConfigureFieldTrialService (FieldTrialServiceData *data_p, GrassrootsServer
 
 	if (data_p -> dftsd_database_s)
 		{
-			if ((data_p -> dftsd_mongo_p = AllocateMongoTool (NULL, grassroots_p -> gs_mongo_manager_p)) != NULL)
+			bool enable_db_cache_flag = false;
+			const char * const BACKUP_SUFFIX_S = "_backup";
+			success_flag = true;
+
+			data_p -> dftsd_study_cache_path_s = GetJSONString (service_config_p, "cache_path");
+
+			if (data_p -> dftsd_study_cache_path_s)
 				{
-					if (SetMongoToolDatabase (data_p -> dftsd_mongo_p, data_p -> dftsd_database_s))
+					if (!EnsureDirectoryExists (data_p -> dftsd_study_cache_path_s))
 						{
-							bool enable_db_cache_flag = false;
-							const char * const BACKUP_SUFFIX_S = "_backup";
-							success_flag = true;
-
-							data_p -> dftsd_study_cache_path_s = GetJSONString (service_config_p, "cache_path");
-
-							if (data_p -> dftsd_study_cache_path_s)
-								{
-									if (!EnsureDirectoryExists (data_p -> dftsd_study_cache_path_s))
-										{
-											PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "Failed to create studies cache directory \"%s\"", data_p -> dftsd_study_cache_path_s);
-											data_p -> dftsd_study_cache_path_s = NULL;
-										}
-								}
-
-							data_p -> dftsd_assets_path_s = GetJSONString (service_config_p, "fd_path");
-
-							if (data_p -> dftsd_assets_path_s)
-								{
-									if (!EnsureDirectoryExists (data_p -> dftsd_assets_path_s))
-										{
-											PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "Failed to create frictionless data packages directory \"%s\"", data_p -> dftsd_assets_path_s);
-											data_p -> dftsd_assets_path_s = NULL;
-										}
-								}
-
-							data_p -> dftsd_fd_url_s = GetJSONString (service_config_p, "fd_url");
-
-							data_p -> dftsd_view_study_url_s = GetJSONString (service_config_p, "view_study_url");
-							data_p -> dftsd_view_trial_url_s = GetJSONString (service_config_p, "view_trial_url");
-							data_p -> dftsd_view_location_url_s = GetJSONString (service_config_p, "view_location_url");
-							data_p -> dftsd_view_programme_url_s = GetJSONString (service_config_p, "view_programme_url");
-							data_p -> dftsd_view_plots_url_s = GetJSONString (service_config_p, "view_plots_url");
-
-							data_p -> dftsd_latex_commmand_s = GetJSONString (service_config_p, "pdflatex_path");
-							if (! (data_p -> dftsd_latex_commmand_s))
-								{
-									data_p -> dftsd_latex_commmand_s = "pdflatex";
-								}
-
-
-							data_p -> dftsd_wastebasket_path_s = GetJSONString (service_config_p, "wastebasket_path");
-
-							data_p -> dftsd_plots_uploads_path_s = GetJSONString (service_config_p, "plots_uploads_path");
-
-
-							data_p -> dftsd_geoapify_key_s = GetJSONString (service_config_p, "geoapify_api_key");
-
-							data_p -> dftsd_map_tile_width_s = GetJSONString (service_config_p, "map_tile_width");
-							data_p -> dftsd_map_tile_height_s = GetJSONString (service_config_p, "map_tile_height");
-
-
-							data_p -> dftsd_phenotype_images_path_s = GetJSONString (service_config_p, "handbook_phenotype_images");
-
-
-							data_p -> dftsd_marti_api_url_s = GetJSONString (service_config_p, "marti_api_url");
-
-							data_p -> dftsd_grassroots_marti_search_url_s = GetJSONString (service_config_p, "grassroots_marti_service_url");
-
-
-							* ((data_p -> dftsd_collection_ss) + DFTD_PROGRAMME) = DFT_PROGRAM_S;
-							* ((data_p -> dftsd_collection_ss) + DFTD_FIELD_TRIAL) = DFT_FIELD_TRIALS_S;
-							* ((data_p -> dftsd_collection_ss) + DFTD_STUDY) = DFT_STUDIES_S;
-							* ((data_p -> dftsd_collection_ss) + DFTD_LOCATION) = DFT_LOCATION_S;
-							* ((data_p -> dftsd_collection_ss) + DFTD_PLOT) = DFT_PLOT_S;
-							* ((data_p -> dftsd_collection_ss) + DFTD_MATERIAL) = DFT_MATERIAL_S;
-							* ((data_p -> dftsd_collection_ss) + DFTD_DRILLING) = DFT_DRILLING_S;
-							* ((data_p -> dftsd_collection_ss) + DFTD_MEASURED_VARIABLE) = DFT_PHENOTYPE_S;
-							* ((data_p -> dftsd_collection_ss) + DFTD_OBSERVATION) = DFT_OBSERVATION_S;
-							* ((data_p -> dftsd_collection_ss) + DFTD_INSTRUMENT) = DFT_INSTRUMENT_S;
-							* ((data_p -> dftsd_collection_ss) + DFTD_GENE_BANK) = DFT_GENE_BANK_S;
-							// * ((data_p -> dftsd_collection_ss) + DFTD_ROW) = DFT_ROW_S;
-							* ((data_p -> dftsd_collection_ss) + DFTD_CROP) = DFT_CROP_S;
-							* ((data_p -> dftsd_collection_ss) + DFTD_TREATMENT) = DFT_TREATMENT_S;
-							* ((data_p -> dftsd_collection_ss) + DFTD_ONTOLOGY) = DFT_PHENOTYPE_ONOTOLOGY_S;
-
-							* ((data_p -> dftsd_backup_collection_ss) + DFTD_PROGRAMME) = DFT_PROGRAM_BACKUP_S;
-							* ((data_p -> dftsd_backup_collection_ss) + DFTD_FIELD_TRIAL) = DFT_FIELD_TRIALS_BACKUP_S;
-							* ((data_p -> dftsd_backup_collection_ss) + DFTD_STUDY) = DFT_STUDIES_BACKUP_S;
-							* ((data_p -> dftsd_backup_collection_ss) + DFTD_LOCATION) = DFT_LOCATION_BACKUP_S;
-							* ((data_p -> dftsd_backup_collection_ss) + DFTD_PLOT) = DFT_PLOT_BACKUP_S;
-							* ((data_p -> dftsd_backup_collection_ss) + DFTD_MATERIAL) = DFT_MATERIAL_BACKUP_S;
-							* ((data_p -> dftsd_backup_collection_ss) + DFTD_DRILLING) = DFT_DRILLING_BACKUP_S;
-							* ((data_p -> dftsd_backup_collection_ss) + DFTD_MEASURED_VARIABLE) = DFT_PHENOTYPE_BACKUP_S;
-							* ((data_p -> dftsd_backup_collection_ss) + DFTD_OBSERVATION) = DFT_OBSERVATION_BACKUP_S;
-							* ((data_p -> dftsd_backup_collection_ss) + DFTD_INSTRUMENT) = DFT_INSTRUMENT_BACKUP_S;
-							* ((data_p -> dftsd_backup_collection_ss) + DFTD_GENE_BANK) = DFT_GENE_BANK_BACKUP_S;
-							// * ((data_p -> dftsd_collection_ss) + DFTD_ROW) = DFT_ROW_S;
-							* ((data_p -> dftsd_backup_collection_ss) + DFTD_CROP) = DFT_CROP_S;
-							* ((data_p -> dftsd_backup_collection_ss) + DFTD_TREATMENT) = DFT_TREATMENT_S;
-							* ((data_p -> dftsd_backup_collection_ss) + DFTD_ONTOLOGY) = DFT_PHENOTYPE_ONOTOLOGY_S;
-
-
-
-							GetJSONBoolean (service_config_p, "use_mv_cache", &enable_db_cache_flag);
-
-							if (enable_db_cache_flag)
-								{
-									if (!EnableMeasuredVariablesCache (data_p))
-										{
-											PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "Failed to enable measured variable cache");
-										}
-								}
-
-							GetJSONBoolean (service_config_p, "use_treatments_cache", &enable_db_cache_flag);
-
-							if (enable_db_cache_flag)
-								{
-									if (!EnableTreatmentsCache (data_p))
-										{
-											PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "Failed to enable treatmnets cache");
-										}
-								}
-
-
+							PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "Failed to create studies cache directory \"%s\"", data_p -> dftsd_study_cache_path_s);
+							data_p -> dftsd_study_cache_path_s = NULL;
 						}
-					else
-						{
-							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set db to \"%s\"", data_p -> dftsd_database_s);
-						}
-
-				}		/* if ((data_p -> dftsd_mongo_p = AllocateMongoTool (NULL, grassroots_p -> gs_mongo_manager_p)) != NULL) */
-			else
-				{
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to allocate MongoTool");
 				}
 
+			data_p -> dftsd_assets_path_s = GetJSONString (service_config_p, "fd_path");
+
+			if (data_p -> dftsd_assets_path_s)
+				{
+					if (!EnsureDirectoryExists (data_p -> dftsd_assets_path_s))
+						{
+							PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "Failed to create frictionless data packages directory \"%s\"", data_p -> dftsd_assets_path_s);
+							data_p -> dftsd_assets_path_s = NULL;
+						}
+				}
+
+			data_p -> dftsd_fd_url_s = GetJSONString (service_config_p, "fd_url");
+
+			data_p -> dftsd_view_study_url_s = GetJSONString (service_config_p, "view_study_url");
+			data_p -> dftsd_view_trial_url_s = GetJSONString (service_config_p, "view_trial_url");
+			data_p -> dftsd_view_location_url_s = GetJSONString (service_config_p, "view_location_url");
+			data_p -> dftsd_view_programme_url_s = GetJSONString (service_config_p, "view_programme_url");
+			data_p -> dftsd_view_plots_url_s = GetJSONString (service_config_p, "view_plots_url");
+
+			data_p -> dftsd_latex_commmand_s = GetJSONString (service_config_p, "pdflatex_path");
+			if (! (data_p -> dftsd_latex_commmand_s))
+				{
+					data_p -> dftsd_latex_commmand_s = "pdflatex";
+				}
+
+
+			data_p -> dftsd_wastebasket_path_s = GetJSONString (service_config_p, "wastebasket_path");
+
+			data_p -> dftsd_plots_uploads_path_s = GetJSONString (service_config_p, "plots_uploads_path");
+
+
+			data_p -> dftsd_geoapify_key_s = GetJSONString (service_config_p, "geoapify_api_key");
+
+			data_p -> dftsd_map_tile_width_s = GetJSONString (service_config_p, "map_tile_width");
+			data_p -> dftsd_map_tile_height_s = GetJSONString (service_config_p, "map_tile_height");
+
+
+			data_p -> dftsd_phenotype_images_path_s = GetJSONString (service_config_p, "handbook_phenotype_images");
+
+
+			data_p -> dftsd_marti_api_url_s = GetJSONString (service_config_p, "marti_api_url");
+
+			data_p -> dftsd_grassroots_marti_search_url_s = GetJSONString (service_config_p, "grassroots_marti_service_url");
+
+
+			* ((data_p -> dftsd_collection_ss) + DFTD_PROGRAMME) = DFT_PROGRAM_S;
+			* ((data_p -> dftsd_collection_ss) + DFTD_FIELD_TRIAL) = DFT_FIELD_TRIALS_S;
+			* ((data_p -> dftsd_collection_ss) + DFTD_STUDY) = DFT_STUDIES_S;
+			* ((data_p -> dftsd_collection_ss) + DFTD_LOCATION) = DFT_LOCATION_S;
+			* ((data_p -> dftsd_collection_ss) + DFTD_PLOT) = DFT_PLOT_S;
+			* ((data_p -> dftsd_collection_ss) + DFTD_MATERIAL) = DFT_MATERIAL_S;
+			* ((data_p -> dftsd_collection_ss) + DFTD_DRILLING) = DFT_DRILLING_S;
+			* ((data_p -> dftsd_collection_ss) + DFTD_MEASURED_VARIABLE) = DFT_PHENOTYPE_S;
+			* ((data_p -> dftsd_collection_ss) + DFTD_OBSERVATION) = DFT_OBSERVATION_S;
+			* ((data_p -> dftsd_collection_ss) + DFTD_INSTRUMENT) = DFT_INSTRUMENT_S;
+			* ((data_p -> dftsd_collection_ss) + DFTD_GENE_BANK) = DFT_GENE_BANK_S;
+			// * ((data_p -> dftsd_collection_ss) + DFTD_ROW) = DFT_ROW_S;
+			* ((data_p -> dftsd_collection_ss) + DFTD_CROP) = DFT_CROP_S;
+			* ((data_p -> dftsd_collection_ss) + DFTD_TREATMENT) = DFT_TREATMENT_S;
+			* ((data_p -> dftsd_collection_ss) + DFTD_ONTOLOGY) = DFT_PHENOTYPE_ONOTOLOGY_S;
+
+			* ((data_p -> dftsd_backup_collection_ss) + DFTD_PROGRAMME) = DFT_PROGRAM_BACKUP_S;
+			* ((data_p -> dftsd_backup_collection_ss) + DFTD_FIELD_TRIAL) = DFT_FIELD_TRIALS_BACKUP_S;
+			* ((data_p -> dftsd_backup_collection_ss) + DFTD_STUDY) = DFT_STUDIES_BACKUP_S;
+			* ((data_p -> dftsd_backup_collection_ss) + DFTD_LOCATION) = DFT_LOCATION_BACKUP_S;
+			* ((data_p -> dftsd_backup_collection_ss) + DFTD_PLOT) = DFT_PLOT_BACKUP_S;
+			* ((data_p -> dftsd_backup_collection_ss) + DFTD_MATERIAL) = DFT_MATERIAL_BACKUP_S;
+			* ((data_p -> dftsd_backup_collection_ss) + DFTD_DRILLING) = DFT_DRILLING_BACKUP_S;
+			* ((data_p -> dftsd_backup_collection_ss) + DFTD_MEASURED_VARIABLE) = DFT_PHENOTYPE_BACKUP_S;
+			* ((data_p -> dftsd_backup_collection_ss) + DFTD_OBSERVATION) = DFT_OBSERVATION_BACKUP_S;
+			* ((data_p -> dftsd_backup_collection_ss) + DFTD_INSTRUMENT) = DFT_INSTRUMENT_BACKUP_S;
+			* ((data_p -> dftsd_backup_collection_ss) + DFTD_GENE_BANK) = DFT_GENE_BANK_BACKUP_S;
+			// * ((data_p -> dftsd_collection_ss) + DFTD_ROW) = DFT_ROW_S;
+			* ((data_p -> dftsd_backup_collection_ss) + DFTD_CROP) = DFT_CROP_S;
+			* ((data_p -> dftsd_backup_collection_ss) + DFTD_TREATMENT) = DFT_TREATMENT_S;
+			* ((data_p -> dftsd_backup_collection_ss) + DFTD_ONTOLOGY) = DFT_PHENOTYPE_ONOTOLOGY_S;
+
+
+
+			GetJSONBoolean (service_config_p, "use_mv_cache", &enable_db_cache_flag);
+
+			if (enable_db_cache_flag)
+				{
+					if (!EnableMeasuredVariablesCache (data_p))
+						{
+							PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "Failed to enable measured variable cache");
+						}
+				}
+
+			GetJSONBoolean (service_config_p, "use_treatments_cache", &enable_db_cache_flag);
+
+			if (enable_db_cache_flag)
+				{
+					if (!EnableTreatmentsCache (data_p))
+						{
+							PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "Failed to enable treatmnets cache");
+						}
+				}
 
 		} /* if (data_p -> psd_database_s) */
 

@@ -249,10 +249,7 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 bool AddSubmissionStudyParams (ServiceData *data_p, ParameterSet *params_p, Study *active_study_p, const bool read_only_flag)
 {
 	bool success_flag = false;
-	Parameter *param_p = NULL;
 	ParameterGroup *group_p = CreateAndAddParameterGroupToParameterSet ("Study", false, data_p, params_p);
-	FieldTrialServiceData *dfw_data_p = (FieldTrialServiceData *) data_p;
-
 	bool defaults_flag = false;
 	char *id_s = NULL;
 	char *this_crop_s = NULL;
@@ -2290,29 +2287,43 @@ bool AddStudyToServiceJob (ServiceJob *job_p, Study *study_p, const ViewFormat f
 json_t *GetAllStudiesAsJSON (const FieldTrialServiceData *data_p, bool full_data_flag)
 {
 	json_t *results_p = NULL;
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_STUDY]))
+	if (mongo_p)
 		{
-			bson_t *query_p = NULL;
-			bson_t *opts_p = NULL;
-
-			if (full_data_flag)
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_STUDY]))
 				{
-					opts_p = BCON_NEW ("sort", "{", ST_NAME_S, BCON_INT32 (1), "}");
-				}
-			else
-				{
-					opts_p = BCON_NEW ("projection", "{", ST_NAME_S, BCON_BOOL (true), "}",
-														 "sort", "{", ST_NAME_S, BCON_INT32 (1), "}");
+					bson_t *query_p = NULL;
+					bson_t *opts_p = NULL;
+
+					if (full_data_flag)
+						{
+							opts_p = BCON_NEW ("sort", "{", ST_NAME_S, BCON_INT32 (1), "}");
+						}
+					else
+						{
+							opts_p = BCON_NEW ("projection", "{", ST_NAME_S, BCON_BOOL (true), "}",
+																 "sort", "{", ST_NAME_S, BCON_INT32 (1), "}");
+						}
+
+					results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, opts_p);
+
+					if (opts_p)
+						{
+							bson_destroy (opts_p);
+						}
 				}
 
-			results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, opts_p);
-
-			if (opts_p)
-				{
-					bson_destroy (opts_p);
-				}
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 		}
+
+
+
+
 
 	return results_p;
 }
@@ -2322,26 +2333,40 @@ json_t *GetAllStudyIds (Service *service_p)
 {
 	json_t *id_results_p = NULL;
 	FieldTrialServiceData *data_p = (FieldTrialServiceData *) (service_p -> se_data_p);
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_STUDY]))
+	if (mongo_p)
 		{
-			bson_t query;
-			const char *fields_ss [] = { MONGO_ID_S, NULL };
-
-			bson_init (&query);
-
-			if (FindMatchingMongoDocumentsByBSON (data_p -> dftsd_mongo_p, &query, fields_ss, NULL))
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_STUDY]))
 				{
-					id_results_p = GetAllExistingMongoResultsAsJSON (data_p -> dftsd_mongo_p);
+					bson_t query;
+					const char *fields_ss [] = { MONGO_ID_S, NULL };
 
-					if (!id_results_p)
+					bson_init (&query);
+
+					if (FindMatchingMongoDocumentsByBSON (mongo_p, &query, fields_ss, NULL))
 						{
+							id_results_p = GetAllExistingMongoResultsAsJSON (mongo_p);
 
-						}		/* if (id_results_p) */
+							if (!id_results_p)
+								{
 
-				}		/* if (FindMatchingMongoDocumentsByBSON (data_p -> dftsd_mongo_p, NULL, fields_ss, NULL)) */
+								}		/* if (id_results_p) */
 
-		}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_STUDY])) */
+						}		/* if (FindMatchingMongoDocumentsByBSON (data_p -> dftsd_mongo_p, NULL, fields_ss, NULL)) */
+
+				}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_STUDY])) */
+
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+		}
+
+
+
 
 	return id_results_p;
 }
@@ -3254,15 +3279,164 @@ OperationStatus CalculateStudyStatistics (Study *study_p, const FieldTrialServic
 OperationStatus CalculateStudyAccessions (Study *study_p, const FieldTrialServiceData *service_data_p)
 {
 	OperationStatus status = OS_FAILED;
-	json_t *ids_p = GetAllStudyMaterialIds (study_p, service_data_p);
+	json_t *accessions_p = GetStudyMaterialCounts (study_p, service_data_p);
 
-	if (ids_p)
+	if (accessions_p)
 		{
+			if (SetStudyAccessions (study_p, accessions_p))
+				{
+					status = OS_SUCCEEDED;
+				}
+
+			json_decref (accessions_p);
+		}		/* if (accessions_p) */
+
+	return status;
+}
+
+
+
+json_t *GetStudyMaterialCounts (const Study * const study_p, const FieldTrialServiceData *data_p)
+{
+	bool has_plots_flag = ((study_p -> st_plots_p) && (study_p -> st_plots_p -> ll_size > 0));
+
+	if (!has_plots_flag)
+		{
+			has_plots_flag = GetStudyPlots (study_p, VF_STORAGE, data_p);
+		}
+
+	if (has_plots_flag)
+		{
+			bool success_flag = false;
+			json_t *accessions_p = json_array ();
+
+			if (accessions_p)
+				{
+					json_t *cache_p = json_object ();
+
+					if (cache_p)
+						{
+							const PlotNode *plot_node_p = (const PlotNode *) (study_p -> st_plots_p -> ll_head_p);
+							bool loop_flag = true;
+							size_t cache_size = 0;
+							size_t accessions_size = 0;
+
+
+							while (plot_node_p && loop_flag)
+								{
+									const Plot *plot_p = plot_node_p -> pn_plot_p;
+									const RowNode *row_node_p = (const RowNode *) (plot_p -> pl_rows_p -> ll_head_p);
+
+									while (row_node_p && loop_flag)
+										{
+											const Row *row_p = row_node_p -> rn_row_p;
+
+											if (row_p -> ro_type == RT_STANDARD)
+												{
+													const StandardRow *sr_p = ((const StandardRow *) row_p);
+
+													if (sr_p -> sr_material_p)
+														{
+															const char *accession_s = sr_p -> sr_material_p -> ma_accession_s;
+															json_int_t count = 0;
+
+															GetJSONInteger (cache_p, accession_s, &count);
+
+															++ count;
+
+															if (!SetJSONInteger (cache_p, accession_s, count))
+																{
+																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, cache_p, "Failed to set \"%s\": " INT64_FMT "", accession_s, count);
+
+																	loop_flag = false;
+																}
+
+														}
+												}
+
+											row_node_p = (const RowNode *) (row_node_p -> rn_node.ln_next_p);
+										}		/* while (row_node_p) */
+
+
+									plot_node_p = (const PlotNode *) (plot_node_p -> pn_node.ln_next_p);
+								}		/* while (plot_node_p) */
+
+							if (success_flag)
+								{
+									char *key_s;
+									json_t *value_p;
+
+									json_object_foreach (cache_p, key_s, value_p)
+										{
+
+											json_int_t count = 0;
+
+
+											if (GetJSONInteger (cache_p, key_s, &count))
+												{
+													json_t *entry_p = json_object ();
+
+													if (entry_p)
+														{
+															bool added_flag = false;
+
+															if (SetJSONString (entry_p, "so:name", key_s))
+																{
+																	if (SetJSONInteger (entry_p, "count", count))
+																		{
+																			if (json_array_append_new (accessions_p, entry_p) == 0)
+																				{
+																					added_flag = true;
+																				}
+																			else
+																				{
+																					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, accessions_p, "Failed to set \"%s\": " INT64_FMT "", key_s, count);
+
+																					json_decref (entry_p);
+
+																				}
+
+																		}
+
+																}
+
+															if (!success_flag)
+																{
+																	json_decref (entry_p);
+																}
+
+														}
+												}
+
+
+
+										}
+								}
+
+							cache_size = json_object_size (cache_p);
+							accessions_size = json_array_size (accessions_p);
+
+							if (cache_size == accessions_size)
+								{
+									success_flag = true;
+								}
+
+							json_decref (cache_p);
+						}		/* if (cache_p) */
+
+
+					if (success_flag)
+						{
+							return accessions_p;
+						}
+
+					json_decref (accessions_p);
+
+				}		/* if (accessions_p) */
 
 		}
 
-
-	return status;
+	return NULL;
 }
 
 
@@ -3279,7 +3453,26 @@ json_t *GetAllStudyMaterialIds (const Study * const study_p, const FieldTrialSer
 
 					if (key_s)
 						{
-							results_p = DistinctMatchingMongoDocumentsByBSON (data_p -> dftsd_mongo_p, data_p -> dftsd_database_s, data_p -> dftsd_collection_ss [DFTD_PLOT], key_s, query_p);
+							json_t *temp_p = NULL;
+							MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+							if (mongo_p)
+								{
+									OperationStatus status = DistinctMatchingMongoDocumentsByBSON (mongo_p, data_p -> dftsd_database_s, data_p -> dftsd_collection_ss [DFTD_PLOT], key_s, query_p, &temp_p);
+
+									if (status == OS_SUCCEEDED)
+										{
+											results_p = temp_p;
+										}
+
+									FreeMongoTool (mongo_p);
+								}		/* if (mongo_p) */
+							else
+								{
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+								}
+
+
 
 							FreeCopiedString (key_s);
 						}
@@ -3449,128 +3642,143 @@ static OperationStatus ProcessDistinctValues (bson_oid_t *study_id_p, const char
 {
 	OperationStatus status = OS_FAILED_TO_START;
 
-	if (SetMongoToolCollection (service_data_p -> dftsd_mongo_p, service_data_p -> dftsd_collection_ss [DFTD_PLOT]))
+	MongoTool *mongo_p = GetConfiguredMongoTool (service_data_p, NULL);
+
+	if (mongo_p)
 		{
-			bson_t *command_p = BCON_NEW ("distinct",
-																		BCON_UTF8 (service_data_p -> dftsd_collection_ss [DFTD_PLOT]),
-																		"key",
-																		BCON_UTF8 (key_s),
-																		"query",
-																		"{",
-																		PL_PARENT_STUDY_S,
-																		BCON_OID (study_id_p),
-																		"}");
-
-			if (command_p)
+			if (SetMongoToolCollection (mongo_p, service_data_p -> dftsd_collection_ss [DFTD_PLOT]))
 				{
-					bson_t *reply_p = NULL;
+					bson_t *command_p = BCON_NEW ("distinct",
+																				BCON_UTF8 (service_data_p -> dftsd_collection_ss [DFTD_PLOT]),
+																				"key",
+																				BCON_UTF8 (key_s),
+																				"query",
+																				"{",
+																				PL_PARENT_STUDY_S,
+																				BCON_OID (study_id_p),
+																				"}");
 
-					if (RunMongoCommand (service_data_p -> dftsd_mongo_p, command_p, &reply_p))
+					if (command_p)
 						{
-							if (reply_p)
+							bson_t *reply_p = NULL;
+
+							if (RunMongoCommand (mongo_p, command_p, &reply_p))
 								{
-									json_t *results_p = ConvertBSONToJSON (reply_p, NULL);
-
-									if (results_p)
+									if (reply_p)
 										{
-											json_t *oid_values_p = json_object_get (results_p, "values");
+											json_t *results_p = ConvertBSONToJSON (reply_p, NULL);
 
-											if (oid_values_p)
+											if (results_p)
 												{
-													if (json_is_array (oid_values_p))
+													json_t *oid_values_p = json_object_get (results_p, "values");
+
+													if (oid_values_p)
 														{
-															json_t *oid_value_p;
-															size_t i;
-															const size_t size = json_array_size (oid_values_p);
-															size_t num_successes = 0;
-
-															/*
-															 * Create a stats list node for each measured variable
-															 */
-
-															json_array_foreach (oid_values_p, i, oid_value_p)
-															{
-																const char *oid_s = GetJSONString (oid_value_p, "$oid");
-
-																if (oid_s)
-																	{
-																		if (process_value_fn (oid_s, user_data_p, service_data_p))
-																			{
-																				++ num_successes;
-																			}
-																		else
-																			{
-																				PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to process data for\"%s\"", oid_s);
-																			}
-																	}		/* if (oid_s) */
-
-															}		/* json_array_foreach (oids_p, i, oid_p) */
-
-
-															if (num_successes == size)
+															if (json_is_array (oid_values_p))
 																{
-																	status = OS_SUCCEEDED;
-																}
-															else if (num_successes > 0)
-																{
-																	status = OS_PARTIALLY_SUCCEEDED;
-																}
-															else
-																{
-																	status = OS_FAILED;
-																}
+																	json_t *oid_value_p;
+																	size_t i;
+																	const size_t size = json_array_size (oid_values_p);
+																	size_t num_successes = 0;
 
-														}		/* if (json_is_array (oids_p)) */
+																	/*
+																	 * Create a stats list node for each measured variable
+																	 */
 
-												}		/* if (oids_p) */
+																	json_array_foreach (oid_values_p, i, oid_value_p)
+																		{
+																			const char *oid_s = GetJSONString (oid_value_p, "$oid");
+
+																			if (oid_s)
+																				{
+																					if (process_value_fn (oid_s, user_data_p, service_data_p))
+																						{
+																							++ num_successes;
+																						}
+																					else
+																						{
+																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to process data for\"%s\"", oid_s);
+																						}
+																				}		/* if (oid_s) */
+
+																		}		/* json_array_foreach (oids_p, i, oid_p) */
 
 
-											json_decref (results_p);
-										}		/* if (results_p) */
+																	if (num_successes == size)
+																		{
+																			status = OS_SUCCEEDED;
+																		}
+																	else if (num_successes > 0)
+																		{
+																			status = OS_PARTIALLY_SUCCEEDED;
+																		}
+																	else
+																		{
+																			status = OS_FAILED;
+																		}
+
+																}		/* if (json_is_array (oids_p)) */
+
+														}		/* if (oids_p) */
 
 
-									bson_destroy (reply_p);
-								}		/* if (reply_p) */
+													json_decref (results_p);
+												}		/* if (results_p) */
+
+
+											bson_destroy (reply_p);
+										}		/* if (reply_p) */
+									else
+										{
+											size_t length;
+											json_t *json_p = ConvertBSONToJSON (command_p, &length);
+
+											if (json_p)
+												{
+													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "RunMongoCommand had empty reply for \"%s\"");
+													json_decref (json_p);
+												}
+											else
+												{
+													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "RunMongoCommand had empty reply");
+												}
+
+										}
+								}		/* if (RunMongoCommand (data_p -> dftsd_mongo_p, command_p, &reply_p)) */
 							else
 								{
 									size_t length;
-									char *json_s = ConvertBSONToJSON (command_p, &length);
-									if (json_s)
+									json_t *json_p = ConvertBSONToJSON (command_p, &length);
+
+									if (json_p)
 										{
-											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "RunMongoCommand had empty reply for \"%s\"", json_s);
-											bson_free (json_s);
+											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "RunMongoCommand failed for \"%s\"");
+											json_decref (json_p);
 										}
 									else
 										{
-											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "RunMongoCommand had empty reply");
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "RunMongoCommand failed");
 										}
-
 								}
-						}		/* if (RunMongoCommand (data_p -> dftsd_mongo_p, command_p, &reply_p)) */
+
+							bson_destroy (command_p);
+						}		/* if (command_p) */
 					else
 						{
-							size_t length;
-							char *json_s = ConvertBSONToJSON (command_p, &length);
-
-							if (json_s)
-								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "RunMongoCommand failed for \"%s\"", json_s);
-									bson_free (json_s);
-								}
-							else
-								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "RunMongoCommand failed");
-								}
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create command");
 						}
 
-					bson_destroy (command_p);
-				}		/* if (command_p) */
-			else
-				{
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create command");
 				}
 
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 		}
+
+
+
 
 	return status;
 }
@@ -3581,111 +3789,127 @@ static json_t *GetDistinctValuesAsJSON (bson_oid_t *study_id_p, const char *key_
 {
 	json_t *values_p = NULL;
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_PLOT]))
+
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+	if (mongo_p)
 		{
-			bson_t *command_p = BCON_NEW ("distinct",
-																		BCON_UTF8 (data_p -> dftsd_collection_ss [DFTD_PLOT]),
-																		"key",
-																		BCON_UTF8 (key_s),
-																		"query",
-																		"{",
-																		PL_PARENT_STUDY_S,
-																		BCON_OID (study_id_p),
-																		"}");
 
-			if (command_p)
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_PLOT]))
 				{
-					bson_t *reply_p = NULL;
+					bson_t *command_p = BCON_NEW ("distinct",
+																				BCON_UTF8 (data_p -> dftsd_collection_ss [DFTD_PLOT]),
+																				"key",
+																				BCON_UTF8 (key_s),
+																				"query",
+																				"{",
+																				PL_PARENT_STUDY_S,
+																				BCON_OID (study_id_p),
+																				"}");
 
-					if (RunMongoCommand (data_p -> dftsd_mongo_p, command_p, &reply_p))
+					if (command_p)
 						{
-							if (reply_p)
+							bson_t *reply_p = NULL;
+
+							if (RunMongoCommand (mongo_p, command_p, &reply_p))
 								{
-									json_t *results_p = ConvertBSONToJSON (reply_p, NULL);
-
-									if (results_p)
+									if (reply_p)
 										{
-											json_t *oid_values_p = json_object_get (results_p, "values");
+											json_t *results_p = ConvertBSONToJSON (reply_p, NULL);
 
-											if (oid_values_p)
+											if (results_p)
 												{
-													if (json_is_array (oid_values_p))
+													json_t *oid_values_p = json_object_get (results_p, "values");
+
+													if (oid_values_p)
 														{
-															values_p = json_array ();
-
-															if (values_p)
+															if (json_is_array (oid_values_p))
 																{
-																	json_t *oid_value_p;
-																	size_t i;
+																	values_p = json_array ();
 
-																	json_array_foreach (oid_values_p, i, oid_value_p)
-																	{
-																		const char *oid_s = GetJSONString (oid_value_p, "$oid");
+																	if (values_p)
+																		{
+																			json_t *oid_value_p;
+																			size_t i;
 
-																		if (oid_s)
+																			json_array_foreach (oid_values_p, i, oid_value_p)
 																			{
-																				if (!add_value_fn (oid_s, values_p, data_p))
+																				const char *oid_s = GetJSONString (oid_value_p, "$oid");
+
+																				if (oid_s)
 																					{
-																						PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add data for\"%s\"", oid_s);
-																					}
-																			}		/* if (oid_s) */
+																						if (!add_value_fn (oid_s, values_p, data_p))
+																							{
+																								PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add data for\"%s\"", oid_s);
+																							}
+																					}		/* if (oid_s) */
 
-																	}		/* json_array_foreach (oids_p, i, oid_p) */
+																			}		/* json_array_foreach (oids_p, i, oid_p) */
 
-																}		/* if (phenotypes_p) */
-
-
-														}		/* if (json_is_array (oids_p)) */
-
-												}		/* if (oids_p) */
+																		}		/* if (phenotypes_p) */
 
 
-											json_decref (results_p);
-										}		/* if (results_p) */
+																}		/* if (json_is_array (oids_p)) */
+
+														}		/* if (oids_p) */
 
 
-									bson_destroy (reply_p);
-								}		/* if (reply_p) */
+													json_decref (results_p);
+												}		/* if (results_p) */
+
+
+											bson_destroy (reply_p);
+										}		/* if (reply_p) */
+									else
+										{
+											size_t length;
+											char *json_s = ConvertBSONToJSON (command_p, &length);
+											if (json_s)
+												{
+													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "RunMongoCommand had empty reply for \"%s\"", json_s);
+													bson_free (json_s);
+												}
+											else
+												{
+													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "RunMongoCommand had empty reply");
+												}
+
+										}
+								}		/* if (RunMongoCommand (data_p -> dftsd_mongo_p, command_p, &reply_p)) */
 							else
 								{
 									size_t length;
 									char *json_s = ConvertBSONToJSON (command_p, &length);
+
 									if (json_s)
 										{
-											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "RunMongoCommand had empty reply for \"%s\"", json_s);
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "RunMongoCommand failed for \"%s\"", json_s);
 											bson_free (json_s);
 										}
 									else
 										{
-											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "RunMongoCommand had empty reply");
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "RunMongoCommand failed");
 										}
-
 								}
-						}		/* if (RunMongoCommand (data_p -> dftsd_mongo_p, command_p, &reply_p)) */
+
+							bson_destroy (command_p);
+						}		/* if (command_p) */
 					else
 						{
-							size_t length;
-							char *json_s = ConvertBSONToJSON (command_p, &length);
-
-							if (json_s)
-								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "RunMongoCommand failed for \"%s\"", json_s);
-									bson_free (json_s);
-								}
-							else
-								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "RunMongoCommand failed");
-								}
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create command");
 						}
 
-					bson_destroy (command_p);
-				}		/* if (command_p) */
-			else
-				{
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create command");
 				}
 
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 		}
+
+
+
 
 	return values_p;
 }
@@ -3883,7 +4107,7 @@ bool SetUpStudiesListParameter (const FieldTrialServiceData *data_p, Parameter *
 							if (num_results > 0)
 								{
 									size_t i = 0;
-									const char *param_value_s = GetStringParameterCurrentValue (param_p);
+									const char *param_value_s = GetStringParameterCurrentValue ((StringParameter *) param_p);
 
 									bson_oid_t *id_p = GetNewUnitialisedBSONOid ();
 
@@ -4225,165 +4449,180 @@ bool GetMatchingStudies (bson_t *query_p, FieldTrialServiceData *data_p, Service
 {
 	bool job_done_flag = false;
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_STUDY]))
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+	if (mongo_p)
 		{
-			bson_t *opts_p =  BCON_NEW ( "sort", "{", ST_NAME_S, BCON_INT32 (1), "}");
-			json_t *results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, opts_p);
-
-			if (results_p)
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_STUDY]))
 				{
-					if (json_is_array (results_p))
+					bson_t *opts_p =  BCON_NEW ( "sort", "{", ST_NAME_S, BCON_INT32 (1), "}");
+					json_t *results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, opts_p);
+
+					if (results_p)
 						{
-							OperationStatus status = OS_FAILED;
-							size_t num_added = 0;
-							size_t i = 0;
-							const size_t num_results = json_array_size (results_p);
-
-							job_done_flag = true;
-
-							for (i = 0; i < num_results; ++ i)
+							if (json_is_array (results_p))
 								{
-									json_t *study_json_p = NULL;
-									json_t *entry_p = json_array_get (results_p, i);
-									char *study_s = NULL;
+									OperationStatus status = OS_FAILED;
+									size_t num_added = 0;
+									size_t i = 0;
+									const size_t num_results = json_array_size (results_p);
 
-									switch (format)
-									{
-										case VF_CLIENT_FULL:
-										case VF_CLIENT_MINIMAL:
+									job_done_flag = true;
+
+									for (i = 0; i < num_results; ++ i)
+										{
+											json_t *study_json_p = NULL;
+											json_t *entry_p = json_array_get (results_p, i);
+											char *study_s = NULL;
+
+											switch (format)
 											{
-												Study *study_p = GetStudyFromJSON (entry_p, format, data_p);
-
-												if (study_p)
+												case VF_CLIENT_FULL:
+												case VF_CLIENT_MINIMAL:
 													{
-														study_json_p = GetStudyAsJSON (study_p, format, NULL, data_p);
+														Study *study_p = GetStudyFromJSON (entry_p, format, data_p);
 
-														if (study_json_p)
+														if (study_p)
 															{
-																study_s = EasyCopyToNewString (study_p -> st_name_s);
-															}
+																study_json_p = GetStudyAsJSON (study_p, format, NULL, data_p);
 
-														FreeStudy (study_p);
-													}
-											}
-											break;
-
-										case VF_INDEXING:
-											{
-												const char *value_s = GetJSONString (entry_p, ST_NAME_S);
-
-												if (value_s)
-													{
-														study_json_p = json_deep_copy (entry_p);
-
-														if (study_json_p)
-															{
-																study_s = EasyCopyToNewString (value_s);
-															}
-													}
-
-											}
-											break;
-
-										case VF_REFERENCE:
-											{
-												const char *name_s = GetJSONString (entry_p, ST_NAME_S);
-
-												if (name_s)
-													{
-														bson_oid_t *id_p = GetNewUnitialisedBSONOid ();
-
-														if (id_p)
-															{
-																if (GetMongoIdFromJSON (entry_p, id_p))
+																if (study_json_p)
 																	{
-																		study_json_p = json_object ();
+																		study_s = EasyCopyToNewString (study_p -> st_name_s);
+																	}
 
-																		if (study_json_p)
+																FreeStudy (study_p);
+															}
+													}
+													break;
+
+												case VF_INDEXING:
+													{
+														const char *value_s = GetJSONString (entry_p, ST_NAME_S);
+
+														if (value_s)
+															{
+																study_json_p = json_deep_copy (entry_p);
+
+																if (study_json_p)
+																	{
+																		study_s = EasyCopyToNewString (value_s);
+																	}
+															}
+
+													}
+													break;
+
+												case VF_REFERENCE:
+													{
+														const char *name_s = GetJSONString (entry_p, ST_NAME_S);
+
+														if (name_s)
+															{
+																bson_oid_t *id_p = GetNewUnitialisedBSONOid ();
+
+																if (id_p)
+																	{
+																		if (GetMongoIdFromJSON (entry_p, id_p))
 																			{
-																				if (SetJSONString (study_json_p, ST_NAME_S, name_s))
+																				study_json_p = json_object ();
+
+																				if (study_json_p)
 																					{
-																						if (!AddCompoundIdToJSON (study_json_p, id_p))
+																						if (SetJSONString (study_json_p, ST_NAME_S, name_s))
+																							{
+																								if (!AddCompoundIdToJSON (study_json_p, id_p))
+																									{
+																										json_decref (study_json_p);
+																										study_json_p = NULL;
+																									}
+																							}
+																						else
 																							{
 																								json_decref (study_json_p);
 																								study_json_p = NULL;
 																							}
 																					}
-																				else
-																					{
-																						json_decref (study_json_p);
-																						study_json_p = NULL;
-																					}
 																			}
-																	}
 
-																FreeBSONOid (id_p);
+																		FreeBSONOid (id_p);
+																	}
 															}
+
 													}
+													break;
 
 											}
-											break;
 
-									}
-
-									if (study_json_p)
-										{
-											bool added_flag = false;
-
-											if (AddContext (study_json_p))
+											if (study_json_p)
 												{
-													json_t *dest_record_p = GetDataResourceAsJSONByParts (PROTOCOL_INLINE_S, NULL, study_s, study_json_p);
+													bool added_flag = false;
 
-													if (dest_record_p)
+													if (AddContext (study_json_p))
 														{
-															if (AddResultToServiceJob (job_p, dest_record_p))
+															json_t *dest_record_p = GetDataResourceAsJSONByParts (PROTOCOL_INLINE_S, NULL, study_s, study_json_p);
+
+															if (dest_record_p)
 																{
-																	++ num_added;
-																	added_flag = true;
-																}
-															else
-																{
-																	json_decref (dest_record_p);
-																}
+																	if (AddResultToServiceJob (job_p, dest_record_p))
+																		{
+																			++ num_added;
+																			added_flag = true;
+																		}
+																	else
+																		{
+																			json_decref (dest_record_p);
+																		}
 
-														}		/* if (dest_record_p) */
+																}		/* if (dest_record_p) */
 
-												}		/* if (AddContext (trial_json_p)) */
+														}		/* if (AddContext (trial_json_p)) */
 
-											if (!added_flag)
-												{
-													json_decref (study_json_p);
-												}
+													if (!added_flag)
+														{
+															json_decref (study_json_p);
+														}
 
-											if (study_s)
-												{
-													FreeCopiedString (study_s);
-												}
+													if (study_s)
+														{
+															FreeCopiedString (study_s);
+														}
 
-										}		/* if (study_json_p) */
+												}		/* if (study_json_p) */
 
-								}		/* if (num_results > 0) */
+										}		/* if (num_results > 0) */
 
-							if (num_added == num_results)
-								{
-									status = OS_SUCCEEDED;
-								}
-							else if (status > 0)
-								{
-									status = OS_PARTIALLY_SUCCEEDED;
-								}
+									if (num_added == num_results)
+										{
+											status = OS_SUCCEEDED;
+										}
+									else if (status > 0)
+										{
+											status = OS_PARTIALLY_SUCCEEDED;
+										}
 
-							SetServiceJobStatus (job_p, status);
-						}		/* if (json_is_array (results_p)) */
+									SetServiceJobStatus (job_p, status);
+								}		/* if (json_is_array (results_p)) */
 
-				}		/* if (results_p) */
+						}		/* if (results_p) */
 
-			if (opts_p)
-				{
-					bson_destroy (opts_p);
-				}
+					if (opts_p)
+						{
+							bson_destroy (opts_p);
+						}
 
-		}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_EXPERIMENTAL_AREA]) */
+				}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_EXPERIMENTAL_AREA]) */
+
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+		}
+
+
+
 
 	return job_done_flag;
 }
@@ -4700,13 +4939,88 @@ Study *GetStudyFromResource (DataResource *resource_p, const NamedParameterType 
 OperationStatus RemovePlotsForStudyById (const char *id_s, FieldTrialServiceData *data_p)
 {
 	OperationStatus status = OS_FAILED;
-	MongoTool *tool_p = data_p -> dftsd_mongo_p;
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-	OperationStatus phenotypes_status = RemoveStudyPhenotypesFromStudyById (id_s, data_p);
-
-	if (phenotypes_status == OS_SUCCEEDED)
+	if (mongo_p)
 		{
-			if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [DFTD_PLOT]))
+			OperationStatus phenotypes_status = RemoveStudyPhenotypesFromStudyById (id_s, data_p);
+
+			if (phenotypes_status == OS_SUCCEEDED)
+				{
+					if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_PLOT]))
+						{
+							bson_oid_t *id_p = GetBSONOidFromString (id_s);
+
+							if (id_p)
+								{
+									bson_t *query_p = bson_new ();
+
+									if (query_p)
+										{
+											if (BSON_APPEND_OID (query_p, PL_PARENT_STUDY_S, id_p))
+												{
+													if (RemoveMongoDocumentsByBSON (mongo_p, query_p, false))
+														{
+															status = OS_SUCCEEDED;
+														}
+													else
+														{
+															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "RemoveMongoDocumentsByBSON () failed for \"%s\"", id_s);
+														}
+												}
+											else
+												{
+													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "BSON_APPEND_OID () failed for \"%s\"", id_s);
+												}
+
+											bson_free (query_p);
+										}
+									else
+										{
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "bson_new () failed");
+										}
+
+									FreeBSONOid (id_p);
+								}		/* if (id_p) */
+							else
+								{
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetBSONOidFromString () failed for \"%s\"", id_s);
+								}
+
+						}		/* if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [DFTD_PLOT])) */
+					else
+						{
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set mongo collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_PLOT]);
+						}
+
+				}		/* if (phenotypes_status == OS_SUCCEEDED) */
+			else
+				{
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "RemoveStudyPhenotypesFromStudyById () failed for \"%s\"", id_s);
+				}
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+		}
+
+
+
+
+	return status;
+}
+
+
+OperationStatus RemoveStudyPhenotypesFromStudyById (const char *id_s, FieldTrialServiceData *data_p)
+{
+	OperationStatus status = OS_FAILED;
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+	if (mongo_p)
+		{
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_STUDY]))
 				{
 					bson_oid_t *id_p = GetBSONOidFromString (id_s);
 
@@ -4716,15 +5030,14 @@ OperationStatus RemovePlotsForStudyById (const char *id_s, FieldTrialServiceData
 
 							if (query_p)
 								{
-									if (BSON_APPEND_OID (query_p, PL_PARENT_STUDY_S, id_p))
+									if (BSON_APPEND_OID (query_p, MONGO_ID_S, id_p))
 										{
-											if (RemoveMongoDocumentsByBSON (tool_p, query_p, false))
+											bson_t *reply_p = NULL;
+											const char *fields_ss [] = { ST_PHENOTYPES_S, NULL };
+
+											if (RemoveMongoFields (mongo_p, query_p, fields_ss, &reply_p))
 												{
 													status = OS_SUCCEEDED;
-												}
-											else
-												{
-													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "RemoveMongoDocumentsByBSON () failed for \"%s\"", id_s);
 												}
 										}
 									else
@@ -4752,65 +5065,15 @@ OperationStatus RemovePlotsForStudyById (const char *id_s, FieldTrialServiceData
 					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set mongo collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_PLOT]);
 				}
 
-		}		/* if (phenotypes_status == OS_SUCCEEDED) */
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
 	else
 		{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "RemoveStudyPhenotypesFromStudyById () failed for \"%s\"", id_s);
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 		}
 
-	return status;
-}
 
-
-OperationStatus RemoveStudyPhenotypesFromStudyById (const char *id_s, FieldTrialServiceData *data_p)
-{
-	OperationStatus status = OS_FAILED;
-	MongoTool *tool_p = data_p -> dftsd_mongo_p;
-
-	if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [DFTD_STUDY]))
-		{
-			bson_oid_t *id_p = GetBSONOidFromString (id_s);
-
-			if (id_p)
-				{
-					bson_t *query_p = bson_new ();
-
-					if (query_p)
-						{
-							if (BSON_APPEND_OID (query_p, MONGO_ID_S, id_p))
-								{
-									bson_t *reply_p = NULL;
-									const char *fields_ss [] = { ST_PHENOTYPES_S, NULL };
-
-									if (RemoveMongoFields (tool_p, query_p, fields_ss, &reply_p))
-										{
-											status = OS_SUCCEEDED;
-										}
-								}
-							else
-								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "BSON_APPEND_OID () failed for \"%s\"", id_s);
-								}
-
-							bson_free (query_p);
-						}
-					else
-						{
-							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "bson_new () failed");
-						}
-
-					FreeBSONOid (id_p);
-				}		/* if (id_p) */
-			else
-				{
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetBSONOidFromString () failed for \"%s\"", id_s);
-				}
-
-		}		/* if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [DFTD_PLOT])) */
-	else
-		{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set mongo collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_PLOT]);
-		}
 
 	return status;
 }
@@ -4878,72 +5141,84 @@ bool BackupStudy (Study *study_p, const char *id_s, FieldTrialServiceData *data_
 OperationStatus DeleteStudyById (const char *id_s, ServiceJob *job_p, FieldTrialServiceData *data_p, const bool backup_flag)
 {
 	OperationStatus status = OS_FAILED;
-	MongoTool *tool_p = data_p -> dftsd_mongo_p;
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-	if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [DFTD_STUDY]))
+	if (mongo_p)
 		{
-			bool success_flag = false;
-
-			if (backup_flag)
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_STUDY]))
 				{
-					Study *study_p = GetStudyByIdString (id_s, VF_CLIENT_FULL, data_p);
+					bool success_flag = false;
 
-					if (study_p)
+					if (backup_flag)
 						{
-							json_t *study_json_p = GetStudyAsJSON (study_p, VF_CLIENT_FULL, NULL, data_p);
+							Study *study_p = GetStudyByIdString (id_s, VF_CLIENT_FULL, data_p);
 
-							if (study_json_p)
+							if (study_p)
 								{
-									/*
-									 * Back up study
-									 */
-									success_flag = BackupStudy (study_p, id_s, data_p);
+									json_t *study_json_p = GetStudyAsJSON (study_p, VF_CLIENT_FULL, NULL, data_p);
 
-									json_decref (study_json_p);
-								}
-
-							FreeStudy (study_p);
-						}
-
-				}		/* if (backup_flag) */
-			else
-				{
-					success_flag = true;
-				}
-
-			if (success_flag)
-				{
-					bson_oid_t *id_p = GetBSONOidFromString (id_s);
-
-					if (id_p)
-						{
-							bson_t *query_p = bson_new ();
-							OperationStatus s;
-
-							if (query_p)
-								{
-									if (BSON_APPEND_OID (query_p, MONGO_ID_S, id_p))
+									if (study_json_p)
 										{
-											if (RemoveMongoDocumentsByBSON (tool_p, query_p, false))
-												{
-													status = RemovePlotsForStudyById (id_s, data_p);
-												}
+											/*
+											 * Back up study
+											 */
+											success_flag = BackupStudy (study_p, id_s, data_p);
+
+											json_decref (study_json_p);
 										}
 
-									bson_free (query_p);
+									FreeStudy (study_p);
 								}
 
+						}		/* if (backup_flag) */
+					else
+						{
+							success_flag = true;
+						}
 
-							s = DeleteStudyFromLuceneIndexById (id_s,  job_p -> sj_id, data_p);
+					if (success_flag)
+						{
+							bson_oid_t *id_p = GetBSONOidFromString (id_s);
 
-							FreeBSONOid (id_p);
-						}		/* if (id_p) */
+							if (id_p)
+								{
+									bson_t *query_p = bson_new ();
+									OperationStatus s;
 
-				}		/* if (success_flag) */
+									if (query_p)
+										{
+											if (BSON_APPEND_OID (query_p, MONGO_ID_S, id_p))
+												{
+													if (RemoveMongoDocumentsByBSON (mongo_p, query_p, false))
+														{
+															status = RemovePlotsForStudyById (id_s, data_p);
+														}
+												}
+
+											bson_free (query_p);
+										}
+
+
+									s = DeleteStudyFromLuceneIndexById (id_s,  job_p -> sj_id, data_p);
+
+									FreeBSONOid (id_p);
+								}		/* if (id_p) */
+
+						}		/* if (success_flag) */
 
 
 
-		}		/* if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [DFTD_STUDY])) */
+				}		/* if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [DFTD_STUDY])) */
+
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+		}
+
+
 
 	return status;
 
@@ -5565,7 +5840,7 @@ static bool AddTreatmentFactorParameters (ParameterSet *params_p, const Study *s
 											*value_ss = NULL;
 
 											tf_json_p = factors_array_p;
-											name_param_p = EasyCreateAndAddStringArrayParameterToParameterSet (& (data_p -> dftsd_base_data), params_p, group_p, TFJ_TREATMENT_NAME.npt_name_s, tf_name_display_name_s, tf_name_description_s, values_ss, num_treatments, PL_ALL);
+											name_param_p = EasyCreateAndAddStringArrayParameterToParameterSet (& (data_p -> dftsd_base_data), params_p, group_p, TFJ_TREATMENT_NAME.npt_name_s, tf_name_display_name_s, tf_name_description_s, (char **) values_ss, num_treatments, PL_ALL);
 
 											if (name_param_p)
 												{

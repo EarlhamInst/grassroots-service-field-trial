@@ -360,8 +360,19 @@ bool SaveMaterial (Material *material_p, const FieldTrialServiceData *data_p)
 
 			if (material_json_p)
 				{
-					success_flag = SaveAndBackupMongoDataWithTimestamp (data_p -> dftsd_mongo_p, material_json_p, data_p -> dftsd_collection_ss [DFTD_MATERIAL], 
-						data_p -> dftsd_backup_collection_ss [DFTD_MATERIAL], DFT_BACKUPS_ID_KEY_S, selector_p, MONGO_TIMESTAMP_S);
+					MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+					if (mongo_p)
+						{
+							success_flag = SaveAndBackupMongoDataWithTimestamp (mongo_p, material_json_p, data_p -> dftsd_collection_ss [DFTD_MATERIAL],
+								data_p -> dftsd_backup_collection_ss [DFTD_MATERIAL], DFT_BACKUPS_ID_KEY_S, selector_p, MONGO_TIMESTAMP_S);
+
+							FreeMongoTool (mongo_p);
+						}		/* if (mongo_p) */
+					else
+						{
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+						}
 
 					json_decref (material_json_p);
 				}		/* if (material_json_p) */
@@ -512,50 +523,63 @@ Material *GetMaterialById (const bson_oid_t *material_id_p, const FieldTrialServ
 static Material *SearchForMaterial (bson_t *query_p, const FieldTrialServiceData *data_p)
 {
 	Material *material_p = NULL;
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_MATERIAL]))
+	if (mongo_p)
 		{
-			json_t *results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, NULL);
-
-			if (results_p)
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_MATERIAL]))
 				{
-					if (json_is_array (results_p))
+					json_t *results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, NULL);
+
+					if (results_p)
 						{
-							if (json_array_size (results_p) == 1)
+							if (json_is_array (results_p))
 								{
-									json_t *result_p = json_array_get (results_p, 0);
-
-									material_p = GetMaterialFromJSON (result_p, VF_STORAGE, data_p);
-
-									if (!material_p)
+									if (json_array_size (results_p) == 1)
 										{
-											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, result_p, "Failed to get Material from JSON");
+											json_t *result_p = json_array_get (results_p, 0);
+
+											material_p = GetMaterialFromJSON (result_p, VF_STORAGE, data_p);
+
+											if (!material_p)
+												{
+													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, result_p, "Failed to get Material from JSON");
+												}
+
+										}		/* if (json_array_size (results_p) == 1) */
+									else
+										{
+											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "Materials array does not contain just a single item");
 										}
 
-								}		/* if (json_array_size (results_p) == 1) */
+								}		/* if (json_is_array (results_p)) */
 							else
 								{
-									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "Materials array does not contain just a single item");
+									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "results are not an array");
 								}
 
-						}		/* if (json_is_array (results_p)) */
+							json_decref (results_p);
+						}		/* if (results_p) */
 					else
 						{
-							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "results are not an array");
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "No results returned");
 						}
-
-					json_decref (results_p);
-				}		/* if (results_p) */
+				}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_MATERIAL])) */
 			else
 				{
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "No results returned");
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set mongo collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_MATERIAL]);
 				}
-		}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_MATERIAL])) */
+
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
 	else
 		{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set mongo collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_MATERIAL]);
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 		}
+
+
+
 
 	return material_p;
 }

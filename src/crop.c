@@ -457,7 +457,18 @@ bool SaveCrop (Crop *crop_p, const FieldTrialServiceData *data_p)
 
 			if (crop_json_p)
 				{
-					success_flag = SaveAndBackupMongoDataWithTimestamp (data_p -> dftsd_mongo_p, crop_json_p, data_p -> dftsd_collection_ss [DFTD_CROP], data_p -> dftsd_backup_collection_ss [DFTD_CROP], DFT_BACKUPS_ID_KEY_S, selector_p, MONGO_TIMESTAMP_S);
+					MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+					if (mongo_p)
+						{
+							success_flag = SaveAndBackupMongoDataWithTimestamp (mongo_p, crop_json_p, data_p -> dftsd_collection_ss [DFTD_CROP], data_p -> dftsd_backup_collection_ss [DFTD_CROP], DFT_BACKUPS_ID_KEY_S, selector_p, MONGO_TIMESTAMP_S);
+
+							FreeMongoTool (mongo_p);
+						}
+					else
+						{
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+						}
 
 					json_decref (crop_json_p);
 				}		/* if (crop_json_p) */

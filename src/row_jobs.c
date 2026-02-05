@@ -1141,75 +1141,89 @@ Row *GetRowByStudyIndex (const int32 by_study_index, Study *study_p, const ViewF
 
 					if (query_p)
 						{
-							if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_PLOT]))
+							MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+							if (mongo_p)
 								{
-									json_t *results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, NULL);
-
-									if (results_p)
+									if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_PLOT]))
 										{
-											if (json_is_array (results_p))
+											json_t *results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, NULL);
+
+											if (results_p)
 												{
-													const size_t num_results = json_array_size (results_p);
-
-													if (num_results == 1)
+													if (json_is_array (results_p))
 														{
-															size_t i = 0;
-															json_t *plot_json_p = json_array_get (results_p, i);
-															Plot *plot_p = GetPlotFromJSON (plot_json_p, study_p, format, data_p);
+															const size_t num_results = json_array_size (results_p);
 
-															if (plot_p)
+															if (num_results == 1)
 																{
-																	row_p = GetRowFromPlotByStudyIndex (plot_p, by_study_index);
+																	size_t i = 0;
+																	json_t *plot_json_p = json_array_get (results_p, i);
+																	Plot *plot_p = GetPlotFromJSON (plot_json_p, study_p, format, data_p);
 
-																	if (!row_p)
+																	if (plot_p)
 																		{
-																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, plot_json_p, "Failed to get row with study index " UINT32_FMT,  by_study_index);
-																			FreePlot (plot_p);
+																			row_p = GetRowFromPlotByStudyIndex (plot_p, by_study_index);
+
+																			if (!row_p)
+																				{
+																					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, plot_json_p, "Failed to get row with study index " UINT32_FMT,  by_study_index);
+																					FreePlot (plot_p);
+																				}
 																		}
-																}
+																	else
+																		{
+																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, plot_json_p, "Failed to create plot");
+																		}
+
+																}		/* if (num_results == 1) */
 															else
 																{
-																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, plot_json_p, "Failed to create plot");
-																}
+																	json_t *query_json_p = ConvertBSONToJSON (query_p, NULL);
+																	bool printed_error_flag = false;
 
-														}		/* if (num_results == 1) */
-													else
-														{
-															json_t *query_json_p = ConvertBSONToJSON (query_p, NULL);
-															bool printed_error_flag = false;
-
-															if (query_json_p)
-																{
-																	char *query_json_s = json_dumps (query_json_p, 0);
-
-																	if (query_json_s)
+																	if (query_json_p)
 																		{
-																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, UINT32_FMT " results for \"%s\"", query_json_s);
-																			free (query_json_s);
+																			char *query_json_s = json_dumps (query_json_p, 0);
 
-																			printed_error_flag = true;
+																			if (query_json_s)
+																				{
+																					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, UINT32_FMT " results for \"%s\"", query_json_s);
+																					free (query_json_s);
+
+																					printed_error_flag = true;
+																				}
+
+																			json_decref (query_json_p);
 																		}
 
-																	json_decref (query_json_p);
+																	if (!printed_error_flag)
+																		{
+																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, UINT32_FMT " for row " UINT32_FMT " in study \"%s\"", by_study_index, study_p -> st_name_s);
+																		}
+
 																}
 
-															if (!printed_error_flag)
-																{
-																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, UINT32_FMT " for row " UINT32_FMT " in study \"%s\"", by_study_index, study_p -> st_name_s);
-																}
+														}		/* if (json_is_array (results_p)) */
 
-														}
+													json_decref (results_p);
+												}		/* if (results_p) */
+											else
+												{
+													PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "No results for row " UINT32_FMT " in study \"%s\"", by_study_index, study_p -> st_name_s);
+												}
 
-												}		/* if (json_is_array (results_p)) */
+										}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_ROW]) */
 
-											json_decref (results_p);
-										}		/* if (results_p) */
-									else
-										{
-											PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "No results for row " UINT32_FMT " in study \"%s\"", by_study_index, study_p -> st_name_s);
-										}
 
-								}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_ROW]) */
+									FreeMongoTool (mongo_p);
+								}		/* if (mongo_p) */
+							else
+								{
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+								}
+
+
 
 							bson_destroy (query_p);
 						}		/* if (query_p) */

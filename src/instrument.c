@@ -147,7 +147,18 @@ bool SaveInstrument (Instrument *instrument_p, const FieldTrialServiceData *data
 
 			if (instrument_json_p)
 				{
-					success_flag = SaveAndBackupMongoDataWithTimestamp (data_p -> dftsd_mongo_p, instrument_json_p, data_p -> dftsd_collection_ss [DFTD_INSTRUMENT], data_p -> dftsd_backup_collection_ss [DFTD_INSTRUMENT], DFT_BACKUPS_ID_KEY_S, selector_p, MONGO_TIMESTAMP_S);
+					MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+					if (mongo_p)
+						{
+							success_flag = SaveAndBackupMongoDataWithTimestamp (mongo_p, instrument_json_p, data_p -> dftsd_collection_ss [DFTD_INSTRUMENT], data_p -> dftsd_backup_collection_ss [DFTD_INSTRUMENT], DFT_BACKUPS_ID_KEY_S, selector_p, MONGO_TIMESTAMP_S);
+
+							FreeMongoTool (mongo_p);
+						}		/* if (mongo_p) */
+					else
+						{
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+						}
 
 					json_decref (instrument_json_p);
 				}		/* if (instrument_json_p) */
@@ -162,43 +173,55 @@ bool SaveInstrument (Instrument *instrument_p, const FieldTrialServiceData *data
 Instrument *GetInstrumentById (const bson_oid_t *instrument_id_p, const FieldTrialServiceData *data_p)
 {
 	Instrument *instrument_p = NULL;
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_INSTRUMENT]))
+	if (mongo_p)
 		{
-			bson_t *query_p = BCON_NEW (MONGO_ID_S, BCON_OID (instrument_id_p));
-
-			if (query_p)
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_INSTRUMENT]))
 				{
-					json_t *results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, NULL);
+					bson_t *query_p = BCON_NEW (MONGO_ID_S, BCON_OID (instrument_id_p));
 
-					if (results_p)
+					if (query_p)
 						{
-							if (json_is_array (results_p))
+							json_t *results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, NULL);
+
+							if (results_p)
 								{
-									const size_t num_results = json_array_size (results_p);
-
-									if (num_results == 1)
+									if (json_is_array (results_p))
 										{
-											json_t *entry_p = json_array_get (results_p, 0);
+											const size_t num_results = json_array_size (results_p);
 
-											instrument_p = GetInstrumentFromJSON (entry_p);
-
-											if (!instrument_p)
+											if (num_results == 1)
 												{
+													json_t *entry_p = json_array_get (results_p, 0);
 
-												}		/* if (!instrument_p) */
+													instrument_p = GetInstrumentFromJSON (entry_p);
 
-										}		/* if (num_results == 1) */
+													if (!instrument_p)
+														{
 
-								}		/* if (json_is_array (results_p)) */
+														}		/* if (!instrument_p) */
 
-							json_decref (results_p);
-						}		/* if (results_p) */
+												}		/* if (num_results == 1) */
 
-					bson_destroy (query_p);
-				}		/* if (query_p) */
+										}		/* if (json_is_array (results_p)) */
 
-		}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_LOCATION])) */
+									json_decref (results_p);
+								}		/* if (results_p) */
+
+							bson_destroy (query_p);
+						}		/* if (query_p) */
+
+				}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_LOCATION])) */
+
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+		}
+
 
 	return instrument_p;
 }

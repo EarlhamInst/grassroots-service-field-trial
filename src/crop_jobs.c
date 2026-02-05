@@ -238,110 +238,122 @@ bool SetUpCropsListParameter (const FieldTrialServiceData *data_p, Parameter *pa
 {
 	bool success_flag = false;
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_CROP]))
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+	if (mongo_p)
 		{
-			bson_t *query_p = NULL;
-			bson_t *opts_p =  BCON_NEW ( "sort", "{", CR_NAME_S, BCON_INT32 (1), "}", "collation", "{", "locale", BCON_UTF8 ("en"), "}");
-			json_t *results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, opts_p);
-
-			if (results_p)
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_CROP]))
 				{
-					if (json_is_array (results_p))
+					bson_t *query_p = NULL;
+					bson_t *opts_p =  BCON_NEW ( "sort", "{", CR_NAME_S, BCON_INT32 (1), "}", "collation", "{", "locale", BCON_UTF8 ("en"), "}");
+					json_t *results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, opts_p);
+
+					if (results_p)
 						{
-							const size_t num_results = json_array_size (results_p);
-
-							if (num_results > 0)
+							if (json_is_array (results_p))
 								{
-									size_t i;
-									const json_t *service_config_p = data_p -> dftsd_base_data.sd_config_p;
-									const char *default_crop_s = NULL;
-									bool default_is_set_flag = false;
+									const size_t num_results = json_array_size (results_p);
 
-									if (active_crop_p)
+									if (num_results > 0)
 										{
-											default_crop_s = active_crop_p -> cr_name_s;
-										}
-									else if (new_study_flag)
-										{
-											default_crop_s = GetJSONString (service_config_p, "default_crop");
-										}
+											size_t i;
+											const json_t *service_config_p = data_p -> dftsd_base_data.sd_config_p;
+											const char *default_crop_s = NULL;
+											bool default_is_set_flag = false;
 
-									if ((!default_crop_s) && empty_option_s)
-										{
-											default_crop_s = empty_option_s;
-										}
-
-									/*
-									 * If there's an empty option, add it
-									 */
-									if (empty_option_s)
-										{
-											success_flag = CreateAndAddStringParameterOption (param_p, empty_option_s, empty_option_s);
-
-											if (!default_crop_s)
+											if (active_crop_p)
 												{
-													success_flag = SetDefaultCropValue ((StringParameter *) param_p, empty_option_s);
-
-													default_is_set_flag = true;
+													default_crop_s = active_crop_p -> cr_name_s;
 												}
-										}
-
-									for (i = 0; i < num_results; ++ i)
-										{
-											json_t *entry_p = json_array_get (results_p, i);
-											Crop *crop_p = GetCropFromJSON (entry_p, data_p);
-
-											if (crop_p)
+											else if (new_study_flag)
 												{
-													char *id_s = GetBSONOidAsString (crop_p -> cr_id_p);
+													default_crop_s = GetJSONString (service_config_p, "default_crop");
+												}
 
-													if (id_s)
+											if ((!default_crop_s) && empty_option_s)
+												{
+													default_crop_s = empty_option_s;
+												}
+
+											/*
+											 * If there's an empty option, add it
+											 */
+											if (empty_option_s)
+												{
+													success_flag = CreateAndAddStringParameterOption (param_p, empty_option_s, empty_option_s);
+
+													if (!default_crop_s)
 														{
-															if (!default_is_set_flag)
+															success_flag = SetDefaultCropValue ((StringParameter *) param_p, empty_option_s);
+
+															default_is_set_flag = true;
+														}
+												}
+
+											for (i = 0; i < num_results; ++ i)
+												{
+													json_t *entry_p = json_array_get (results_p, i);
+													Crop *crop_p = GetCropFromJSON (entry_p, data_p);
+
+													if (crop_p)
+														{
+															char *id_s = GetBSONOidAsString (crop_p -> cr_id_p);
+
+															if (id_s)
 																{
-																	if (default_crop_s)
+																	if (!default_is_set_flag)
 																		{
-																			if (strcmp (crop_p -> cr_name_s, default_crop_s) == 0)
+																			if (default_crop_s)
+																				{
+																					if (strcmp (crop_p -> cr_name_s, default_crop_s) == 0)
+																						{
+																							success_flag = SetDefaultCropValue ((StringParameter *) param_p, id_s);
+																							default_is_set_flag = true;
+																						}
+																				}
+																			else if (i == 0)
 																				{
 																					success_flag = SetDefaultCropValue ((StringParameter *) param_p, id_s);
 																					default_is_set_flag = true;
 																				}
 																		}
-																	else if (i == 0)
-																		{
-																			success_flag = SetDefaultCropValue ((StringParameter *) param_p, id_s);
-																			default_is_set_flag = true;
-																		}
+
+																	success_flag = CreateAndAddStringParameterOption (param_p, id_s, crop_p -> cr_name_s);
+
+																	FreeBSONOidString (id_s);
 																}
 
-															success_flag = CreateAndAddStringParameterOption (param_p, id_s, crop_p -> cr_name_s);
+															FreeCrop (crop_p);
+														}		/* if (crop_p) */
 
-															FreeBSONOidString (id_s);
-														}
+												}		/* for (i = 0; i < num_results; ++ i)) */
 
-													FreeCrop (crop_p);
-												}		/* if (crop_p) */
+										}		/* if (num_results > 0) */
+									else
+										{
+											/* nothing to add */
+											success_flag = true;
+										}
 
-										}		/* for (i = 0; i < num_results; ++ i)) */
+								}		/* if (json_is_array (results_p)) */
 
-								}		/* if (num_results > 0) */
-							else
-								{
-									/* nothing to add */
-									success_flag = true;
-								}
+							json_decref (results_p);
+						}		/* if (results_p) */
 
-						}		/* if (json_is_array (results_p)) */
+					if (opts_p)
+						{
+							bson_destroy (opts_p);
+						}
 
-					json_decref (results_p);
-				}		/* if (results_p) */
+				}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL])) */
 
-			if (opts_p)
-				{
-					bson_destroy (opts_p);
-				}
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+		}
 
-		}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL])) */
 
 	return success_flag;
 }

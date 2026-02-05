@@ -151,83 +151,96 @@ bool GetSubmissionGeneBankParameterTypeForNamedParameter (const char *param_name
 bool SetUpGenBanksListParameter (const FieldTrialServiceData *data_p, StringParameter *param_p)
 {
 	bool success_flag = false;
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_GENE_BANK]))
+	if (mongo_p)
 		{
-			bson_t *query_p = NULL;
-			bson_t *opts_p = BCON_NEW ( "sort", "{", CONTEXT_PREFIX_SCHEMA_ORG_S "name", BCON_INT32 (1), "}");
-			json_t *results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, opts_p);
-
-			if (results_p)
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_GENE_BANK]))
 				{
-					if (json_is_array (results_p))
+					bson_t *query_p = NULL;
+					bson_t *opts_p = BCON_NEW ( "sort", "{", CONTEXT_PREFIX_SCHEMA_ORG_S "name", BCON_INT32 (1), "}");
+					json_t *results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, opts_p);
+
+					if (results_p)
 						{
-							const size_t num_results = json_array_size (results_p);
-
-							if (num_results > 0)
+							if (json_is_array (results_p))
 								{
-									size_t i = 0;
-									json_t *entry_p = json_array_get (results_p, i);
-									GeneBank *gene_bank_p = GetGeneBankFromJSON (entry_p);
+									const size_t num_results = json_array_size (results_p);
 
-									if (gene_bank_p)
+									if (num_results > 0)
 										{
-											char id_s [MONGO_OID_STRING_BUFFER_SIZE];
+											size_t i = 0;
+											json_t *entry_p = json_array_get (results_p, i);
+											GeneBank *gene_bank_p = GetGeneBankFromJSON (entry_p);
 
-											bson_oid_to_string (gene_bank_p -> gb_id_p, id_s);
-
-											if (SetStringParameterCurrentValue (param_p, id_s))
+											if (gene_bank_p)
 												{
-													if (SetStringParameterDefaultValue (param_p, id_s))
+													char id_s [MONGO_OID_STRING_BUFFER_SIZE];
+
+													bson_oid_to_string (gene_bank_p -> gb_id_p, id_s);
+
+													if (SetStringParameterCurrentValue (param_p, id_s))
 														{
-															success_flag = CreateAndAddStringParameterOption (& (param_p -> sp_base_param), id_s, gene_bank_p -> gb_name_s);
+															if (SetStringParameterDefaultValue (param_p, id_s))
+																{
+																	success_flag = CreateAndAddStringParameterOption (& (param_p -> sp_base_param), id_s, gene_bank_p -> gb_name_s);
+																}
+
 														}
 
-												}
+													FreeGeneBank (gene_bank_p);
+												}		/* if (gene_bank_p) */
 
-											FreeGeneBank (gene_bank_p);
-										}		/* if (gene_bank_p) */
-
-									if (success_flag)
-										{
-											for (++ i; i < num_results; ++ i)
+											if (success_flag)
 												{
-													entry_p = json_array_get (results_p, i);
-													gene_bank_p = GetGeneBankFromJSON (entry_p);
-
-													if (gene_bank_p)
+													for (++ i; i < num_results; ++ i)
 														{
-															char id_s [MONGO_OID_STRING_BUFFER_SIZE];
+															entry_p = json_array_get (results_p, i);
+															gene_bank_p = GetGeneBankFromJSON (entry_p);
 
-															bson_oid_to_string (gene_bank_p -> gb_id_p, id_s);
+															if (gene_bank_p)
+																{
+																	char id_s [MONGO_OID_STRING_BUFFER_SIZE];
 
-															success_flag = CreateAndAddStringParameterOption (param_p, id_s, gene_bank_p -> gb_name_s);
+																	bson_oid_to_string (gene_bank_p -> gb_id_p, id_s);
 
-															FreeGeneBank (gene_bank_p);
-														}		/* if (gene_bank_p) */
+																	success_flag = CreateAndAddStringParameterOption (param_p, id_s, gene_bank_p -> gb_name_s);
 
-												}		/* for (++ i; i < num_results; ++ i) */
+																	FreeGeneBank (gene_bank_p);
+																}		/* if (gene_bank_p) */
 
-										}		/* if (param_p) */
+														}		/* for (++ i; i < num_results; ++ i) */
 
-								}		/* if (num_results > 0) */
-							else
-								{
-									/* nothing to add */
-									success_flag = true;
-								}
+												}		/* if (param_p) */
 
-						}		/* if (json_is_array (results_p)) */
+										}		/* if (num_results > 0) */
+									else
+										{
+											/* nothing to add */
+											success_flag = true;
+										}
 
-					json_decref (results_p);
-				}		/* if (results_p) */
+								}		/* if (json_is_array (results_p)) */
 
-			if (opts_p)
-				{
-					bson_destroy (opts_p);
-				}
+							json_decref (results_p);
+						}		/* if (results_p) */
 
-		}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_LOCATION])) */
+					if (opts_p)
+						{
+							bson_destroy (opts_p);
+						}
+
+				}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_LOCATION])) */
+
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+		}
+
+
 
 	return success_flag;
 }

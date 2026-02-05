@@ -366,18 +366,33 @@ OperationStatus SaveLocation (Location *location_p, ServiceJob *job_p, FieldTria
 
 			if (location_json_p)
 				{
-					if (SaveAndBackupMongoDataWithTimestamp (data_p -> dftsd_mongo_p, location_json_p, data_p -> dftsd_collection_ss [DFTD_LOCATION], 
-							data_p -> dftsd_backup_collection_ss [DFTD_LOCATION], DFT_BACKUPS_ID_KEY_S, selector_p, MONGO_TIMESTAMP_S))
-						{
-							status = IndexData (job_p, location_json_p, NULL);
+					MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-							if (status != OS_SUCCEEDED)
+					if (mongo_p)
+						{
+							if (SaveAndBackupMongoDataWithTimestamp (mongo_p, location_json_p, data_p -> dftsd_collection_ss [DFTD_LOCATION],
+									data_p -> dftsd_backup_collection_ss [DFTD_LOCATION], DFT_BACKUPS_ID_KEY_S, selector_p, MONGO_TIMESTAMP_S))
 								{
-									status = OS_PARTIALLY_SUCCEEDED;
-									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, location_json_p, "Failed to index location \"%s\" as JSON to Lucene", location_p -> lo_address_p -> ad_name_s);
-									AddGeneralErrorMessageToServiceJob (job_p, "Location saved but failed to index for searching");
+									status = IndexData (job_p, location_json_p, NULL);
+
+									if (status != OS_SUCCEEDED)
+										{
+											status = OS_PARTIALLY_SUCCEEDED;
+											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, location_json_p, "Failed to index location \"%s\" as JSON to Lucene", location_p -> lo_address_p -> ad_name_s);
+											AddGeneralErrorMessageToServiceJob (job_p, "Location saved but failed to index for searching");
+										}
 								}
+
+
+							FreeMongoTool (mongo_p);
+						}		/* if (mongo_p) */
+					else
+						{
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 						}
+
+
+
 
 					json_decref (location_json_p);
 				}		/* if (area_json_p) */

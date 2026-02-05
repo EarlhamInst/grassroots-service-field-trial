@@ -370,30 +370,45 @@ json_t *GetAllProgrammesAsJSON (const FieldTrialServiceData *data_p, const bool 
 {
 	json_t *results_p = NULL;
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_PROGRAMME]))
+
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+	if (mongo_p)
 		{
-			bson_t *query_p = NULL;
-			bson_t *opts_p = NULL;
-
-			if (full_data_flag)
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_PROGRAMME]))
 				{
-					opts_p =  BCON_NEW ( "sort", "{", PR_NAME_S, BCON_INT32 (1), "}");
-				}
-			else
-				{
-					opts_p =  BCON_NEW ("projection", "{", PR_NAME_S, BCON_BOOL (true), "}",
-															"sort", "{", PR_NAME_S, BCON_INT32 (1), "}");
-				}
+					bson_t *query_p = NULL;
+					bson_t *opts_p = NULL;
+
+					if (full_data_flag)
+						{
+							opts_p =  BCON_NEW ( "sort", "{", PR_NAME_S, BCON_INT32 (1), "}");
+						}
+					else
+						{
+							opts_p =  BCON_NEW ("projection", "{", PR_NAME_S, BCON_BOOL (true), "}",
+																	"sort", "{", PR_NAME_S, BCON_INT32 (1), "}");
+						}
 
 
-			results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, opts_p);
+					results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, opts_p);
 
-			if (opts_p)
-				{
-					bson_destroy (opts_p);
-				}
+					if (opts_p)
+						{
+							bson_destroy (opts_p);
+						}
 
-		}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_PROGRAMME])) */
+				}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_PROGRAMME])) */
+
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+		}
+
+
 
 	return results_p;
 }

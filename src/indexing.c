@@ -1403,103 +1403,117 @@ static void GenerateStudyHandbook (Study *study_p, ServiceJob *job_p, FieldTrial
 static OperationStatus StoreAllRResScaleUnits (json_t *terms_p, FieldTrialServiceData *data_p)
 {
 	OperationStatus status = OS_FAILED;
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE]))
+	if (mongo_p)
 		{
-			bson_t *query_p = bson_new ();
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE]))
+					{
+						bson_t *query_p = bson_new ();
 
-			if (query_p)
-				{
-					size_t i;
-					json_t *row_p;
-					size_t num_succeeded = 0;
-					const size_t num_terms = json_array_size (terms_p);
+						if (query_p)
+							{
+								size_t i;
+								json_t *row_p;
+								size_t num_succeeded = 0;
+								const size_t num_terms = json_array_size (terms_p);
 
-					json_array_foreach (terms_p, i, row_p)
-						{
-							const char *unit_id_s = GetJSONString (row_p, "unit-id");
+								json_array_foreach (terms_p, i, row_p)
+									{
+										const char *unit_id_s = GetJSONString (row_p, "unit-id");
 
-							if (unit_id_s)
-								{
-									const char *scale_class_s = GetJSONString (row_p, "scale class");
+										if (unit_id_s)
+											{
+												const char *scale_class_s = GetJSONString (row_p, "scale class");
 
-									if (scale_class_s)
-										{
-											const ScaleClass *scale_class_p = GetScaleClassByName (scale_class_s);
+												if (scale_class_s)
+													{
+														const ScaleClass *scale_class_p = GetScaleClassByName (scale_class_s);
 
-											if (scale_class_p)
-												{
-													json_t *scale_class_json_p = GetScaleClassAsEmbeddedJSON (scale_class_p, MV_SCALE_S);
+														if (scale_class_p)
+															{
+																json_t *scale_class_json_p = GetScaleClassAsEmbeddedJSON (scale_class_p, MV_SCALE_S);
 
-													if (scale_class_json_p)
-														{
-															const char * const key_s = "unit.so:sameAs";
+																if (scale_class_json_p)
+																	{
+																		const char * const key_s = "unit.so:sameAs";
 
-															if (BSON_APPEND_UTF8 (query_p, key_s, unit_id_s))
-																{
-																	if (UpdateMongoDocumentsByBSON (data_p -> dftsd_mongo_p, query_p, scale_class_json_p, true))
-																		{
-																			++ num_succeeded;
-																		}
-																	else
-																		{
-																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, scale_class_json_p, "UpdateMongoDocumentsByBSON () failed for query \"%s\": \"%s\"", key_s, unit_id_s);
-																		}
+																		if (BSON_APPEND_UTF8 (query_p, key_s, unit_id_s))
+																			{
+																				if (UpdateMongoDocumentsByBSON (mongo_p, query_p, scale_class_json_p, true))
+																					{
+																						++ num_succeeded;
+																					}
+																				else
+																					{
+																						PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, scale_class_json_p, "UpdateMongoDocumentsByBSON () failed for query \"%s\": \"%s\"", key_s, unit_id_s);
+																					}
 
-																	bson_init (query_p);
-																}		/* if (BSON_APPEND_UTF8 (query_p, "unit.so:sameAs", unit_id_s)) */
-															else
-																{
-																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, scale_class_json_p, "BSON_APPEND_UTF8 () failed for query \"%s\": \"%s\"", key_s, unit_id_s);
-																}
+																				bson_init (query_p);
+																			}		/* if (BSON_APPEND_UTF8 (query_p, "unit.so:sameAs", unit_id_s)) */
+																		else
+																			{
+																				PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, scale_class_json_p, "BSON_APPEND_UTF8 () failed for query \"%s\": \"%s\"", key_s, unit_id_s);
+																			}
 
-															json_decref (scale_class_json_p);
-														}
-													else
-														{
-															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetScaleClassAsJSON () failed for \"%s\"", scale_class_p -> sc_name_s);
-														}
-												}
-											else
-												{
-													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetScaleClassByName () failed for \"%s\"", scale_class_s);
-												}
+																		json_decref (scale_class_json_p);
+																	}
+																else
+																	{
+																		PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetScaleClassAsJSON () failed for \"%s\"", scale_class_p -> sc_name_s);
+																	}
+															}
+														else
+															{
+																PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetScaleClassByName () failed for \"%s\"", scale_class_s);
+															}
 
-										}		/* if (scale_class_s) */
-									else
-										{
-											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, row_p, "No scale class specified");
-										}
+													}		/* if (scale_class_s) */
+												else
+													{
+														PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, row_p, "No scale class specified");
+													}
 
-								}		/* if (unit_id_s) */
-							else
-								{
-									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, row_p, "No unit id specified");
-								}
+											}		/* if (unit_id_s) */
+										else
+											{
+												PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, row_p, "No unit id specified");
+											}
 
-						}		/* json_array_foreach (terms_p, i, row_p) */
+									}		/* json_array_foreach (terms_p, i, row_p) */
 
 
-					if (num_succeeded == num_terms)
-						{
-							status = OS_SUCCEEDED;
-						}
-					else if (num_succeeded > 0)
-						{
-							status = OS_PARTIALLY_SUCCEEDED;
-						}
+								if (num_succeeded == num_terms)
+									{
+										status = OS_SUCCEEDED;
+									}
+								else if (num_succeeded > 0)
+									{
+										status = OS_PARTIALLY_SUCCEEDED;
+									}
 
-					bson_destroy (query_p);
-				}		/* if (query_p) */
-			else
-				{
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set allocate query");
-				}
-		}
+								bson_destroy (query_p);
+							}		/* if (query_p) */
+						else
+							{
+								PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set allocate query");
+							}
+					}
+				else
+					{
+						PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set Mongo collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE]);
+					}
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
 	else
 		{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set Mongo collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE]);
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 		}
+
+
+
+
 
 
 	return status;
@@ -1869,76 +1883,90 @@ static OperationStatus GenerateAllFrictionlessDataStudies (ServiceJob *job_p, Fi
 static OperationStatus CreateMongoIndexes (FieldTrialServiceData *data_p)
 {
 	OperationStatus status = OS_FAILED;
-	MongoTool *tool_p = data_p -> dftsd_mongo_p;
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-	const char *keys_array_ss [5];
-	const char **keys_ss = keys_array_ss;
-
-	keys_array_ss [0] = MA_ACCESSION_S;
-	keys_array_ss [1] = MA_GENE_BANK_ID_S;
-	keys_array_ss [2] = NULL;
-
-	/* Materials */
-	if (AddCollectionCompoundIndex (tool_p, NULL, data_p -> dftsd_collection_ss [DFTD_MATERIAL], keys_ss, true, false))
+	if (mongo_p)
 		{
+			const char *keys_array_ss [5];
+			const char **keys_ss = keys_array_ss;
 
-			keys_array_ss [0] = PL_PARENT_STUDY_S;
-			keys_array_ss [1] = PL_ROW_INDEX_S;
-			keys_array_ss [2] = PL_COLUMN_INDEX_S;
-			keys_array_ss [3] = SR_RACK_INDEX_S;
-			keys_array_ss [4] = NULL;
+			keys_array_ss [0] = MA_ACCESSION_S;
+			keys_array_ss [1] = MA_GENE_BANK_ID_S;
+			keys_array_ss [2] = NULL;
 
-			/* Plots */
-			if (AddCollectionCompoundIndex (tool_p, NULL, data_p -> dftsd_collection_ss [DFTD_PLOT], keys_ss, true, false))
+			/* Materials */
+			if (AddCollectionCompoundIndex (mongo_p, NULL, data_p -> dftsd_collection_ss [DFTD_MATERIAL], keys_ss, true, false))
 				{
-					if (AddCollectionSingleIndex (tool_p, NULL, data_p -> dftsd_collection_ss [DFTD_PLOT], PL_PARENT_STUDY_S, NULL, false, false))
+
+
+					keys_array_ss [0] = PL_PARENT_STUDY_S;
+					keys_array_ss [1] = PL_ROW_INDEX_S;
+					keys_array_ss [2] = PL_COLUMN_INDEX_S;
+					keys_array_ss [3] = SR_RACK_INDEX_S;
+					keys_array_ss [4] = NULL;
+
+					/* Plots */
+					if (AddCollectionCompoundIndex (mongo_p, NULL, data_p -> dftsd_collection_ss [DFTD_PLOT], keys_ss, true, false))
 						{
-							uint32 i = 0;
-							const uint32 num_keys = 2;
-							OperationStatus revisions_status = OS_FAILED;
-
-							/* Measured Variables */
-							char *key_s = GetMeasuredVariablesNameKey ();
-
-							if (key_s)
+							if (AddCollectionSingleIndex (mongo_p, NULL, data_p -> dftsd_collection_ss [DFTD_PLOT], PL_PARENT_STUDY_S, NULL, false, false))
 								{
-									if (AddCollectionSingleIndex (tool_p, NULL, data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE], key_s, NULL, true, false))
+									uint32 i = 0;
+									const uint32 num_keys = 2;
+									OperationStatus revisions_status = OS_FAILED;
+
+									/* Measured Variables */
+									char *key_s = GetMeasuredVariablesNameKey ();
+
+									if (key_s)
 										{
-											++ i;
+											if (AddCollectionSingleIndex (mongo_p, NULL, data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE], key_s, NULL, true, false))
+												{
+													++ i;
+												}
+
+											FreeMeasuredVariablesNameKey (key_s);
 										}
 
-									FreeMeasuredVariablesNameKey (key_s);
-								}
+									/* Rows */
+									key_s = GetRowsNameKey ();
 
-							/* Rows */
-							key_s = GetRowsNameKey ();
-
-							if (key_s)
-								{
-									if (AddCollectionSingleIndex (tool_p, NULL, data_p -> dftsd_collection_ss [DFTD_PLOT], key_s, NULL, true, false))
+									if (key_s)
 										{
-											++ i;
+											if (AddCollectionSingleIndex (mongo_p, NULL, data_p -> dftsd_collection_ss [DFTD_PLOT], key_s, NULL, true, false))
+												{
+													++ i;
+												}
+
+											FreeRowsNameKey (key_s);
 										}
 
-									FreeRowsNameKey (key_s);
-								}
+									status = (i == num_keys) ? OS_SUCCEEDED : OS_PARTIALLY_SUCCEEDED;
 
-							status = (i == num_keys) ? OS_SUCCEEDED : OS_PARTIALLY_SUCCEEDED;
+									revisions_status = CreateMongoRevisionsCollections (data_p);
 
-							revisions_status = CreateMongoRevisionsCollections (data_p);
-
-							if (revisions_status != OS_SUCCEEDED)
-								{
-									if (status == OS_SUCCEEDED)
+									if (revisions_status != OS_SUCCEEDED)
 										{
-											status = OS_PARTIALLY_SUCCEEDED;
+											if (status == OS_SUCCEEDED)
+												{
+													status = OS_PARTIALLY_SUCCEEDED;
+												}
 										}
 								}
+
 						}
 
-				}
+				}		/* if (AddCollectionIndex (tool_p, NULL, data_p -> dftsd_collection_ss [DFTD_MATERIAL], MA_ACCESSION_S, false, false)) */
 
-		}		/* if (AddCollectionIndex (tool_p, NULL, data_p -> dftsd_collection_ss [DFTD_MATERIAL], MA_ACCESSION_S, false, false)) */
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+		}
+
+
+
 
 
 	return status;
@@ -1948,16 +1976,26 @@ static OperationStatus CreateMongoIndexes (FieldTrialServiceData *data_p)
 static OperationStatus CreateMongoRevisionsCollections (FieldTrialServiceData *data_p)
 {
 	OperationStatus status = OS_FAILED;
-	MongoTool *tool_p = data_p -> dftsd_mongo_p;
 	uint32 num_successes = 0;
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-	for (uint32 i = 0; i < DFTD_NUM_TYPES; ++ i)
+	if (mongo_p)
 		{
-			if (CreateMongoRevisionsCollection (tool_p, data_p -> dftsd_database_s, * ((data_p -> dftsd_backup_collection_ss) + i)))
+			for (uint32 i = 0; i < DFTD_NUM_TYPES; ++ i)
 				{
-					++ num_successes;
+					if (CreateMongoRevisionsCollection (mongo_p, data_p -> dftsd_database_s, * ((data_p -> dftsd_backup_collection_ss) + i)))
+						{
+							++ num_successes;
+						}
 				}
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 		}
+
 
 	if (num_successes == DFTD_NUM_TYPES)
 		{

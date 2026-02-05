@@ -107,49 +107,61 @@ static LinkedList *GetMatchingFieldTrialsFromMongoDB (const FieldTrialServiceDat
 
 					if (success_flag)
 						{
-							if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL]))
+							MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+							if (mongo_p)
 								{
-									json_t *results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, NULL);
 
-									if (results_p)
+									if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL]))
 										{
-											const size_t size = json_array_size (results_p);
-											size_t i = 0;
+											json_t *results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, NULL);
 
-											for (i = 0; i < size; ++ i)
+											if (results_p)
 												{
-													json_t *result_p = json_array_get (results_p, i);
-													FieldTrial *trial_p = GetFieldTrialFromJSON (result_p, VF_STORAGE, data_p);
+													const size_t size = json_array_size (results_p);
+													size_t i = 0;
 
-													if (trial_p)
+													for (i = 0; i < size; ++ i)
 														{
-															FieldTrialNode *node_p = AllocateFieldTrialNode (trial_p);
+															json_t *result_p = json_array_get (results_p, i);
+															FieldTrial *trial_p = GetFieldTrialFromJSON (result_p, VF_STORAGE, data_p);
 
-															if (node_p)
+															if (trial_p)
 																{
-																	LinkedListAddTail (field_trials_list_p, & (node_p -> ftn_node));
-																}
+																	FieldTrialNode *node_p = AllocateFieldTrialNode (trial_p);
+
+																	if (node_p)
+																		{
+																			LinkedListAddTail (field_trials_list_p, & (node_p -> ftn_node));
+																		}
+																	else
+																		{
+																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, result_p, "Failed to create FieldTrialNode");
+																		}
+
+																}		/* if (trial_p) */
 															else
 																{
-																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, result_p, "Failed to create FieldTrialNode");
+																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, result_p, "Failed to get FieldTrial from JSON");
 																}
 
-														}		/* if (trial_p) */
-													else
-														{
-															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, result_p, "Failed to get FieldTrial from JSON");
-														}
-
-												}		/* for (i = 0; i < size; ++ i) */
+														}		/* for (i = 0; i < size; ++ i) */
 
 
-											json_decref (results_p);
-										}		/* if (results_p) */
+													json_decref (results_p);
+												}		/* if (results_p) */
 
-								}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL])) */
+										}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL])) */
+									else
+										{
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set mongo tool collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL]);
+										}
+
+									FreeMongoTool (mongo_p);
+								}		/* if (mongo_p) */
 							else
 								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set mongo tool collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL]);
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 								}
 
 						}		/* if (success_flag) */

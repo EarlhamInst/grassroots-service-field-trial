@@ -319,8 +319,20 @@ bool SavePlot (Plot *plot_p, const FieldTrialServiceData *data_p)
 
 			if (plot_json_p)
 				{
-					success_flag = SaveAndBackupMongoDataWithTimestamp (data_p -> dftsd_mongo_p, plot_json_p, data_p -> dftsd_collection_ss [DFTD_PLOT], 
-					data_p -> dftsd_backup_collection_ss [DFTD_PLOT], DFT_BACKUPS_ID_KEY_S, selector_p, MONGO_TIMESTAMP_S);
+					MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+					if (mongo_p)
+						{
+							success_flag = SaveAndBackupMongoDataWithTimestamp (mongo_p, plot_json_p, data_p -> dftsd_collection_ss [DFTD_PLOT],
+							data_p -> dftsd_backup_collection_ss [DFTD_PLOT], DFT_BACKUPS_ID_KEY_S, selector_p, MONGO_TIMESTAMP_S);
+
+							FreeMongoTool (mongo_p);
+						}		/* if (mongo_p) */
+					else
+						{
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+						}
+
 
 					json_decref (plot_json_p);
 				}		/* if (plot_json_p) */

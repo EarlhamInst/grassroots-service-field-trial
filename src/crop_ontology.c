@@ -285,18 +285,29 @@ bool SaveCropOntology (CropOntology *co_p, const FieldTrialServiceData *data_p)
 	bson_t *selector_p = NULL;
 	bool success_flag = PrepareSaveData (& (co_p -> co_id_p), &selector_p);
 
-	if (co_p -> co_id_p)
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+	if (mongo_p)
 		{
-			json_t *crop_json_p = GetCropOntologyAsJSON (co_p, VF_STORAGE, data_p);
-
-			if (crop_json_p)
+			if (co_p -> co_id_p)
 				{
-					success_flag = SaveAndBackupMongoDataWithTimestamp (data_p -> dftsd_mongo_p, crop_json_p, data_p -> dftsd_collection_ss [DFTD_ONTOLOGY], data_p -> dftsd_backup_collection_ss [DFTD_ONTOLOGY], DFT_BACKUPS_ID_KEY_S, selector_p, MONGO_TIMESTAMP_S);
+					json_t *crop_json_p = GetCropOntologyAsJSON (co_p, VF_STORAGE, data_p);
 
-					json_decref (crop_json_p);
-				}		/* if (crop_json_p) */
+					if (crop_json_p)
+						{
+							success_flag = SaveAndBackupMongoDataWithTimestamp (mongo_p, crop_json_p, data_p -> dftsd_collection_ss [DFTD_ONTOLOGY], data_p -> dftsd_backup_collection_ss [DFTD_ONTOLOGY], DFT_BACKUPS_ID_KEY_S, selector_p, MONGO_TIMESTAMP_S);
 
-		}		/* if (co_p -> CO_id_p) */
+							json_decref (crop_json_p);
+						}		/* if (crop_json_p) */
+
+				}		/* if (co_p -> CO_id_p) */
+
+			FreeMongoTool (mongo_p);
+		}
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+		}
 
 	return success_flag;
 }
@@ -333,80 +344,90 @@ CropOntology *GetCropOntologyByIdString (const char *id_s, const FieldTrialServi
 CropOntology *GetExistingCropOntologyByOntologyID (const char * const ontology_id_s, const FieldTrialServiceData *data_p)
 {
 	CropOntology *co_p = NULL;
-	MongoTool *tool_p = data_p -> dftsd_mongo_p;
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-	if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [DFTD_ONTOLOGY]))
+	if (mongo_p)
 		{
-			bson_t *query_p = bson_new ();
-
-			if (query_p)
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_ONTOLOGY]))
 				{
-					if (BSON_APPEND_UTF8 (query_p, CO_ID_S, ontology_id_s))
+					bson_t *query_p = bson_new ();
+
+					if (query_p)
 						{
-							json_t *results_p = NULL;
-
-							#if DFW_UTIL_DEBUG >= STM_LEVEL_FINER
+							if (BSON_APPEND_UTF8 (query_p, CO_ID_S, ontology_id_s))
 								{
-									PrintBSONToLog (STM_LEVEL_FINER, __FILE__, __LINE__, query_p, "GetExistingCropOntologyByOntologyID query ");
-								}
-							#endif
+									json_t *results_p = NULL;
 
-							results_p = GetAllMongoResultsAsJSON (tool_p, query_p, NULL);
-
-							if (results_p)
-								{
-									if (json_is_array (results_p))
+									#if DFW_UTIL_DEBUG >= STM_LEVEL_FINER
 										{
-											size_t num_results = json_array_size (results_p);
+											PrintBSONToLog (STM_LEVEL_FINER, __FILE__, __LINE__, query_p, "GetExistingCropOntologyByOntologyID query ");
+										}
+									#endif
 
-											if (num_results == 1)
+									results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, NULL);
+
+									if (results_p)
+										{
+											if (json_is_array (results_p))
 												{
-													json_t *res_p = json_array_get (results_p, 0);
+													size_t num_results = json_array_size (results_p);
 
-													co_p = GetCropOntologyFromJSON (res_p, data_p);
-
-													if (!co_p)
+													if (num_results == 1)
 														{
-															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, res_p, "GetCropOntologyFromJSON () failed for id \"%s\"", ontology_id_s);
+															json_t *res_p = json_array_get (results_p, 0);
+
+															co_p = GetCropOntologyFromJSON (res_p, data_p);
+
+															if (!co_p)
+																{
+																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, res_p, "GetCropOntologyFromJSON () failed for id \"%s\"", ontology_id_s);
+																}
+
+														}		/* if (num_results == 1) */
+													else
+														{
+															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, SIZET_FMT " results when searching for object_id_s with id \"%s\"", num_results, ontology_id_s);
 														}
 
-												}		/* if (num_results == 1) */
+												}		/* if (json_is_array (results_p) */
 											else
 												{
-													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, SIZET_FMT " results when searching for object_id_s with id \"%s\"", num_results, ontology_id_s);
+													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "Results are not an array");
 												}
 
-										}		/* if (json_is_array (results_p) */
+											json_decref (results_p);
+										}		/* if (results_p) */
 									else
 										{
-											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "Results are not an array");
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get results searching for object_id_s with id \"%s\"", ontology_id_s);
 										}
 
-									json_decref (results_p);
-								}		/* if (results_p) */
+								}		/* if (BSON_APPEND_OID (query_p, MONGO_ID_S, id_p)) */
 							else
 								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get results searching for object_id_s with id \"%s\"", ontology_id_s);
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for object_id_s with id \"%s\"", ontology_id_s);
 								}
 
-						}		/* if (BSON_APPEND_OID (query_p, MONGO_ID_S, id_p)) */
+							bson_destroy (query_p);
+						}		/* if (query_p) */
 					else
 						{
 							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for object_id_s with id \"%s\"", ontology_id_s);
 						}
 
-					bson_destroy (query_p);
-				}		/* if (query_p) */
+				}		/* if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [collection_type])) */
 			else
 				{
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for object_id_s with id \"%s\"", ontology_id_s);
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_ONTOLOGY]);
 				}
 
-		}		/* if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [collection_type])) */
+			FreeMongoTool (mongo_p);
+		}
 	else
 		{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_ONTOLOGY]);
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 		}
+
 
 	return co_p;
 }

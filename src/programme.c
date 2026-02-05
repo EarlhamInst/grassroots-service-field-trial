@@ -651,50 +651,65 @@ static LinkedList *GetMatchingProgrammes (const FieldTrialServiceData *data_p, c
 
 					if (success_flag)
 						{
-							if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL]))
+							MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+							if (mongo_p)
 								{
-									json_t *results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, NULL);
-
-									if (results_p)
+									if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL]))
 										{
-											const size_t size = json_array_size (results_p);
-											size_t i = 0;
+											json_t *results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, NULL);
 
-											for (i = 0; i < size; ++ i)
+											if (results_p)
 												{
-													json_t *result_p = json_array_get (results_p, i);
-													FieldTrial *trial_p = GetFieldTrialFromJSON (result_p, VF_STORAGE, data_p);
+													const size_t size = json_array_size (results_p);
+													size_t i = 0;
 
-													if (trial_p)
+													for (i = 0; i < size; ++ i)
 														{
-															FieldTrialNode *node_p = AllocateFieldTrialNode (trial_p);
+															json_t *result_p = json_array_get (results_p, i);
+															FieldTrial *trial_p = GetFieldTrialFromJSON (result_p, VF_STORAGE, data_p);
 
-															if (node_p)
+															if (trial_p)
 																{
-																	LinkedListAddTail (field_trials_list_p, & (node_p -> ftn_node));
-																}
+																	FieldTrialNode *node_p = AllocateFieldTrialNode (trial_p);
+
+																	if (node_p)
+																		{
+																			LinkedListAddTail (field_trials_list_p, & (node_p -> ftn_node));
+																		}
+																	else
+																		{
+																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, result_p, "Failed to create FieldTrialNode");
+																		}
+
+																}		/* if (trial_p) */
 															else
 																{
-																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, result_p, "Failed to create FieldTrialNode");
+																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, result_p, "Failed to get FieldTrial from JSON");
 																}
 
-														}		/* if (trial_p) */
-													else
-														{
-															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, result_p, "Failed to get FieldTrial from JSON");
-														}
-
-												}		/* for (i = 0; i < size; ++ i) */
+														}		/* for (i = 0; i < size; ++ i) */
 
 
-											json_decref (results_p);
-										}		/* if (results_p) */
+													json_decref (results_p);
+												}		/* if (results_p) */
 
-								}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL])) */
+										}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL])) */
+									else
+										{
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set mongo tool collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL]);
+										}
+
+									FreeMongoTool (mongo_p);
+								}		/* if (mongo_p) */
 							else
 								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set mongo tool collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_FIELD_TRIAL]);
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 								}
+
+
+
+
 
 						}		/* if (success_flag) */
 					else
@@ -779,52 +794,67 @@ OperationStatus SaveProgramme (Programme *programme_p, ServiceJob *job_p, FieldT
 
 			if (programme_json_p)
 				{
-					if (SaveAndBackupMongoDataWithTimestamp (data_p -> dftsd_mongo_p, programme_json_p, data_p -> dftsd_collection_ss [DFTD_PROGRAMME],
-																									 data_p -> dftsd_backup_collection_ss [DFTD_PROGRAMME], DFT_BACKUPS_ID_KEY_S, selector_p, MONGO_TIMESTAMP_S))
+					MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+					if (mongo_p)
 						{
-							char *id_s = GetBSONOidAsString (programme_p -> pr_id_p);
-							json_t *programme_indexing_p = GetProgrammeAsJSON (programme_p, VF_INDEXING, data_p);
-
-							if (programme_indexing_p)
+							if (SaveAndBackupMongoDataWithTimestamp (mongo_p, programme_json_p, data_p -> dftsd_collection_ss [DFTD_PROGRAMME],
+																											 data_p -> dftsd_backup_collection_ss [DFTD_PROGRAMME], DFT_BACKUPS_ID_KEY_S, selector_p, MONGO_TIMESTAMP_S))
 								{
-									status = IndexData (job_p, programme_indexing_p, NULL);
-									json_decref (programme_indexing_p);
-								}
+									char *id_s = GetBSONOidAsString (programme_p -> pr_id_p);
+									json_t *programme_indexing_p = GetProgrammeAsJSON (programme_p, VF_INDEXING, data_p);
 
-							if (status != OS_SUCCEEDED)
-								{
-									status = OS_PARTIALLY_SUCCEEDED;
-									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, programme_json_p, "Failed to index Programme \"%s\" as JSON to Lucene", programme_p -> pr_name_s);
-									AddGeneralErrorMessageToServiceJob (job_p, "Programme saved but failed to index for searching");
-								}
-
-							if (data_p -> dftsd_assets_path_s)
-								{
-									if (!SaveProgrammeAsFrictionlessData (programme_p, data_p))
+									if (programme_indexing_p)
 										{
-
-										}
-								}
-
-							if (id_s)
-								{
-									/*
-									 * If we have the front-end web address to view the trial,
-									 * save it to the ServiceJob.
-									 */
-									if (data_p -> dftsd_view_programme_url_s)
-										{
-											SetFieldTrialServiceJobURL (job_p, data_p -> dftsd_view_programme_url_s, id_s);
+											status = IndexData (job_p, programme_indexing_p, NULL);
+											json_decref (programme_indexing_p);
 										}
 
-									FreeBSONOidString (id_s);
-								}
-							else
-								{
-									PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "Failed to get bson oid string for trial \"%s\"", programme_p -> pr_name_s);
+									if (status != OS_SUCCEEDED)
+										{
+											status = OS_PARTIALLY_SUCCEEDED;
+											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, programme_json_p, "Failed to index Programme \"%s\" as JSON to Lucene", programme_p -> pr_name_s);
+											AddGeneralErrorMessageToServiceJob (job_p, "Programme saved but failed to index for searching");
+										}
+
+									if (data_p -> dftsd_assets_path_s)
+										{
+											if (!SaveProgrammeAsFrictionlessData (programme_p, data_p))
+												{
+
+												}
+										}
+
+									if (id_s)
+										{
+											/*
+											 * If we have the front-end web address to view the trial,
+											 * save it to the ServiceJob.
+											 */
+											if (data_p -> dftsd_view_programme_url_s)
+												{
+													SetFieldTrialServiceJobURL (job_p, data_p -> dftsd_view_programme_url_s, id_s);
+												}
+
+											FreeBSONOidString (id_s);
+										}
+									else
+										{
+											PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "Failed to get bson oid string for trial \"%s\"", programme_p -> pr_name_s);
+										}
+
 								}
 
+							FreeMongoTool (mongo_p);
+						}		/* if (mongo_p) */
+					else
+						{
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 						}
+
+
+
+
 					json_decref (programme_json_p);
 				}		/* if (programme_json_p) */
 

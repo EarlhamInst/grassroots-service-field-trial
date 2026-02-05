@@ -281,56 +281,70 @@ bool AddSearchTraitParams (ServiceData *data_p, ParameterSet *param_set_p)
 json_t *GetAllTraitsAsJSON (const FieldTrialServiceData *data_p)
 {
 	json_t *traits_p = NULL;
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE]))
+	if (mongo_p)
 		{
-			bson_t *query_p = NULL;
-			bson_t *opts_p =  BCON_NEW ( "sort", "{", MONGO_ID_S, BCON_INT32 (1), "}");
-			json_t *results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, opts_p);
-
-			if (results_p)
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE]))
 				{
-					traits_p = json_array ();
+					bson_t *query_p = NULL;
+					bson_t *opts_p =  BCON_NEW ( "sort", "{", MONGO_ID_S, BCON_INT32 (1), "}");
+					json_t *results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, opts_p);
 
-					if (traits_p)
+					if (results_p)
 						{
-							const size_t num_results = json_array_size (results_p);
-							size_t i;
+							traits_p = json_array ();
 
-							for (i = 0; i < num_results; ++ i)
+							if (traits_p)
 								{
-									json_t *result_p = json_array_get (results_p, i);
-									json_t *trait_p = json_object_get (result_p, MV_TRAIT_S);
+									const size_t num_results = json_array_size (results_p);
+									size_t i;
 
-									if (trait_p)
+									for (i = 0; i < num_results; ++ i)
 										{
-											if (json_array_append (traits_p, trait_p) != 0)
+											json_t *result_p = json_array_get (results_p, i);
+											json_t *trait_p = json_object_get (result_p, MV_TRAIT_S);
+
+											if (trait_p)
 												{
-													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, trait_p, "Failed to append trait to array");
-												}		/* if (json_array_append (traits_p, trait_p) != 0) */
+													if (json_array_append (traits_p, trait_p) != 0)
+														{
+															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, trait_p, "Failed to append trait to array");
+														}		/* if (json_array_append (traits_p, trait_p) != 0) */
 
-										}		/* if (trait_p) */
-									else
-										{
-											PrintJSONToErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, result_p, "No \"%s\" key found");
-										}
+												}		/* if (trait_p) */
+											else
+												{
+													PrintJSONToErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, result_p, "No \"%s\" key found");
+												}
 
-								}		/* for (i = 0; i < num_results; ++ i) */
+										}		/* for (i = 0; i < num_results; ++ i) */
 
-						}		/* if (traits_p) */
-					else
-						{
-							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create traits array");
+								}		/* if (traits_p) */
+							else
+								{
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create traits array");
+								}
+
+							json_decref (results_p);
 						}
 
-					json_decref (results_p);
+					if (opts_p)
+						{
+							bson_destroy (opts_p);
+						}
 				}
 
-			if (opts_p)
-				{
-					bson_destroy (opts_p);
-				}
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 		}
+
+
+
 
 	return traits_p;
 }
@@ -352,94 +366,109 @@ MeasuredVariable *GetMeasuredVariableByVariableName (const char *name_s, MEM_FLA
 
 	if (!phenotype_p)
 		{
-			if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE]))
+			MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+			if (mongo_p)
 				{
-					char *key_s = GetMeasuredVariablesNameKey ();
-
-					if (key_s)
+					if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE]))
 						{
-							bson_t *query_p = BCON_NEW (key_s, BCON_UTF8 (name_s));
+							char *key_s = GetMeasuredVariablesNameKey ();
 
-							if (query_p)
+							if (key_s)
 								{
-									json_t *results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, NULL);
+									bson_t *query_p = BCON_NEW (key_s, BCON_UTF8 (name_s));
 
-									if (results_p)
+									if (query_p)
 										{
-											if (json_is_array (results_p))
+											json_t *results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, NULL);
+
+											if (results_p)
 												{
-													const size_t num_results = json_array_size (results_p);
-
-													if (num_results > 1)
+													if (json_is_array (results_p))
 														{
-															PrintJSONToLog (STM_LEVEL_INFO, __FILE__, __LINE__, results_p, "Multiple matching measured variables " SIZET_FMT ", using the first", num_results);
-														}
+															const size_t num_results = json_array_size (results_p);
 
-													if (num_results != 0)
-														{
-															size_t i = 0;
-															json_t *entry_p = json_array_get (results_p, i);
-
-															phenotype_p = GetMeasuredVariableFromJSON (entry_p, data_p);
-
-															if (phenotype_p)
+															if (num_results > 1)
 																{
-																	MEM_FLAG mf = MF_SHALLOW_COPY;
+																	PrintJSONToLog (STM_LEVEL_INFO, __FILE__, __LINE__, results_p, "Multiple matching measured variables " SIZET_FMT ", using the first", num_results);
+																}
 
-																	if (HasMeasuredVariableCache (data_p))
+															if (num_results != 0)
+																{
+																	size_t i = 0;
+																	json_t *entry_p = json_array_get (results_p, i);
+
+																	phenotype_p = GetMeasuredVariableFromJSON (entry_p, data_p);
+
+																	if (phenotype_p)
 																		{
-																			if (AddMeasuredVariableToCache (data_p, phenotype_p, MF_SHALLOW_COPY))
+																			MEM_FLAG mf = MF_SHALLOW_COPY;
+
+																			if (HasMeasuredVariableCache (data_p))
 																				{
-																					mf = MF_SHADOW_USE;
+																					if (AddMeasuredVariableToCache (data_p, phenotype_p, MF_SHALLOW_COPY))
+																						{
+																							mf = MF_SHADOW_USE;
+																						}
 																				}
+
+																			*mv_mem_p = mf;
 																		}
 
-																	*mv_mem_p = mf;
-																}
+																	if (!phenotype_p)
+																		{
+																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "GetMeasuredVariableFromJSON failed for \"%s\": \"%s\"", key_s, name_s);
+																		}
 
-															if (!phenotype_p)
+																}		/* if (num_results != 0) */
+															else
 																{
-																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "GetMeasuredVariableFromJSON failed for \"%s\": \"%s\"", key_s, name_s);
+																	PrintBSONToErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, query_p, "No measured variables found for \"%s\": \"%s\"", key_s, name_s);
 																}
 
-														}		/* if (num_results != 0) */
+														}		/* if (json_is_array (results_p)) */
 													else
 														{
-															PrintBSONToErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, query_p, "No measured variables found for \"%s\": \"%s\"", key_s, name_s);
+															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "Results are not an array for \"%s\": \"%s\"", key_s, name_s);
 														}
 
-												}		/* if (json_is_array (results_p)) */
+													json_decref (results_p);
+												}		/* if (results_p) */
 											else
 												{
-													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "Results are not an array for \"%s\": \"%s\"", key_s, name_s);
+													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "NULL results for \"%s\": \"%s\"", key_s, name_s);
 												}
 
-											json_decref (results_p);
-										}		/* if (results_p) */
+											bson_destroy (query_p);
+										}		/* if (query_p) */
 									else
 										{
-											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "NULL results for \"%s\": \"%s\"", key_s, name_s);
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for \"%s\": \"%s\"", key_s, name_s);
 										}
 
-									bson_destroy (query_p);
-								}		/* if (query_p) */
+									FreeMeasuredVariablesNameKey (key_s);
+								}
 							else
 								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for \"%s\": \"%s\"", key_s, name_s);
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetMeasuredVariablesNameKey () failed", data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE]);
 								}
 
-							FreeMeasuredVariablesNameKey (key_s);
-						}
+						}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_RAW_PHENOTYPE])) */
 					else
 						{
-							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetMeasuredVariablesNameKey () failed", data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE]);
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set mongo collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE]);
 						}
 
-				}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_RAW_PHENOTYPE])) */
+					FreeMongoTool (mongo_p);
+				}		/* if (mongo_p) */
 			else
 				{
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set mongo collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE]);
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 				}
+
+
+
+
 
 		}		/* if (!phenotype_p) */
 
@@ -523,13 +552,26 @@ json_t *GetMeasuredVariableIndexingData (Service *service_p)
 json_t *GetAllMeasuredVariablesAsJSON (const FieldTrialServiceData *data_p, bson_t *opts_p)
 {
 	json_t *results_p = NULL;
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE]))
+	if (mongo_p)
 		{
-			bson_t *query_p = NULL;
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE]))
+				{
+					bson_t *query_p = NULL;
 
-			results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, opts_p);
-		}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_PHENOTYPE])) */
+					results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, opts_p);
+				}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_PHENOTYPE])) */
+
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+		}
+
+
 
 	return results_p;
 }
@@ -659,82 +701,98 @@ OperationStatus GetAllStudiesContainingMeasuredVariable (const MeasuredVariable 
 
 	if (query_p)
 		{
-			if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_PLOT]))
+			MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+			if (mongo_p)
 				{
-					json_t *results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, NULL);
-
-					if (results_p)
+					if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_PLOT]))
 						{
-							json_t *studies_cache_p = json_object ();
+							json_t *results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, NULL);
 
-							if (studies_cache_p)
+							if (results_p)
 								{
-									if (json_is_array (results_p))
+									json_t *studies_cache_p = json_object ();
+
+									if (studies_cache_p)
 										{
-											const size_t num_results = json_array_size (results_p);
-											size_t i = 0;
-
-											while ((i < num_results) && success_flag)
+											if (json_is_array (results_p))
 												{
-													json_t *plot_json_p = json_array_get (results_p, i);
-													bson_oid_t oid;
+													const size_t num_results = json_array_size (results_p);
+													size_t i = 0;
 
-													/*
-													 * Get the study id
-													 */
-													if (GetNamedIdFromJSON (plot_json_p, PL_PARENT_STUDY_S, &oid))
+													while ((i < num_results) && success_flag)
 														{
-															char *id_s = GetBSONOidAsString (&oid);
+															json_t *plot_json_p = json_array_get (results_p, i);
+															bson_oid_t oid;
 
-															if (id_s)
+															/*
+															 * Get the study id
+															 */
+															if (GetNamedIdFromJSON (plot_json_p, PL_PARENT_STUDY_S, &oid))
 																{
-																	json_int_t count = 0;
+																	char *id_s = GetBSONOidAsString (&oid);
 
-																	GetJSONInteger (studies_cache_p, id_s, &count);
-
-																	++ count;
-
-																	if (!SetJSONInteger (studies_cache_p, id_s, count))
+																	if (id_s)
 																		{
-																			success_flag = false;
-																		}
+																			json_int_t count = 0;
 
-																	FreeBSONOidString (id_s);
-																}		/* if (id_s) */
+																			GetJSONInteger (studies_cache_p, id_s, &count);
 
-														}
+																			++ count;
+
+																			if (!SetJSONInteger (studies_cache_p, id_s, count))
+																				{
+																					success_flag = false;
+																				}
+
+																			FreeBSONOidString (id_s);
+																		}		/* if (id_s) */
+
+																}
+
+															if (success_flag)
+																{
+																	++ i;
+																}
+
+														}		/* while ((i < num_results) && success_flag) */
+
 
 													if (success_flag)
 														{
-															++ i;
-														}
-
-												}		/* while ((i < num_results) && success_flag) */
-
-
-											if (success_flag)
-												{
-													/*
-													 * Now we sort the studies by how many times the material appears
-													 */
-													size_t num_studies = json_object_size (studies_cache_p);
-													if (num_studies > 0)
-														{
+															/*
+															 * Now we sort the studies by how many times the material appears
+															 */
+															size_t num_studies = json_object_size (studies_cache_p);
+															if (num_studies > 0)
+																{
 
 
-														}		/* if (studies_cache_p -> ht_size > 0) */
+																}		/* if (studies_cache_p -> ht_size > 0) */
 
-												}		/* if (success_flag) */
+														}		/* if (success_flag) */
 
-										}		/* if (json_is_array (results_p)) */
+												}		/* if (json_is_array (results_p)) */
 
-									json_decref (studies_cache_p);
-								}		/* if (studies_cache_p */
+											json_decref (studies_cache_p);
+										}		/* if (studies_cache_p */
 
-							json_decref (results_p);
-						}		/* if (results_p) */
+									json_decref (results_p);
+								}		/* if (results_p) */
 
-				}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_ROW] */
+						}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_ROW] */
+
+
+					FreeMongoTool (mongo_p);
+				}		/* if (mongo_p) */
+			else
+				{
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+				}
+
+
+
+
 
 			bson_free (query_p);
 		}		/* if (query_p) */
@@ -912,151 +970,161 @@ static OperationStatus AddMeasuredVariablesFromJSON (ServiceJob *job_p, const ui
 	if (row_size > 0)
 		{
 			MeasuredVariable *mv_p = NULL;
-			MongoTool *mongo_p = data_p -> dftsd_mongo_p;
-			SchemaTerm *trait_p = get_trait_fn (table_row_json_p, mongo_p);
+			MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-			if (trait_p)
+			if (mongo_p)
 				{
-					SchemaTerm *method_p = get_method_fn (table_row_json_p, mongo_p);
+					SchemaTerm *trait_p = get_trait_fn (table_row_json_p, mongo_p);
 
-					if (method_p)
+					if (trait_p)
 						{
-							SchemaTerm *unit_p = get_unit_fn (table_row_json_p, mongo_p);
+							SchemaTerm *method_p = get_method_fn (table_row_json_p, mongo_p);
 
-							if (unit_p)
+							if (method_p)
 								{
-									SchemaTerm *variable_p = get_variable_fn (table_row_json_p, mongo_p);
+									SchemaTerm *unit_p = get_unit_fn (table_row_json_p, mongo_p);
 
-									if (variable_p)
+									if (unit_p)
 										{
-											/*
-											 * Variable names must not contain any whitespace
-											 */
-											if (!DoesStringContainWhitespace (variable_p -> st_name_s))
+											SchemaTerm *variable_p = get_variable_fn (table_row_json_p, mongo_p);
+
+											if (variable_p)
 												{
-													const ScaleClass *scale_p = get_scale_class_fn (table_row_json_p, mongo_p);
-
-													if (scale_p)
+													/*
+													 * Variable names must not contain any whitespace
+													 */
+													if (!DoesStringContainWhitespace (variable_p -> st_name_s))
 														{
-															MEM_FLAG ontology_mem = MF_ALREADY_FREED;
-															CropOntology *ontology_p = get_ontology_fn (table_row_json_p, &ontology_mem, data_p);
+															const ScaleClass *scale_p = get_scale_class_fn (table_row_json_p, mongo_p);
 
-															mv_p = AllocateMeasuredVariable (NULL, trait_p, method_p, unit_p, variable_p, scale_p, ontology_p, ontology_mem);
-
-															if (mv_p)
+															if (scale_p)
 																{
-																	int res = CheckMeasuredVariable (mv_p, data_p);
+																	MEM_FLAG ontology_mem = MF_ALREADY_FREED;
+																	CropOntology *ontology_p = get_ontology_fn (table_row_json_p, &ontology_mem, data_p);
 
-																	if (res == 0)
+																	mv_p = AllocateMeasuredVariable (NULL, trait_p, method_p, unit_p, variable_p, scale_p, ontology_p, ontology_mem);
+
+																	if (mv_p)
 																		{
-																			PrintJSONToLog (STM_LEVEL_FINER, __FILE__, __LINE__, table_row_json_p, "Adding MeasuredVariable for row");
+																			int res = CheckMeasuredVariable (mv_p, data_p);
 
-																			status = SaveMeasuredVariable (mv_p, job_p, variable_p -> st_name_s, data_p);
-
-
-																			if ((status == OS_SUCCEEDED) || (status == OS_PARTIALLY_SUCCEEDED))
+																			if (res == 0)
 																				{
+																					PrintJSONToLog (STM_LEVEL_FINER, __FILE__, __LINE__, table_row_json_p, "Adding MeasuredVariable for row");
 
-																				}
-																			else
+																					status = SaveMeasuredVariable (mv_p, job_p, variable_p -> st_name_s, data_p);
+
+
+																					if ((status == OS_SUCCEEDED) || (status == OS_PARTIALLY_SUCCEEDED))
+																						{
+
+																						}
+																					else
+																						{
+																							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, table_row_json_p, "Failed to save MeasuredVariable for row");
+																							AddTabularParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, "Failed to save measured variable", current_row, NULL);
+																						}
+
+																				}		/* if (res == 0) */
+																			else if (res == 1)
 																				{
-																					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, table_row_json_p, "Failed to save MeasuredVariable for row");
-																					AddTabularParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, "Failed to save measured variable", current_row, NULL);
+																					status = OS_IDLE;
+																					PrintJSONToLog (STM_LEVEL_FINER, __FILE__, __LINE__, table_row_json_p, "Ignoring existing MeasuredVariable for row " SIZET_FMT, current_row);
 																				}
+																			else if (res == -1)
+																				{
+																					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, table_row_json_p, "MeasuredVariable Trait, Measurement and Unit Combination already exist for different Variable " SIZET_FMT, current_row);
+																					AddTabularParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, "MeasuredVariable Trait, Measurement and Unit Combination already exist for different Variable", current_row, NULL);
+																				}
+																		}		/* if (mv_p) */
+																	else
+																		{
+																			PrintJSONToErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, table_row_json_p, "AllocateMeasuredVariable failed with name \"%s\"  for row " SIZET_FMT, variable_p -> st_name_s, current_row);
+																			AddTabularParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, "Failed to create measured variable", current_row, NULL);
+																		}
 
-																		}		/* if (res == 0) */
-																	else if (res == 1)
-																		{
-																			status = OS_IDLE;
-																			PrintJSONToLog (STM_LEVEL_FINER, __FILE__, __LINE__, table_row_json_p, "Ignoring existing MeasuredVariable for row " SIZET_FMT, current_row);
-																		}
-																	else if (res == -1)
-																		{
-																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, table_row_json_p, "MeasuredVariable Trait, Measurement and Unit Combination already exist for different Variable " SIZET_FMT, current_row);
-																			AddTabularParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, "MeasuredVariable Trait, Measurement and Unit Combination already exist for different Variable", current_row, NULL);
-																		}
-																}		/* if (mv_p) */
+																}		/*  if (scale_p) */
 															else
 																{
-																	PrintJSONToErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, table_row_json_p, "AllocateMeasuredVariable failed with name \"%s\"  for row " SIZET_FMT, variable_p -> st_name_s, current_row);
-																	AddTabularParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, "Failed to create measured variable", current_row, NULL);
+																	PrintErrors (STM_LEVEL_INFO, __FILE__, __LINE__, "Failed to get scale class for row " SIZET_FMT, current_row);
+																	AddTabularParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, "Failed to get scale class", current_row, NULL);
 																}
 
-														}		/*  if (scale_p) */
+														}
 													else
 														{
-															PrintErrors (STM_LEVEL_INFO, __FILE__, __LINE__, "Failed to get scale class for row " SIZET_FMT, current_row);
-															AddTabularParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, "Failed to get scale class", current_row, NULL);
+															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, table_row_json_p, "Variable name \"%s\" on line " SIZET_FMT " contains whitespace", variable_p -> st_name_s, current_row);
+															AddTabularParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, "Variable name contains whitespace", current_row, NULL);
 														}
 
-												}
+
+
+												}		/* if (variable_p */
 											else
 												{
-													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, table_row_json_p, "Variable name \"%s\" on line " SIZET_FMT " contains whitespace", variable_p -> st_name_s, current_row);
-													AddTabularParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, "Variable name contains whitespace", current_row, NULL);
+													char *row_s = GetRowAsString (current_row);
+													PrintJSONToErrors (STM_LEVEL_INFO, __FILE__, __LINE__, table_row_json_p, "Failed to get Variable for row " SIZET_FMT, current_row);
+
+													if (row_s)
+														{
+															const char *prefix_s = "Failed to get Method";
+															char *error_s = ConcatenateVarargsStrings (prefix_s, " for ", row_s, NULL);
+
+															if (error_s)
+																{
+																	AddParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, error_s);
+																	FreeCopiedString (error_s);
+																}
+															else
+																{
+																	AddParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, prefix_s);
+																}
+
+															FreeCopiedString (row_s);
+														}
 												}
 
+											if (!mv_p)
+												{
+													FreeSchemaTerm (unit_p);
+												}
 
-
-										}		/* if (variable_p */
+										}		/* if (unit_p) */
 									else
 										{
-											char *row_s = GetRowAsString (current_row);
-											PrintJSONToErrors (STM_LEVEL_INFO, __FILE__, __LINE__, table_row_json_p, "Failed to get Variable for row " SIZET_FMT, current_row);
-
-											if (row_s)
-												{
-													const char *prefix_s = "Failed to get Method";
-													char *error_s = ConcatenateVarargsStrings (prefix_s, " for ", row_s, NULL);
-
-													if (error_s)
-														{
-															AddParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, error_s);
-															FreeCopiedString (error_s);
-														}
-													else
-														{
-															AddParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, prefix_s);
-														}
-
-													FreeCopiedString (row_s);
-												}
+											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, table_row_json_p, "Failed to get Unit for row " SIZET_FMT, current_row);
+											AddTabularParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, "Failed to create Unit", current_row, NULL);
 										}
 
 									if (!mv_p)
 										{
-											FreeSchemaTerm (unit_p);
+											FreeSchemaTerm (method_p);
 										}
 
-								}		/* if (unit_p) */
+								}		/* if (method_p) */
 							else
 								{
-									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, table_row_json_p, "Failed to get Unit for row " SIZET_FMT, current_row);
-									AddTabularParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, "Failed to create Unit", current_row, NULL);
+									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, table_row_json_p, "Failed to get Method for row " SIZET_FMT, current_row);
+									AddTabularParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, "Failed to create Method", current_row, NULL);
 								}
 
 							if (!mv_p)
 								{
-									FreeSchemaTerm (method_p);
+									FreeSchemaTerm (trait_p);
 								}
 
-						}		/* if (method_p) */
+						}		/* if (trait_p) */
 					else
 						{
-							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, table_row_json_p, "Failed to get Method for row " SIZET_FMT, current_row);
-							AddTabularParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, "Failed to create Method", current_row, NULL);
+							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, table_row_json_p, "Failed to get Trait for row " SIZET_FMT, current_row);
+							AddTabularParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, "Failed to create Trait", current_row, NULL);
 						}
 
-					if (!mv_p)
-						{
-							FreeSchemaTerm (trait_p);
-						}
-
-				}		/* if (trait_p) */
+					FreeMongoTool (mongo_p);
+				}		/* if (mongo_p) */
 			else
 				{
-					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, table_row_json_p, "Failed to get Trait for row " SIZET_FMT, current_row);
-					AddTabularParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, "Failed to create Trait", current_row, NULL);
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 				}
 
 			if (mv_p)
@@ -1182,25 +1250,40 @@ json_t *GetAllMeasuredVariableIds (Service *service_p)
 	json_t *id_results_p = NULL;
 	FieldTrialServiceData *data_p = (FieldTrialServiceData *) (service_p -> se_data_p);
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE]))
+
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+	if (mongo_p)
 		{
-			bson_t query;
-			const char *fields_ss [] = { MONGO_ID_S, NULL };
-
-			bson_init (&query);
-
-			if (FindMatchingMongoDocumentsByBSON (data_p -> dftsd_mongo_p, &query, fields_ss, NULL))
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_MEASURED_VARIABLE]))
 				{
-					id_results_p = GetAllExistingMongoResultsAsJSON (data_p -> dftsd_mongo_p);
+					bson_t query;
+					const char *fields_ss [] = { MONGO_ID_S, NULL };
 
-					if (!id_results_p)
+					bson_init (&query);
+
+					if (FindMatchingMongoDocumentsByBSON (mongo_p, &query, fields_ss, NULL))
 						{
+							id_results_p = GetAllExistingMongoResultsAsJSON (mongo_p);
 
-						}		/* if (id_results_p) */
+							if (!id_results_p)
+								{
 
-				}		/* if (FindMatchingMongoDocumentsByBSON (data_p -> dftsd_mongo_p, NULL, fields_ss, NULL)) */
+								}		/* if (id_results_p) */
 
-		}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_STUDY])) */
+						}		/* if (FindMatchingMongoDocumentsByBSON (data_p -> dftsd_mongo_p, NULL, fields_ss, NULL)) */
+
+				}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_STUDY])) */
+
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+		}
+
+
 
 	return id_results_p;
 }

@@ -227,6 +227,9 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL json_t *GetStudyDistinctPhenotypesAsFrictionlessDa
 DFW_FIELD_TRIAL_SERVICE_LOCAL OperationStatus CalculateStudyStatistics (Study *study_p, const FieldTrialServiceData *service_data_p);
 
 
+DFW_FIELD_TRIAL_SERVICE_LOCAL OperationStatus CalculateStudyAccessions (Study *study_p, const FieldTrialServiceData *service_data_p);
+
+
 DFW_FIELD_TRIAL_SERVICE_LOCAL OperationStatus GenerateStatisticsForAllStudies (ServiceJob *job_p,  FieldTrialServiceData *data_p);
 
 
@@ -261,6 +264,9 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL bool GetMatchingStudies (bson_t *query_p, FieldTri
 
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL json_t *GetAllStudyMaterialIds (const Study * const study_p, const FieldTrialServiceData *data_p);
+
+
+DFW_FIELD_TRIAL_SERVICE_LOCAL json_t *GetStudyMaterialCounts (const Study * const study_p, const FieldTrialServiceData *data_p);
 
 
 #ifdef __cplusplus

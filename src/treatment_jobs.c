@@ -99,12 +99,26 @@ json_t *GetAllTreatmentsAsJSON (const FieldTrialServiceData *data_p, bson_t *opt
 {
 	json_t *results_p = NULL;
 
-	if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_TREATMENT]))
-		{
-			bson_t *query_p = NULL;
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-			results_p = GetAllMongoResultsAsJSON (data_p -> dftsd_mongo_p, query_p, opts_p);
-		}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_TREATMENT])) */
+	if (mongo_p)
+		{
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_TREATMENT]))
+				{
+					bson_t *query_p = NULL;
+
+					results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, opts_p);
+				}		/* if (SetMongoToolCollection (data_p -> dftsd_mongo_p, data_p -> dftsd_collection_ss [DFTD_TREATMENT])) */
+
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+		}
+
+
 
 	return results_p;
 }
@@ -201,72 +215,85 @@ Treatment *GetTreatmentById (const bson_oid_t *id_p, const ViewFormat format, co
 Treatment *GetTreatmentByURL (const char *term_url_s, const ViewFormat format, const FieldTrialServiceData *data_p)
 {
 	Treatment *treatment_p = NULL;
-	MongoTool *tool_p = data_p -> dftsd_mongo_p;
+	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
-	if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [DFTD_TREATMENT]))
+	if (mongo_p)
 		{
-			bson_t *query_p = bson_new ();
-
-			if (query_p)
+			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_TREATMENT]))
 				{
-					if (BSON_APPEND_UTF8 (query_p, SCHEMA_TERM_URL_S, term_url_s))
+					bson_t *query_p = bson_new ();
+
+					if (query_p)
 						{
-							json_t *results_p = GetAllMongoResultsAsJSON (tool_p, query_p, NULL);
-
-							if (results_p)
+							if (BSON_APPEND_UTF8 (query_p, SCHEMA_TERM_URL_S, term_url_s))
 								{
-									if (json_is_array (results_p))
+									json_t *results_p = GetAllMongoResultsAsJSON (mongo_p, query_p, NULL);
+
+									if (results_p)
 										{
-											size_t num_results = json_array_size (results_p);
-
-											if (num_results == 1)
+											if (json_is_array (results_p))
 												{
-													json_t *res_p = json_array_get (results_p, 0);
+													size_t num_results = json_array_size (results_p);
 
-													treatment_p = GetTreatmentFromJSON (res_p);
-
-													if (!treatment_p)
+													if (num_results == 1)
 														{
-															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, res_p, "failed to get Treatment for url \"%s\"", term_url_s);
+															json_t *res_p = json_array_get (results_p, 0);
+
+															treatment_p = GetTreatmentFromJSON (res_p);
+
+															if (!treatment_p)
+																{
+																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, res_p, "failed to get Treatment for url \"%s\"", term_url_s);
+																}
+
+														}		/* if (num_results == 1) */
+													else
+														{
+															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "" SIZET_FMT " results when searching for Treatment with term_url_s \"%s\"", num_results, term_url_s);
 														}
 
-												}		/* if (num_results == 1) */
+												}		/* if (json_is_array (results_p) */
 											else
 												{
-													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "" SIZET_FMT " results when searching for Treatment with term_url_s \"%s\"", num_results, term_url_s);
+													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "Results are not an array");
 												}
 
-										}		/* if (json_is_array (results_p) */
+											json_decref (results_p);
+										}		/* if (results_p) */
 									else
 										{
-											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "Results are not an array");
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get results searching for Treatment with id \"%s\"", term_url_s);
 										}
 
-									json_decref (results_p);
-								}		/* if (results_p) */
+								}		/* if (BSON_APPEND_UTF8 (query_p, TR_TERM_S, term_url_s)) */
 							else
 								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get results searching for Treatment with id \"%s\"", term_url_s);
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for Treatment with id \"%s\"", term_url_s);
 								}
 
-						}		/* if (BSON_APPEND_UTF8 (query_p, TR_TERM_S, term_url_s)) */
+							bson_destroy (query_p);
+						}		/* if (query_p) */
 					else
 						{
-							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for Treatment with id \"%s\"", term_url_s);
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for term \"%s\"", term_url_s);
 						}
 
-					bson_destroy (query_p);
-				}		/* if (query_p) */
+				}		/* if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [collection_type])) */
 			else
 				{
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for term \"%s\"", term_url_s);
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_TREATMENT]);
 				}
 
-		}		/* if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [collection_type])) */
+
+			FreeMongoTool (mongo_p);
+		}		/* if (mongo_p) */
 	else
 		{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set collection to \"%s\"", data_p -> dftsd_collection_ss [DFTD_TREATMENT]);
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 		}
+
+
+
 
 
 	return treatment_p;
