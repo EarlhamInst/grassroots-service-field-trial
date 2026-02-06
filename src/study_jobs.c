@@ -1359,12 +1359,23 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 
 							if (lower_case_accession_s)
 								{
-									if (!BSON_APPEND_UTF8 (query_p, ST_ACCESSIONS_S, lower_case_accession_s))
+									char *key_s = ConcatenateVarargsStrings (ST_ACCESSIONS_S, ".", "so:name", NULL);
+
+									if (key_s)
+										{
+											if (!BSON_APPEND_UTF8 (query_p, key_s, lower_case_accession_s))
+												{
+													built_query_success_flag = false;
+													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_ACCESSIONS_S, lower_case_accession_s);
+												}
+
+											FreeCopiedString (key_s);
+										}
+									else
 										{
 											built_query_success_flag = false;
-											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_ACCESSIONS_S, lower_case_accession_s);
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "ConcatenateVarargsStrings () failed to create key");
 										}
-
 									FreeCopiedString (lower_case_accession_s);
 								}		/* if (lower_case_accession_s) */
 							else
@@ -1376,17 +1387,33 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 						}		/* if (!IsStringEmpty (accession_s)) */
 
 
+					PrintBSONToLog (STM_LEVEL_INFO, __FILE__, __LINE__, query_p, "post accessions query");
+
 					if (built_query_success_flag)
 						{
 							if (!IsStringEmpty (phenotype_s))
 								{
-									if (!BSON_APPEND_UTF8 (query_p, ST_PHENOTYPES_S, phenotype_s))
+									char *key_s = ConcatenateVarargsStrings (ST_PHENOTYPES_S, ".", "definition", ".", "so:name", NULL);
+
+									if (key_s)
+										{
+											if (!BSON_APPEND_UTF8 (query_p, key_s, phenotype_s))
+												{
+													built_query_success_flag = false;
+													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_PHENOTYPES_S, phenotype_s);
+												}
+
+											FreeCopiedString (key_s);
+										}
+									else
 										{
 											built_query_success_flag = false;
-											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_PHENOTYPES_S, phenotype_s);
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "ConcatenateVarargsStrings () failed to create key");
 										}
+
 								}		/* if (!IsStringEmpty (accession_s)) */
 
+							PrintBSONToLog (STM_LEVEL_INFO, __FILE__, __LINE__, query_p, "post phenotypes query");
 
 							if (built_query_success_flag)
 								{
