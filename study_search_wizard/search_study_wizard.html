@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Study Search</title>
+
+
+<style>
+#loader {
+  border: 16px solid #f3f3f3; /* Light grey */
+  border-top: 16px solid #3498db; /* Blue */
+  border-radius: 50%;
+  width: 80px;
+  height: 80px;
+  animation: spin 2s linear infinite;
+  visibility: hidden;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+</style>
+
+<script>
+
+function AccessionChanged (accession_element)
+{
+    console.log (accession_element.value);
+}
+
+/**
+ * Check the number is odd
+ *
+ * @param {Int} n - Number input.
+ */
+function isOdd(n) {
+    return Math.abs(n % 2) == 1;
+}
+
+/**
+ * Ajax search services for searching Treatments and Measured Variables
+ *
+ * @param {String} type - Define Treatments or Measured Variables.
+ */
+async function SearchGrassroots (text_element, facet_type) {
+    const query = text_element.value;
+
+    let input_tail = "";
+
+    if (isOdd((query.match(/\"/g) || []).length)) {
+        input_tail = "\"";
+    }
+    if (((query.match(/\"/g) || []).length) == 0) {
+        input_tail = "*";
+    }
+
+    console.log ("query: " + query + " tail: " + input_tail);
+
+    if (query.length > 1) {
+
+        let submit_json = {
+            "services": [
+                {
+                    "start_service": true,
+                    "so:name": "Search Grassroots",
+                    "parameter_set": {
+                        "level": "simple",
+                        "parameters": [
+                            {
+                                "param": "SS Keyword Search",
+                                "current_value": query + input_tail
+                            },
+                            {
+                                "param": "SS Facet",
+                                "current_value": facet_type
+                            },
+                                      ]
+                    }
+                }
+            ]
+        };
+
+        let req_body = JSON.stringify (submit_json);
+
+        console.log ("req_body: " + req_body);
+
+      
+        document.getElementById("loader").style.visibility = "visible";
+        //document.getElementById("loader").innerHTML = "Loading...";
+ 
+        const response = await fetch ("http://localhost:2000/grassroots/private_backend", {
+          method: "POST",
+          body: req_body,
+        });
+
+        console.log ("req_body: " + req_body);
+
+        if (response.ok) {
+            let res_json = await response.json ();
+            console.log ("res_json: " + JSON.stringify (res_json));
+            LoadSearchResults (res_json);
+        } else {
+            console.log ("response status: " + response.status);
+        }
+
+        document.getElementById("loader").style.visibility = "hidden";
+        //document.getElementById("loader").innerHTML = "";
+
+    } else {
+        document.getElementById ("phenotypes_tbody").innerHTML = "";
+    }
+
+}
+
+
+function LoadSearchResults (response_json) {
+
+    const results = response_json.results;
+
+    if (results) {
+        let table = "";
+
+        if (Array.isArray (results)) {
+            if (results.length == 1) {
+                const hits = results[0].results;
+
+                for (let i in hits) {
+                    const hit = hits [i];
+                    const data = hit.data;
+
+                    console.log ("hit: " + JSON.stringify (hit));
+                    console.log ("data: " + JSON.stringify (data));
+                    
+
+                    let tr = "<tr>\n" +
+                        "<td>" + data ["so:name"] + "</td>\n" +
+                        "<td>" + data.variable ["so:name"] + "</td>\n" +
+                        "<td>" + data.trait ["so:name"] + "</td>\n" +
+                        "<td>" + data.trait ["so:description"] + "</td>\n" +
+                        "<tr>\n";
+
+                    table = table + tr;
+
+                }
+
+                
+
+                console.log ("table: " + table)
+
+                document.getElementById ("phenotypes_tbody").innerHTML = table;
+
+            }
+
+        }
+    }
+
+
+}
+
+</script>
+
+</head>
+
+<body>
+
+
+<form action="">
+    <label for="accession_text">Accession:</label>
+    <input type="text" id="accession_text" name="accession_text" onkeyup="SearchGrassroots (this, 'Measured Variable');"><br><br>
+    
+    <label for="phenotype_text">Phenotype:</label>
+    <input type="text" id="phenotype_text" name="phenotype_text"><br><br>
+
+    <input type="submit" value="Submit">
+</form> 
+
+
+<div id="loader"></div>
+
+<table id="phenotypes_table">
+    <thead>
+        <th>Title</th>        
+        <th>Variable Name</th>        
+        <th>Trait Name</th>  
+        <th>Trait Description</th>
+    </thead>
+
+    <tbody id="phenotypes_tbody">
+
+    </tbody>
+
+</table>
+
+
+</body>
+
+
+</html>
