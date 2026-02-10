@@ -45,9 +45,43 @@ table tr:nth-child(even) {
 	background-color: red;
 }
 
+
+#selected_phenotypes 
+{
+	list-style-type: none;
+	border-style: solid 1px;
+}
+
+
+.hover {
+    position:relative;
+    top:50px;
+    left:50px;
+}
+
+.tooltip {
+  top:-10px;
+  background-color:#3498db;
+  color:white;
+  border-radius:5px;
+  opacity:0;
+  position:absolute;
+  -webkit-transition: opacity 0.5s;
+  -moz-transition:  opacity 0.5s;
+  -ms-transition: opacity 0.5s;
+  -o-transition:  opacity 0.5s;
+  transition:  opacity 0.5s;
+}
+
+.hover:hover .tooltip {
+    opacity:1;
+}
+
+
 </style>
 
 <script>
+
 
 function AccessionChanged (accession_element)
 {
@@ -64,14 +98,20 @@ function isOdd(n)
 	return Math.abs(n % 2) == 1;
 }
 
+const S_DEBOUNCE_DELAY = 200;
+
+const SearchGrassroots = Debounce (RealSearchGrassroots, S_DEBOUNCE_DELAY);
+
+
+
 /**
  * Ajax search services for searching Treatments and Measured Variables
  *
  * @param {String} type - Define Treatments or Measured Variables.
  */
-async function SearchGrassroots (text_element, facet_type) 
+async function RealSearchGrassroots (query, facet_type) 
 {
-	const query = text_element.value;
+	console.log ("RealSearchGrassroots: " + query);
 
 	let input_tail = "";
 
@@ -148,7 +188,6 @@ async function SearchGrassroots (text_element, facet_type)
 
 function LoadSearchResults (response_json) 
 {
-
 	const results = response_json.results;
 
 	if (results) {
@@ -199,16 +238,32 @@ function SelectRow (table_row)
 	let selected_variable = table_row.cells [1].innerHTML;
 	console.log ("variable: " + selected_variable);
 
-	let accessions_list = document.getElementById ("selected_accessions");
-	let accession_entry = document.createElement ("li");
+	let trait_name = table_row.cells [2].innerHTML;
+	console.log ("trait_name: " + trait_name);
 
-	accession_entry.appendChild (document.createTextNode (selected_variable));
+	let trait_description = table_row.cells [3].innerHTML;
+	console.log ("trait_description: " + trait_description);
+
+	let phenotypes_list = document.getElementById ("selected_phenotypes");
+	let phenotype_entry = document.createElement ("li");
+
+	phenotype_entry.setAttribute ("title", trait_description);
+	phenotype_entry.appendChild (document.createTextNode (selected_variable));
 	
-	let remove_button = document.createElement ("button");
-	remove_button.innerHTML = "delete";
-	accession_entry.appendChild (remove_button);
+	/*
+		Create the delete button
+	*/
+	let remove_button = document.createElement ("input");
+	remove_button.type = "image"
+	remove_button.setAttribute ("src", "/grassroots/images/aiss/list_remove");
+	
+	remove_button.setAttribute ("onclick", "RemoveSelectedPhenotype (this.parentElement)");
+	remove_button.setAttribute ("title", "Remove " + selected_variable + " from selected phenotypes");
 
-	accessions_list.appendChild (accession_entry);
+
+//	remove_button.innerHTML = "delete";
+	phenotype_entry.appendChild (remove_button);
+	phenotypes_list.appendChild (phenotype_entry);
 
 
 	if (table_row.classList.contains ("selected"))
@@ -221,6 +276,68 @@ function SelectRow (table_row)
 		}
 }
 
+
+function RemoveSelectedPhenotype (list_entry)
+{
+	let phenotypes_list = list_entry.parentElement;
+	
+	console.log ("list_entry " + list_entry);
+	console.log ("phenotypes_list " + phenotypes_list);
+
+	phenotypes_list.removeChild (list_entry);
+}
+
+
+/**
+ * Instead of running a function every time, add a small delay before
+ * running. If the user is typing in a search term this will then only 
+ * call the server once they've paused typing rather than on every 
+ * keystroke.
+ * 
+ * @param callback_fn The function to run after the given time of inactivity.
+ * @param wait_time The time in milliseconds to use as the inactivity time.
+ */
+function Debounce (callback_fn, wait_time) 
+{
+	let timer;
+
+	return function (...args) 
+		{
+			// cancel the timer
+			clearTimeout (timer);
+
+			// set a new timer
+			timer = setTimeout (() => 
+				{
+					// run the callback function with its original args
+					callback_fn.apply (this, args);
+				}, 
+				wait_time
+			);
+		};
+}
+
+
+function SearchGrassrootsHandler (event)
+{
+	// Cancel the default action
+
+	var query = event.target.value;
+
+	const facet = "Measured Variable";
+
+	if (event.key === "Enter")
+		{
+			// Do the search immediately
+			event.preventDefault ();
+			RealSearchGrassroots (query, facet);
+		}
+	else
+		{
+			Debounce (RealSearchGrassroots, S_DEBOUNCE_DELAY, query, facet);
+		}
+}
+
 </script>
 
 </head>
@@ -228,21 +345,29 @@ function SelectRow (table_row)
 <body>
 
 
+
+
+<h1>Search Studies</h1>
+
 <form action="">
 	<label for="accession_text">Accession:</label>
-	<input type="text" id="accession_text" name="accession_text" onkeyup="SearchGrassroots (this, 'Measured Variable');"><br><br>
-	
-	<label for="phenotype_text">Phenotype:</label>
-	<input type="text" id="phenotype_text" name="phenotype_text"><br><br>
-
-	<input type="submit" value="Submit">
+	<input type="text" id="accession_text" name="accession_text">	
 </form> 
 
 
 
-<ul id="selected_accessions">
-</ul>
+<section>
+	<h2>Phenotypes</h2>
 
+	<form action="">
+		<label for="phenotype_text">Search Phenotypes:</label>
+		<input type="text" id="phenotype_text" name="phenotype_text" onkeyup="SearchGrassroots (this.value, 'Measured Variable');">
+	</form> 
+
+	<h3>Selected Phenotypes</h3>
+	<ul id="selected_phenotypes">
+	</ul>
+</section>
 
 <div id="loader"></div>
 
@@ -260,6 +385,12 @@ function SelectRow (table_row)
 
 </table>
 
+
+<script>
+
+document.getElementById ("phenotype_text").addEventListener ("keypress", SearchGrassrootsHandler);
+
+</script>
 
 </body>
 
