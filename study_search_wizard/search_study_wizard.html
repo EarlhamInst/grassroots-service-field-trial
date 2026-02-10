@@ -7,13 +7,15 @@
 
 <style>
 #loader {
-  border: 16px solid #f3f3f3; /* Light grey */
-  border-top: 16px solid #3498db; /* Blue */
+  border: 4px solid #f3f3f3; /* Light grey */
+  border-top: 4px solid #3498db; /* Blue */
   border-radius: 50%;
-  width: 80px;
-  height: 80px;
+  width: 1.0em;
+  height: 1.0em;
   animation: spin 2s linear infinite;
   visibility: hidden;
+	position: fixed;
+	margin-left: 1.0em;
 }
 
 @keyframes spin {
@@ -30,6 +32,8 @@ th {
   text-align: center;
   padding: 8px;
 	background-color: #3498db;
+	position: sticky;
+	top: 0;
 }
 
 td {
@@ -362,14 +366,16 @@ function SearchGrassrootsHandler (event)
 	<form action="">
 		<label for="phenotype_text">Search Phenotypes:</label>
 		<input type="text" id="phenotype_text" name="phenotype_text" onkeyup="SearchGrassroots (this.value, 'Measured Variable');">
+		<span id="loader"></span>
 	</form> 
+
 
 	<h3>Selected Phenotypes</h3>
 	<ul id="selected_phenotypes">
 	</ul>
 </section>
 
-<div id="loader"></div>
+
 
 <table id="phenotypes_table">
 	<thead>
