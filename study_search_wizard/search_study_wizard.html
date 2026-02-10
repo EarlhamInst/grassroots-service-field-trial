@@ -40,12 +40,12 @@
 						</div>
 
 						<div class="equal-column">
-							<input type="text" id="phenotype_text" name="phenotype_text" onkeyup="SearchGrassroots (this.value, 'Measured Variable');">
+							<input type="text" id="phenotype_text" name="phenotype_text" onkeyup="KeywordSearchGrassroots (this.value, 'Measured Variable');">
 						</div>
 
 					</div>
 
-					<span id="loader"></span>
+					<div id="loader"></div>
 
 					<h4>Selected Phenotypes</h4>
 					<ul id="selected_phenotypes">
@@ -82,13 +82,30 @@
 </section>
 
 
+<section>
+
+	<table id="studies_results_table">
+		<thead>
+			<th>Name</th>		
+			<th>Link</th>		
+		</thead>
+
+		<tbody id="studies_tbody">
+
+		</tbody>
+
+
+	</table>
+
+</section>
+
 
 
 
 
 <script>
 
-document.getElementById ("phenotype_text").addEventListener ("keypress", SearchGrassrootsHandler);
+document.getElementById ("phenotype_text").addEventListener ("keypress", KeywordSearchGrassrootsHandler);
 
 </script>
 

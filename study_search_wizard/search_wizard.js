@@ -16,9 +16,11 @@ function isOdd(n)
 
 const S_DEBOUNCE_DELAY = 200;
 
-const SearchGrassroots = Debounce (RealKeywordSearchGrassroots, S_DEBOUNCE_DELAY);
+const KeywordSearchGrassroots = Debounce (RealKeywordSearchGrassroots, S_DEBOUNCE_DELAY);
 
+const S_GRASSROOTS_SERVER_URL = "http://localhost:2000/grassroots/"
 
+const S_DJANGO_SERVER_URL = "http://localhost:8000/"
 
 /**
  * Ajax search services for searching Treatments and Measured Variables
@@ -52,9 +54,8 @@ async function RealKeywordSearchGrassroots (query, facet_type)
 						"start_service": true,
 						"so:name": "Search Grassroots",
 						"parameter_set": {
-						"level": "simple",
-						"parameters": 
-							[{
+							"level": "simple",
+							"parameters": [{
 								"param": "SS Keyword Search",
 								"current_value": query + input_tail
 							}, {
@@ -73,7 +74,7 @@ async function RealKeywordSearchGrassroots (query, facet_type)
 			document.getElementById("loader").style.visibility = "visible";
 			//document.getElementById("loader").innerHTML = "Loading...";
 
-			const response = await fetch ("http://localhost:2000/grassroots/private_backend", {
+			const response = await fetch (S_GRASSROOTS_SERVER_URL + "/private_backend", {
 				method: "POST",
 				body: req_body,
 			});
@@ -84,7 +85,7 @@ async function RealKeywordSearchGrassroots (query, facet_type)
 				{
 					let res_json = await response.json ();
 	//				console.log ("res_json: " + JSON.stringify (res_json));
-					LoadSearchResults (res_json);
+					LoadKeywordSearchResults (res_json);
 				}
 		 	else 
 				{
@@ -102,26 +103,38 @@ async function RealKeywordSearchGrassroots (query, facet_type)
 }
 
 
-function LoadSearchResults (response_json) 
+function GetHitsFromJSON (response_json)
 {
+	let hits = null;
 	const results = response_json.results;
 
-	if (results) {
-		let table = "";
+	if (results) 
+		{
+			if (Array.isArray (results)) 
+				{
+					if (results.length == 1) 
+						{
+							hits = results[0].results;
+						}
+				}
+		}
+		
+	return hits;
+}
 
-		if (Array.isArray (results)) {
-			if (results.length == 1) {
-				const hits = results[0].results;
-				
-				let row_class=""
+
+function LoadKeywordSearchResults (response_json) 
+{
+	const hits = GetHitsFromJSON (response_json);
+
+	if (hits)
+		{
+			let table_body = "";
 			
-				for (let i in hits) {
+			for (let i in hits) 
+				{
 					const hit = hits [i];
 					const data = hit.data;
-
-//					console.log ("hit: " + JSON.stringify (hit));
-//					console.log ("data: " + JSON.stringify (data));
-					
 				
 					let tr = "<tr onclick=\"SelectRow (this)\"";
 
@@ -137,20 +150,12 @@ function LoadSearchResults (response_json)
 						"<td>" + data.trait ["so:description"] + "</td>\n";
 						"<tr>\n";
 
-					table = table + tr;
-
+					table_body += tr;
 				}
 
-				
-
-//				console.log ("table: " + table)
-
-				document.getElementById ("phenotypes_tbody").innerHTML = table;
-
-			}
-
+			
+			document.getElementById ("phenotypes_tbody").innerHTML = table_body;
 		}
-	}
 
 }
 
@@ -264,7 +269,7 @@ function Debounce (callback_fn, wait_time)
 }
 
 
-function SearchGrassrootsHandler (event)
+function KeywordSearchGrassrootsHandler (event)
 {
 	// Cancel the default action
 
@@ -280,14 +285,159 @@ function SearchGrassrootsHandler (event)
 		}
 	else
 		{
-			Debounce (RealSearchGrassroots, S_DEBOUNCE_DELAY, query, facet);
+			Debounce (RealKeywordSearchGrassroots, S_DEBOUNCE_DELAY, query, facet);
 		}
 }
 
 
-function SearchStudies ()
+async function SearchStudies ()
 {
+	console.log ("SearchStudies");
+
+
+	let accessions = "";
+	let phenotypes = "";
+	
+	/*
+	 * Get the accessions
+	 */
+	let el = document.getElementById ("accession_text");
+	if (el)
+		{
+			accessions = el.value;					
+		}
+
+	/*
+	 * Get the phenotypes
+	 */
+	const phenotype_items = document.querySelectorAll ('#selected_phenotypes li');
+
+	if (phenotype_items)
+		{
+			const final_index = phenotype_items.length - 1;
+			let added_entry = false;
+			
+			for (let i = 0; i <= final_index; ++ i) 
+				{
+					let var_name = phenotype_items.item (i).getAttribute ("data-var-name");
+					
+					if (var_name) 
+						{
+							if (added_entry)
+								{
+									phenotypes += ",";
+								}
+
+							phenotypes += var_name;
+							
+							if (!added_entry)
+								{
+									added_entry = true;
+								}
+						}
+				}
+		}
+
+	let submit_json = 
+		{
+			"services": 
+				[
+					{
+						"start_service": true,
+						"so:name": "Search Field Trials",
+						"parameter_set": 
+							{
+								"level": "wizard",
+								"parameters": 
+									[
+										{
+											"param": "ST Search Study Accessions",
+											"current_value": accessions
+										},
+										{
+											"param": "ST Search Study Phenotypes",
+											"current_value": phenotypes,
+										},
+										{
+											"param": "The level of data to get for matching Studies",
+											"current_value": "Names and Ids only",
+										}
+									]
+							}
+					}
+				]
+			};
+
+	let req_body = JSON.stringify (submit_json);
+
+//	console.log ("req_body: " + req_body);
+
+	let loader = document.getElementById ("loader");
+	
+	if (loader)
+		{
+			loader.style.visibility = "visible";
+		}
+		
+	const response = await fetch (S_GRASSROOTS_SERVER_URL + "/private_backend", {
+		method: "POST",
+		body: req_body,
+	});
+
+	if (response.ok) 
+		{
+			let res_json = await response.json ();	
+			console.log ("res_json: " + JSON.stringify (res_json));
+			LoadStudySearchResults (res_json);
+		}
+	else 
+		{
+			console.log ("response status: " + response.status);
+		}
+
+	if (loader)
+		{
+			loader.style.visibility = "hidden";
+		}
 
 
 }
+
+
+function LoadStudySearchResults (response_json) 
+{
+	const hits = GetHitsFromJSON (response_json);
+
+	if (hits)
+		{
+			let table_body = "";
+			
+			for (let i in hits) 
+				{
+					const hit = hits [i];
+					const data = hit.data;
+				
+					let tr = "<tr";
+
+					if (i % 2 == 1) 
+						{
+							tr += " class=\"odd\"";
+						}
+				
+					const id = data._id ["$oid"];
+				
+					tr += ">" + 
+						"<td>" + data ["so:name"] + "</td>\n" +
+						"<td>" + "<a href=\"" + S_DJANGO_SERVER_URL + "/fieldtrial/study/" + id + "\" target=\"_blank\">" + id + "</a> </td>\n" +
+						"<tr>\n";
+
+					table_body += tr;
+				}
+
+			
+			document.getElementById ("studies_tbody").innerHTML = table_body;
+		}
+
+}
+
 
