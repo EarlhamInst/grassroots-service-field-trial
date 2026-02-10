@@ -47,20 +47,58 @@ td {
   padding: 8px;
 }
 
-
 #phenotypes_tbody td
 {
 	cursor: pointer;
 }
 
-table tr:nth-child(even) {
-	background-color: #660000;
+
+tr.odd {
+  background-color: #f2f2f2;
 }
 
-.selected {
-	background-color: red;
+
+#table-wrapper {
+  position:relative;
+}
+#table-scroll {
+  height: 700px;
+  overflow: auto;  
+  margin: 0.5em 1.0em 1.0em 0;
+}
+#table-wrapper table {
+  width:100%;
+    
 }
 
+
+@keyframes highlight {
+    0% {
+        background: #7a9dbf;
+    }
+    100% {
+        background: none;
+    }
+}
+
+@keyframes odd-highlight {
+    0% {
+        background: #7a9dbf;
+    }
+    100% {
+        background: #f2f2f2;
+    }
+}
+
+
+tr.selected {
+	animation: highlight 1s;
+}
+
+tr.selected.odd
+{
+	animation: odd-highlight 1s;
+}
 
 #selected_phenotypes 
 {
@@ -136,12 +174,39 @@ ul li input
 }
 
 
-.container {
-  column-count: 2;
-  column-gap: 20px;
-  column-rule: 4px dotted rgb(79 185 227);
+.row 
+{
+	display: flex;
 }
 
+.narrow-column
+{
+	flex: 30%;
+}
+
+.wide-column
+{
+	flex: 70%;
+}
+
+
+.equal-column
+{
+	flex: 70%;
+}
+
+
+#search_btn
+{
+	position: absolute;
+	bottom: 1.0em;
+	right: 1.0em;
+}
+
+#search_fieldset
+{
+	position: relative;
+}
 
 </style>
 
@@ -165,7 +230,7 @@ function isOdd(n)
 
 const S_DEBOUNCE_DELAY = 200;
 
-const SearchGrassroots = Debounce (RealSearchGrassroots, S_DEBOUNCE_DELAY);
+const SearchGrassroots = Debounce (RealKeywordSearchGrassroots, S_DEBOUNCE_DELAY);
 
 
 
@@ -174,9 +239,9 @@ const SearchGrassroots = Debounce (RealSearchGrassroots, S_DEBOUNCE_DELAY);
  *
  * @param {String} type - Define Treatments or Measured Variables.
  */
-async function RealSearchGrassroots (query, facet_type) 
+async function RealKeywordSearchGrassroots (query, facet_type) 
 {
-	console.log ("RealSearchGrassroots: " + query);
+	console.log ("RealKeywordSearchGrassroots: " + query);
 
 	let input_tail = "";
 
@@ -187,7 +252,7 @@ async function RealSearchGrassroots (query, facet_type)
 	
 	if (((query.match(/\"/g) || []).length) == 0) 
 		{
-		input_tail = "*";
+			input_tail = "*";
 		}
 
 	console.log ("query: " + query + " tail: " + input_tail);
@@ -216,7 +281,7 @@ async function RealSearchGrassroots (query, facet_type)
 
 			let req_body = JSON.stringify (submit_json);
 
-			console.log ("req_body: " + req_body);
+		//	console.log ("req_body: " + req_body);
 
 		
 			document.getElementById("loader").style.visibility = "visible";
@@ -227,12 +292,12 @@ async function RealSearchGrassroots (query, facet_type)
 				body: req_body,
 			});
 
-			console.log ("req_body: " + req_body);
+	//		console.log ("req_body: " + req_body);
 
 			if (response.ok) 
 				{
 					let res_json = await response.json ();
-					console.log ("res_json: " + JSON.stringify (res_json));
+	//				console.log ("res_json: " + JSON.stringify (res_json));
 					LoadSearchResults (res_json);
 				}
 		 	else 
@@ -261,7 +326,9 @@ function LoadSearchResults (response_json)
 		if (Array.isArray (results)) {
 			if (results.length == 1) {
 				const hits = results[0].results;
-
+				
+				let row_class=""
+			
 				for (let i in hits) {
 					const hit = hits [i];
 					const data = hit.data;
@@ -269,12 +336,19 @@ function LoadSearchResults (response_json)
 //					console.log ("hit: " + JSON.stringify (hit));
 //					console.log ("data: " + JSON.stringify (data));
 					
+				
+					let tr = "<tr onclick=\"SelectRow (this)\"";
 
-					let tr = "<tr onclick=\"SelectRow (this)\"> \n" +
+					if (i % 2 == 1) 
+						{
+							tr += " class=\"odd\"";
+						}
+				
+					tr += " data-var-name=\"data.variable [\"so:name\"]\">" + 
 						"<td>" + data ["so:name"] + "</td>\n" +
 						"<td>" + data.variable ["so:name"] + "</td>\n" +
 						"<td>" + data.trait ["so:name"] + "</td>\n" +
-						"<td>" + data.trait ["so:description"] + "</td>\n" +
+						"<td>" + data.trait ["so:description"] + "</td>\n";
 						"<tr>\n";
 
 					table = table + tr;
@@ -364,6 +438,13 @@ function RemoveSelectedPhenotype (list_entry)
 	console.log ("phenotypes_list " + phenotypes_list);
 
 	phenotypes_list.removeChild (list_entry);
+
+	const table_row = document.querySelector(`#phenotypes_tbody tr[data-var-name="${selected_variable}"]`);
+
+	if (table_row !== null)
+		{
+			table_row.classList.remove ("selected");
+		}
 }
 
 
@@ -409,7 +490,7 @@ function SearchGrassrootsHandler (event)
 		{
 			// Do the search immediately
 			event.preventDefault ();
-			RealSearchGrassroots (query, facet);
+			RealKeywordSearchGrassroots (query, facet);
 		}
 	else
 		{
@@ -417,63 +498,88 @@ function SearchGrassrootsHandler (event)
 		}
 }
 
+
+function SearchStudies ()
+{
+
+
+}
+
+
 </script>
 
 </head>
 
 <body>
 
-
-
-
 <h1>Search Studies</h1>
 
-
-<form action="">
-
-
-		<fieldset>
-			<legend>Accession</legend>
-	
-	<label for="accession_text">Accession:</label>
-	<input type="text" id="accession_text" name="accession_text">	
-	</fieldset>
-</form> 
-
-
-
 <section>
-	<form action="" class="container">
-		<fieldset>
-			<legend>Phenotypes</legend>
-			<label for="phenotype_text">Search:</label>
-			<input type="text" id="phenotype_text" name="phenotype_text" onkeyup="SearchGrassroots (this.value, 'Measured Variable');">
-			<span id="loader"></span>
+	<div class="row">
+		<fieldset id="search_fieldset">
+			<legend>Search</legend>
 
-			<h4>Selected Phenotypes</h4>
-			<ul id="selected_phenotypes">
-			</ul>
+			<div class="narrow-column">
+				<form action="">
 
-			<table id="phenotypes_table">
-				<thead>
-					<th>Title</th>		
-					<th>Variable Name</th>		
-					<th>Trait Name</th>  
-					<th>Trait Description</th>
-				</thead>
+					<div class="row">
 
-				<tbody id="phenotypes_tbody">
+						<div class="equal-column">
+							<label for="accession_text">Accession:</label>
+						</div>
 
-				</tbody>
+						<div class="equal-column">
+							<input type="text" id="accession_text" name="accession_text">						
+						</div>
 
-			</table>
+					</div>
+
+						
+					<div class="row">
+
+						<div class="equal-column">
+							<label for="phenotype_text">Phenotypes:</label>
+						</div>
+
+						<div class="equal-column">
+							<input type="text" id="phenotype_text" name="phenotype_text" onkeyup="SearchGrassroots (this.value, 'Measured Variable');">
+						</div>
+
+					</div>
+
+					<span id="loader"></span>
+
+					<h4>Selected Phenotypes</h4>
+					<ul id="selected_phenotypes">
+					</ul>
+
+				</form> 
+			</div>
+
+			<button type="button" id="search_btn" onclick="SearchStudies ()">Find Matching Studies</button>
+
 		</fieldset>
 
+		<div class="wide-column">
+			<div id="table-wrapper">
+				<div id="table-scroll">
+					<table id="phenotypes_table">
+						<thead>
+							<th>Title</th>		
+							<th>Variable Name</th>		
+							<th>Trait Name</th>  
+							<th>Trait Description</th>
+						</thead>
 
+						<tbody id="phenotypes_tbody">
 
+						</tbody>
 
-	</form> 
-
+					</table>
+				</div>
+			</div>
+		</div>
+	</div>
 
 </section>
 
