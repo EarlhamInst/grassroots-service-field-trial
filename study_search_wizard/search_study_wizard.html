@@ -6,9 +6,14 @@
 
 
 <style>
+
+body {
+font-family: Lato, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
 #loader {
   border: 4px solid #f3f3f3; /* Light grey */
-  border-top: 4px solid #3498db; /* Blue */
+  border-top: 4px solid #2c3e50; /* Blue */
   border-radius: 50%;
   width: 1.0em;
   height: 1.0em;
@@ -31,7 +36,8 @@ table {
 th {
   text-align: center;
   padding: 8px;
-	background-color: #3498db;
+	background-color: #2c3e50;
+	color: #ffffff;
 	position: sticky;
 	top: 0;
 }
@@ -39,6 +45,12 @@ th {
 td {
   text-align: center;
   padding: 8px;
+}
+
+
+#phenotypes_tbody td
+{
+	cursor: pointer;
 }
 
 table tr:nth-child(even) {
@@ -55,6 +67,14 @@ table tr:nth-child(even) {
 	list-style-type: none;
 	border-style: solid 1px;
 }
+
+
+ul li input  
+{
+	vertical-align: top;
+  margin-left: 1.0em;
+}
+
 
 
 .hover {
@@ -79,6 +99,47 @@ table tr:nth-child(even) {
 
 .hover:hover .tooltip {
     opacity:1;
+}
+
+.button {
+  position: relative;
+  background-color: #04AA6D;
+  border: none;
+  font-size: 28px;
+  color: #FFFFFF;
+  text-align: center;
+  -webkit-transition-duration: 0.4s; /* Safari */
+  transition-duration: 0.4s;
+  text-decoration: none;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.button:after {
+  content: "";
+  background: #90EE90;
+  display: block;
+  position: absolute;
+  padding-top: 300%;
+  padding-left: 350%;
+  margin-left: -20px!important;
+  margin-top: -120%;
+  opacity: 0;
+  transition: all 0.8s
+}
+
+.button:active:after {
+  padding: 0;
+  margin: 0;
+  opacity: 1;
+  transition: 0s
+}
+
+
+.container {
+  column-count: 2;
+  column-gap: 20px;
+  column-rule: 4px dotted rgb(79 185 227);
 }
 
 
@@ -205,11 +266,11 @@ function LoadSearchResults (response_json)
 					const hit = hits [i];
 					const data = hit.data;
 
-					console.log ("hit: " + JSON.stringify (hit));
-					console.log ("data: " + JSON.stringify (data));
+//					console.log ("hit: " + JSON.stringify (hit));
+//					console.log ("data: " + JSON.stringify (data));
 					
 
-					let tr = "<tr onclick=\"SelectRow (this)\">\n" +
+					let tr = "<tr onclick=\"SelectRow (this)\"> \n" +
 						"<td>" + data ["so:name"] + "</td>\n" +
 						"<td>" + data.variable ["so:name"] + "</td>\n" +
 						"<td>" + data.trait ["so:name"] + "</td>\n" +
@@ -222,7 +283,7 @@ function LoadSearchResults (response_json)
 
 				
 
-				console.log ("table: " + table)
+//				console.log ("table: " + table)
 
 				document.getElementById ("phenotypes_tbody").innerHTML = table;
 
@@ -236,38 +297,52 @@ function LoadSearchResults (response_json)
 
 function SelectRow (table_row) 
 {
-	console.log ("selected table_row: ");
-	console.log (table_row.innerHTML);
+//	console.log ("selected table_row: ");
+//	console.log (table_row.innerHTML);
 
 	let selected_variable = table_row.cells [1].innerHTML;
-	console.log ("variable: " + selected_variable);
+//	console.log ("variable: " + selected_variable);
 
 	let trait_name = table_row.cells [2].innerHTML;
-	console.log ("trait_name: " + trait_name);
+//	console.log ("trait_name: " + trait_name);
 
 	let trait_description = table_row.cells [3].innerHTML;
-	console.log ("trait_description: " + trait_description);
+//	console.log ("trait_description: " + trait_description);
 
 	let phenotypes_list = document.getElementById ("selected_phenotypes");
-	let phenotype_entry = document.createElement ("li");
 
-	phenotype_entry.setAttribute ("title", trait_description);
-	phenotype_entry.appendChild (document.createTextNode (selected_variable));
-	
-	/*
-		Create the delete button
-	*/
-	let remove_button = document.createElement ("input");
-	remove_button.type = "image"
-	remove_button.setAttribute ("src", "/grassroots/images/aiss/list_remove");
-	
-	remove_button.setAttribute ("onclick", "RemoveSelectedPhenotype (this.parentElement)");
-	remove_button.setAttribute ("title", "Remove " + selected_variable + " from selected phenotypes");
+	console.log ("var name: " + selected_variable);
+
+	const var_li = document.querySelector(`#selected_phenotypes li[data-var-name="${selected_variable}"]`);
+
+	if (var_li !== null) 
+		{	
+			console.log (selected_variable + " is already on list");
+		}
+	else
+		{
+			let phenotype_entry = document.createElement ("li");
+
+			phenotype_entry.setAttribute ("title", trait_description);
+			phenotype_entry.setAttribute ("data-var-name", selected_variable);
+			phenotype_entry.appendChild (document.createTextNode (selected_variable));
+			
+			/*
+				Create the delete button
+			*/
+			let remove_button = document.createElement ("input");
+			remove_button.type = "image"
+			remove_button.setAttribute ("src", "/grassroots/images/aiss/delete");
+			
+			remove_button.setAttribute ("onclick", "RemoveSelectedPhenotype (this.parentElement)");
+			remove_button.setAttribute ("title", "Remove " + selected_variable + " from selected phenotypes");
 
 
-//	remove_button.innerHTML = "delete";
-	phenotype_entry.appendChild (remove_button);
-	phenotypes_list.appendChild (phenotype_entry);
+		//	remove_button.innerHTML = "delete";
+			phenotype_entry.appendChild (remove_button);
+			phenotypes_list.appendChild (phenotype_entry);
+		}
+
 
 
 	if (table_row.classList.contains ("selected"))
@@ -353,43 +428,58 @@ function SearchGrassrootsHandler (event)
 
 <h1>Search Studies</h1>
 
+
 <form action="">
+
+
+		<fieldset>
+			<legend>Accession</legend>
+	
 	<label for="accession_text">Accession:</label>
 	<input type="text" id="accession_text" name="accession_text">	
+	</fieldset>
 </form> 
 
 
 
 <section>
-	<h2>Phenotypes</h2>
+	<form action="" class="container">
+		<fieldset>
+			<legend>Phenotypes</legend>
+			<label for="phenotype_text">Search:</label>
+			<input type="text" id="phenotype_text" name="phenotype_text" onkeyup="SearchGrassroots (this.value, 'Measured Variable');">
+			<span id="loader"></span>
 
-	<form action="">
-		<label for="phenotype_text">Search Phenotypes:</label>
-		<input type="text" id="phenotype_text" name="phenotype_text" onkeyup="SearchGrassroots (this.value, 'Measured Variable');">
-		<span id="loader"></span>
+			<h4>Selected Phenotypes</h4>
+			<ul id="selected_phenotypes">
+			</ul>
+
+			<table id="phenotypes_table">
+				<thead>
+					<th>Title</th>		
+					<th>Variable Name</th>		
+					<th>Trait Name</th>  
+					<th>Trait Description</th>
+				</thead>
+
+				<tbody id="phenotypes_tbody">
+
+				</tbody>
+
+			</table>
+		</fieldset>
+
+
+
+
 	</form> 
 
 
-	<h3>Selected Phenotypes</h3>
-	<ul id="selected_phenotypes">
-	</ul>
 </section>
 
 
 
-<table id="phenotypes_table">
-	<thead>
-		<th>Title</th>		
-		<th>Variable Name</th>		
-		<th>Trait Name</th>  
-		<th>Trait Description</th>
-	</thead>
 
-	<tbody id="phenotypes_tbody">
-
-	</tbody>
-
-</table>
 
 
 <script>
