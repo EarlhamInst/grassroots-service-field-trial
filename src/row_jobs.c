@@ -529,7 +529,7 @@ OperationStatus AddObservationValueToStandardRowByParts (ServiceJob *job_p, Stan
 	const char *method_s = NULL;
 	ObservationNature nature = ON_ROW;
 	Instrument *instrument_p = NULL;
-	ObservationNode *observation_node_p = GetMatchingObservationNode (row_p, measured_variable_p, metadata_p);
+	ObservationNode *observation_node_p = GetMatchingObservationNode (row_p, measured_variable_p, metadata_p, true);
 
 	if (observation_node_p)
 		{
@@ -1091,7 +1091,7 @@ void RemoveObservationNode (const StandardRow *row_p, ObservationNode *node_p)
 }
 
 
-ObservationNode *GetMatchingObservationNode (const StandardRow *row_p, const MeasuredVariable *variable_p, const ObservationMetadata *metadata_p)
+ObservationNode *GetMatchingObservationNode (const StandardRow *row_p, const MeasuredVariable *variable_p, const ObservationMetadata *metadata_p, const bool include_metadata_flag)
 {
 	ObservationNode *node_p = (ObservationNode *) (row_p -> sr_observations_p -> ll_head_p);
 
@@ -1099,7 +1099,7 @@ ObservationNode *GetMatchingObservationNode (const StandardRow *row_p, const Mea
 		{
 			Observation *existing_observation_p = node_p -> on_observation_p;
 
-			if (AreObservationsMatchingByParts (existing_observation_p, variable_p, metadata_p))
+			if (AreObservationsMatchingByParts (existing_observation_p, variable_p, metadata_p, include_metadata_flag))
 				{
 					return node_p;
 				}
@@ -1113,9 +1113,9 @@ ObservationNode *GetMatchingObservationNode (const StandardRow *row_p, const Mea
 }
 
 
-Observation *GetMatchingObservation (const StandardRow *row_p, const MeasuredVariable *variable_p, const ObservationMetadata *metadata_p)
+Observation *GetMatchingObservation (const StandardRow *row_p, const MeasuredVariable *variable_p, const ObservationMetadata *metadata_p, const bool include_metadata_flag)
 {
-	ObservationNode *node_p = GetMatchingObservationNode (row_p, variable_p, metadata_p);
+	ObservationNode *node_p = GetMatchingObservationNode (row_p, variable_p, metadata_p, include_metadata_flag);
 
 	if (node_p)
 		{

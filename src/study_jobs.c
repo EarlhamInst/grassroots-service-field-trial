@@ -2556,61 +2556,76 @@ static bool AddPhenotypeAsFrictionlessData (const char *oid_s, json_t *values_p,
 OperationStatus GenerateStatisticsForAllStudies (ServiceJob *job_p,  FieldTrialServiceData *data_p)
 {
 	OperationStatus status = OS_FAILED;
-	json_t *all_studies_p = GetAllStudiesAsJSON (data_p, true);
 
-	if (all_studies_p)
+	/*
+	 * Get all of the Studies that have observations
+	 */
+
+	json_t *study_ids_p = GetAllStudyIdsHavingObservations (data_p);
+
+
+	if (study_ids_p)
 		{
 			size_t i;
-			json_t *study_json_p;
-			const size_t num_studies = json_array_size (all_studies_p);
+			json_t *study_id_p;
+			const size_t num_studies = json_array_size (study_ids_p);
 			size_t num_successes = 0;
 
 			char *stats_filename_s = MakeFilename (data_p -> dftsd_study_cache_path_s, "stats");
 
 			if (stats_filename_s)
 				{
-					json_array_foreach (all_studies_p, i, study_json_p)
+					json_array_foreach (study_ids_p, i, study_id_p)
 						{
-							Study *study_p = GetStudyFromJSON (study_json_p, VF_STORAGE, data_p);
+							const char *study_id_s = GetJSONString (study_id_p, "$oid");
 
-							if (study_p)
+							if (study_id_s)
 								{
-									OperationStatus stats_status = GenerateStatisticsForStudy (study_p, job_p, data_p);
+									Study *study_p = GetStudyByIdString (study_id_s, VF_STORAGE, data_p);
 
-									FILE *stats_f = fopen (stats_filename_s, "a");
-									if (stats_f)
+									if (study_p)
 										{
-											char *id_s = GetBSONOidAsString (study_p->st_id_p);
-											int64 num_plots = GetNumberOfPlotsInStudy (study_p, data_p);
+											OperationStatus stats_status = GenerateStatisticsForStudy (study_p, job_p, data_p);
 
-											fprintf (stats_f, "\"%s\" %s %" PRId64 "\n", study_p->st_name_s, id_s ? id_s : "_", num_plots);
-
-											if (id_s)
+											FILE *stats_f = fopen (stats_filename_s, "a");
+											if (stats_f)
 												{
-													FreeBSONOidString (id_s);
+													char *id_s = GetBSONOidAsString (study_p -> st_id_p);
+													int64 num_plots = GetNumberOfPlotsInStudy (study_p, data_p);
+
+													fprintf (stats_f, "\"%s\" %s %" PRId64 "\n", study_p -> st_name_s, id_s ? id_s : "_", num_plots);
+
+													if (id_s)
+														{
+															FreeBSONOidString (id_s);
+														}
+
+													fclose (stats_f);
 												}
 
-											fclose (stats_f);
-										}
 
+											if (stats_status == OS_SUCCEEDED)
+												{
+													PrintLog (STM_LEVEL_FINE, __FILE__, __LINE__, "GenerateStatisticsForStudy () succeeded for \"%s\"", study_p -> st_name_s);
 
-									if (stats_status == OS_SUCCEEDED)
-										{
-											++num_successes;
-										}
+													++num_successes;
+												}
+											else
+												{
+													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GenerateStatisticsForStudy () failed for \"%s\"", study_p -> st_name_s);
+												}
+
+											FreeStudy (study_p);
+										}		/* if (study_p) */
 									else
 										{
-											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GenerateStatisticsForStudy () failed for \"%s\"", study_p->st_name_s);
+											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetStudyByIdString () failed for \"%s\"", study_id_s);
 										}
 
-									FreeStudy (study_p);
-								}		/* if (study_p) */
-							else
-								{
-									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, study_json_p, "GetStudyFromJSON () failed");
-								}
+								}		/* if (study_id_s) */
 
-						}		/* json_array_foreach (all_studies_p, i, study_json_p) */
+
+						}		/* json_array_foreach (study_ids_p, i, study_id_p) */
 
 
 					FreeCopiedString (stats_filename_s);
@@ -2626,7 +2641,7 @@ OperationStatus GenerateStatisticsForAllStudies (ServiceJob *job_p,  FieldTrialS
 					status = OS_PARTIALLY_SUCCEEDED;
 				}
 
-			json_decref (all_studies_p);
+			json_decref (study_ids_p);
 		}
 
 
@@ -3322,6 +3337,8 @@ OperationStatus CalculateStudyStatistics (Study *study_p, const FieldTrialServic
 					spd.spd_study_p = study_p;
 					spd.spd_stats_tool_p = stats_tool_p;
 
+					ClearLinkedList (study_p -> st_phenotypes_p);
+
 					status = ProcessDistinctValues (study_p -> st_id_p, key_s, ProcessStudyPhenotype, &spd, service_data_p);
 
 					FreeCopiedString (key_s);
@@ -3523,6 +3540,65 @@ json_t *GetStudyMaterialCounts (const Study * const study_p, const FieldTrialSer
 }
 
 
+json_t *GetAllStudyIdsHavingObservations (const FieldTrialServiceData *data_p)
+{
+	json_t *results_p = NULL;
+	char *key_s = ConcatenateVarargsStrings (PL_ROWS_S, ".", SR_OBSERVATIONS_S, ".", OB_PHENOTYPE_ID_S, NULL);
+
+	if (key_s)
+		{
+			bson_t query = BSON_INITIALIZER;
+			bson_t sub_query;
+
+			if (BSON_APPEND_DOCUMENT_BEGIN (&query, key_s, &sub_query))
+				{
+					if (BSON_APPEND_UTF8 (&sub_query, "$exists", "1"))
+						{
+							if (bson_append_document_end (&query, &sub_query))
+								{
+									json_t *temp_p = NULL;
+									MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
+
+									if (mongo_p)
+										{
+											OperationStatus status = DistinctMatchingMongoDocumentsByBSON (mongo_p, data_p -> dftsd_database_s, data_p -> dftsd_collection_ss [DFTD_PLOT], PL_PARENT_STUDY_S, &query, &temp_p);
+
+											char *query_s = bson_as_relaxed_extended_json (&query, NULL);
+											printf ("%s\n", query_s); // Prints: { "foo" : { "baz" : 1 } }
+											PrintLog (STM_LEVEL_FINE, __FILE__, __LINE__, "GetAllStudyIdsHavingObservations () query is \"%s\"", query_s);
+											bson_free (query_s);
+
+											if (status == OS_SUCCEEDED)
+												{
+													results_p = temp_p;
+												}
+
+											FreeMongoTool (mongo_p);
+										}		/* if (mongo_p) */
+									else
+										{
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
+										}
+
+								}
+						}
+				}
+
+			bson_destroy (&query);
+
+			FreeCopiedString (key_s);
+		}
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "ConcatenateVarargsStrings () failed for \"%s\", \".\", \"%s\", \".\", \"%s\"", PL_ROWS_S, SR_OBSERVATIONS_S,  OB_PHENOTYPE_ID_S);
+		}
+
+
+	return results_p;
+}
+
+
+
 json_t *GetAllStudyMaterialIds (const Study * const study_p, const FieldTrialServiceData *data_p)
 {
 	json_t *results_p = NULL;
@@ -3634,13 +3710,15 @@ static bool ProcessStudyPhenotype (const char *phenotype_oid_s, void *user_data_
 															 */
 															if (standard_row_p -> sr_observations_p -> ll_size > 0)
 																{
-																	Observation *obs_p = GetMatchingObservation (standard_row_p, phenotype_p, NULL);
+																	Observation *obs_p = GetMatchingObservation (standard_row_p, phenotype_p, NULL, false);
 
 																	if (obs_p)
 																		{
 																			if (obs_p -> ob_type == OT_NUMERIC)
 																				{
 																					NumericObservation *num_obs_p = (NumericObservation *) obs_p;
+																					const char *phenotype_s = GetMeasuredVariableName (phenotype_p);
+
 																					double d;
 																					bool value_flag = true;
 
@@ -3662,7 +3740,6 @@ static bool ProcessStudyPhenotype (const char *phenotype_oid_s, void *user_data_
 																							if (!AddStatisticsValue (stats_tool_p, d))
 																								{
 																									char *obs_id_s = GetBSONOidAsString (obs_p -> ob_id_p);
-																									const char *phenotype_s = GetMeasuredVariableName (phenotype_p);
 
 																									if (obs_id_s)
 																										{
@@ -3671,12 +3748,22 @@ static bool ProcessStudyPhenotype (const char *phenotype_oid_s, void *user_data_
 																										}
 																									else
 																										{
-																											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %lf for variable \"%s\"", d, phenotype_s);
+																											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add % for variable \"%s\"", d, phenotype_s);
 																										}
 																								}
 																						}
+																					else
+																						{
 
-																				}
+																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get value from row " UINT32_FMT " and observation \"%s\"", row_p -> ro_by_study_index, phenotype_s);
+																						}
+
+																				}		/* if (obs_p -> ob_type == OT_NUMERIC) */
+
+																		}		/* if (obs_p) */
+																	else
+																		{
+
 																		}
 																}
 

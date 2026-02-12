@@ -258,10 +258,10 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL bool SaveObservation (Observation *observation_p, 
  * @return <code>true</code> if the Observations match, <code>false</code> otherwise.
  * @ingroup field_trials_service
  */
-DFW_FIELD_TRIAL_SERVICE_LOCAL bool AreObservationsMatching (const Observation *observation_0_p, const Observation *observation_1_p);
+DFW_FIELD_TRIAL_SERVICE_LOCAL bool AreObservationsMatching (const Observation *observation_0_p, const Observation *observation_1_p, const bool include_metadata_flag);
 
 
-DFW_FIELD_TRIAL_SERVICE_LOCAL bool AreObservationsMatchingByParts (const Observation *observation_p, const MeasuredVariable *variable_p, const ObservationMetadata *metadta_p);
+DFW_FIELD_TRIAL_SERVICE_LOCAL bool AreObservationsMatchingByParts (const Observation *observation_p, const MeasuredVariable *variable_p, const ObservationMetadata *metadata_p, const bool include_metadata_flag);
 
 
 DFW_FIELD_TRIAL_SERVICE_API const char *GetObservationTypeAsString (const ObservationType obs_type);

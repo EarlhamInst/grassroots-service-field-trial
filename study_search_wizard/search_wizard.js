@@ -224,17 +224,20 @@ function SelectRow (table_row)
 function RemoveSelectedPhenotype (list_entry)
 {
 	let phenotypes_list = list_entry.parentElement;
-	
+	const selected_variable = list_entry.getAttribute ("data-var-name");
 	console.log ("list_entry " + list_entry);
 	console.log ("phenotypes_list " + phenotypes_list);
 
 	phenotypes_list.removeChild (list_entry);
 
-	const table_row = document.querySelector(`#phenotypes_tbody tr[data-var-name="${selected_variable}"]`);
-
-	if (table_row !== null)
+	if (selected_variable)
 		{
-			table_row.classList.remove ("selected");
+			const table_row = document.querySelector(`#phenotypes_tbody tr[data-var-name="${selected_variable}"]`);
+
+			if (table_row)
+				{
+					table_row.classList.remove ("selected");
+				}
 		}
 }
 
@@ -312,6 +315,8 @@ async function SearchStudies ()
 	 */
 	const phenotype_items = document.querySelectorAll ('#selected_phenotypes li');
 
+	let study_table_header = document.getElementById ("studies_results_table_header_row");
+
 	if (phenotype_items)
 		{
 			const final_index = phenotype_items.length - 1;
@@ -319,10 +324,12 @@ async function SearchStudies ()
 			
 			for (let i = 0; i <= final_index; ++ i) 
 				{
-					let var_name = phenotype_items.item (i).getAttribute ("data-var-name");
+					const var_name = phenotype_items.item (i).getAttribute ("data-var-name");
 					
 					if (var_name) 
 						{
+							const trait_description = phenotype_items.item (i).getAttribute ("title");
+							
 							if (added_entry)
 								{
 									phenotypes += ",";
@@ -334,7 +341,22 @@ async function SearchStudies ()
 								{
 									added_entry = true;
 								}
+								
+								
+							/* Add phenotype as table column header */
+							let th = document.createElement ("th");
+							
+							if (trait_description)
+								{
+									th.setAttribute ("title", trait_description);
+								}
+								
+							th.appendChild (document.createTextNode (var_name));					
+							th.setAttribute ("id", var_name);
+							study_table_header.appendChild (th);
+	
 						}
+						
 				}
 		}
 
@@ -360,7 +382,7 @@ async function SearchStudies ()
 										},
 										{
 											"param": "The level of data to get for matching Studies",
-											"current_value": "Names and Ids only",
+											"current_value": "Metadata",
 										}
 									]
 							}
@@ -411,6 +433,10 @@ function LoadStudySearchResults (response_json)
 	if (hits)
 		{
 			let table_body = "";
+			let table_header_row = document.getElementById ("studies_results_table_header_row");
+
+			console.log ("table_header " + table_header_row.innerHTML);
+
 			
 			for (let i in hits) 
 				{
@@ -424,13 +450,66 @@ function LoadStudySearchResults (response_json)
 							tr += " class=\"odd\"";
 						}
 				
-					const id = data._id ["$oid"];
 				
 					tr += ">" + 
-						"<td>" + data ["so:name"] + "</td>\n" +
-						"<td>" + "<a href=\"" + S_DJANGO_SERVER_URL + "/fieldtrial/study/" + id + "\" target=\"_blank\">" + id + "</a> </td>\n" +
-						"<tr>\n";
+						"<td> " + "<a href=\"" + S_DJANGO_SERVER_URL + "/fieldtrial/study/" + data._id ["$oid"] + "\" target=\"_blank\">" + data ["so:name"] + "</a> </td>\n" +
+						"<td> " + data ["so:name"] + " </td>\n";
 
+					
+					/* loop over the phenotypes */
+					for (let j = 0; j < table_header_row.cells.length; ++ j)
+						{
+							console.log ("index " + j + ": " + table_header_row.cells [j].innerHTML);
+							const phenotype_th = table_header_row.cells [j];
+							const phenotype_name = phenotype_th.getAttribute ("id");
+							
+							if (phenotype_name)
+								{
+									const study_phenotype = data.phenotypes [phenotype_name];
+									
+									if (study_phenotype)
+										{
+											tr += "\n<td> ";
+											
+											
+											const stats = study_phenotype.statistics;
+											
+											if (stats)
+												{
+													tr += " <ul>\n";
+													
+													let v = stats ["stato:0000150"];													
+													if (v)
+														{
+															tr += "<li>Min: " + v + "</li>\n";
+														}
+													
+													v = stats ["stato:0000401"];
+													if (v)
+														{
+															tr += "<li>Mean: " + v + "</li>\n";
+														}
+																											
+													v = stats ["stato:0000151"];
+													if (v)
+														{
+															tr += "<li>Max: " + v + "</li>\n";
+														}													
+														
+													tr += " </ul>\n";
+												}
+											
+											tr += " </td>\n";
+
+										}
+									
+								}
+							
+							
+						}
+					
+					tr +=	" <tr>\n";
+		
 					table_body += tr;
 				}
 
@@ -441,3 +520,10 @@ function LoadStudySearchResults (response_json)
 }
 
 
+
+function GetTableHeaderForCell (td)
+{
+	let tr = td;
+	
+
+}

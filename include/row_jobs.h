@@ -68,10 +68,10 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL json_t *GetRowAsFrictionlessData (const Row *row_p
 DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddRowFrictionlessDataDetails (const Row *row_p, json_t *row_fd_p, const FieldTrialServiceData *service_data_p, const char * const null_sequence_s);
 
 
-DFW_FIELD_TRIAL_SERVICE_LOCAL Observation *GetMatchingObservation (const StandardRow *row_p, const MeasuredVariable *variable_p, const ObservationMetadata *metadata_p);
+DFW_FIELD_TRIAL_SERVICE_LOCAL Observation *GetMatchingObservation (const StandardRow *row_p, const MeasuredVariable *variable_p, const ObservationMetadata *metadata_p, const bool include_metadata_flag);
 
 
-DFW_FIELD_TRIAL_SERVICE_LOCAL ObservationNode *GetMatchingObservationNode (const StandardRow *row_p, const MeasuredVariable *variable_p, const ObservationMetadata *metadata_p);
+DFW_FIELD_TRIAL_SERVICE_LOCAL ObservationNode *GetMatchingObservationNode (const StandardRow *row_p, const MeasuredVariable *variable_p, const ObservationMetadata *metadata_p, const bool include_metadata_flag);
 
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL void RemoveObservationNode (const StandardRow *row_p, ObservationNode *node_p);

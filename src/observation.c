@@ -909,13 +909,13 @@ bool SaveObservation (Observation *observation_p, const FieldTrialServiceData *d
 }
 
 
-bool AreObservationsMatching (const Observation *observation_0_p, const Observation *observation_1_p)
+bool AreObservationsMatching (const Observation *observation_0_p, const Observation *observation_1_p, const bool include_metadata_flag)
 {
-	return AreObservationsMatchingByParts (observation_0_p, observation_1_p -> ob_phenotype_p, observation_1_p -> ob_metadata_p);
+	return AreObservationsMatchingByParts (observation_0_p, observation_1_p -> ob_phenotype_p, observation_1_p -> ob_metadata_p, include_metadata_flag);
 }
 
 
-bool AreObservationsMatchingByParts (const Observation *observation_p, const MeasuredVariable *variable_p, const ObservationMetadata *metadata_p)
+bool AreObservationsMatchingByParts (const Observation *observation_p, const MeasuredVariable *variable_p, const ObservationMetadata *metadata_p, const bool include_metadata_flag)
 {
 	bool match_flag = false;
 
@@ -923,20 +923,26 @@ bool AreObservationsMatchingByParts (const Observation *observation_p, const Mea
 		{
 			int res = 0;
 
-			if (metadata_p)
+			if (include_metadata_flag)
 				{
-					res = CompareObservationMetadata (observation_p -> ob_metadata_p, metadata_p);
-
-					if (res == 0)
+					if (metadata_p)
 						{
-							if (observation_p -> ob_index == metadata_p -> om_index)
+							res = CompareObservationMetadata (observation_p -> ob_metadata_p, metadata_p);
+
+							if (res == 0)
 								{
-									match_flag = true;
+									if (observation_p -> ob_index == metadata_p -> om_index)
+										{
+											match_flag = true;
+										}
 								}
+
 						}
-
 				}
-
+			else
+				{
+					match_flag = true;
+				}
 
 		}
 

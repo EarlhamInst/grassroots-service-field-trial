@@ -472,7 +472,7 @@ bool AddObservationToStandardRow (StandardRow *row_p, Observation *observation_p
 				{
 					success_flag = true;
 				}
-			else if (AreObservationsMatching (existing_observation_p, observation_p))
+			else if (AreObservationsMatching (existing_observation_p, observation_p, true))
 				{
 					node_p -> on_observation_p = observation_p;
 					FreeObservation (existing_observation_p);
