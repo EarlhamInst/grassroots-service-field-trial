@@ -1323,22 +1323,18 @@ bool RunForSearchStudyParams (FieldTrialServiceData *data_p, ParameterSet *param
 static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, ParameterSet *param_set_p, ServiceJob *job_p)
 {
 	bool job_done_flag = false;
-	const bool *search_flag_p = NULL;
-
 	const char *accession_s = NULL;
-	const char *phenotype_s = NULL;
+	const char *phenotypes_s = NULL;
 
 	GetCurrentStringParameterValueFromParameterSet (param_set_p, S_SEARCH_STUDIES_ACCESSIONS.npt_name_s, &accession_s);
-	GetCurrentStringParameterValueFromParameterSet (param_set_p, S_SEARCH_STUDIES_PHENOTYPES.npt_name_s, &phenotype_s);
+	GetCurrentStringParameterValueFromParameterSet (param_set_p, S_SEARCH_STUDIES_PHENOTYPES.npt_name_s, &phenotypes_s);
 
 
-
-	if ((!IsStringEmpty (accession_s)) || (!IsStringEmpty (phenotype_s)))
+	if ((!IsStringEmpty (accession_s)) || (!IsStringEmpty (phenotypes_s)))
 		{
 			ViewFormat format = VF_CLIENT_MINIMAL;
 
 			GetStudyLevelDetailParameterValue (param_set_p, &format);
-
 
 			/*
 			 * We're building up a query for the given parameters
@@ -1391,17 +1387,95 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 
 					if (built_query_success_flag)
 						{
-							if (!IsStringEmpty (phenotype_s))
+
+
+							if (!IsStringEmpty (phenotypes_s))
 								{
 									char *key_s = ConcatenateVarargsStrings (ST_PHENOTYPES_S, ".", "definition", ".", "so:name", NULL);
 
 									if (key_s)
 										{
-											if (!BSON_APPEND_UTF8 (query_p, key_s, phenotype_s))
+											LinkedList *phenotypes_p = ParseStringToStringLinkedList (phenotypes_s, ",", false);
+
+											if (phenotypes_p)
 												{
-													built_query_success_flag = false;
-													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_PHENOTYPES_S, phenotype_s);
-												}
+													StringListNode *node_p = (StringListNode *) (phenotypes_p -> ll_head_p);
+
+													if (phenotypes_p -> ll_size > 1)
+														{
+
+															bson_array_builder_t *bab_p;
+
+															if (BSON_APPEND_ARRAY_BUILDER_BEGIN (query_p, "$or", &bab_p))
+																{
+																	while (built_query_success_flag && node_p)
+																		{
+																			const char *phenotype_s = node_p -> sln_string_s;
+																			bson_t phenotype_query;
+
+																			bson_init (&phenotype_query);
+
+																			if (BSON_APPEND_UTF8 (&phenotype_query, key_s, phenotype_s))
+																				{
+																					PrintBSONToLog (STM_LEVEL_INFO, __FILE__, __LINE__, query_p, "query after adding \"%s\"", phenotype_s);
+
+																					if (bson_array_builder_append_document (bab_p, &phenotype_query))
+																						{
+																							PrintBSONToLog (STM_LEVEL_INFO, __FILE__, __LINE__, query_p, "query after adding \"%s\"", phenotype_s);
+																						}
+																					else
+																						{
+																							built_query_success_flag = false;
+																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_PHENOTYPES_S, phenotype_s);
+																						}
+
+																				}
+																			else
+																				{
+																					built_query_success_flag = false;
+																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_PHENOTYPES_S, phenotype_s);
+																				}
+
+																			if (built_query_success_flag)
+																				{
+																					node_p = (StringListNode *) (node_p -> sln_node.ln_next_p);
+						 														}
+
+																		}		/* while (built_query_success_flag && node_p) */
+
+																	if (!bson_append_array_builder_end (query_p, bab_p))
+																		{
+																			built_query_success_flag = false;
+																			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to end array");
+																		}
+
+																}		/* if (BSON_APPEND_ARRAY_BUILDER_BEGIN (query_p, "$or", &bab_p)) */
+															else
+																{
+																	built_query_success_flag = false;
+																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to begin array");
+																}
+
+														}		/* if (phenotypes_p -> ll_size > 1) */
+													else
+														{
+															const char *phenotype_s = node_p -> sln_string_s;
+
+															if (!BSON_APPEND_UTF8 (query_p, key_s, phenotype_s))
+																{
+																	built_query_success_flag = false;
+																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_PHENOTYPES_S, phenotype_s);
+																}
+															else
+																{
+																	PrintBSONToLog (STM_LEVEL_INFO, __FILE__, __LINE__, query_p, "query after adding \"%s\"", phenotype_s);
+																}
+														}
+
+													FreeLinkedList (phenotypes_p);
+												}		/* if (phenotypes_p) */
+
+
 
 											FreeCopiedString (key_s);
 										}
@@ -1429,6 +1503,7 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 
 						}		/* if (built_query_success_flag) */
 
+					bson_destroy (query_p);
 				}		/* if (query_p) */
 
 			job_done_flag = true;

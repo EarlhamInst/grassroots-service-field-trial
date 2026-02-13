@@ -4,85 +4,86 @@
 <head>
 	<title>Study Search</title>
 
-  <link rel="stylesheet" href="search_wizard.css">
-	<script src="search_wizard.js"></script>
+  <link rel="stylesheet" href="styles/search_wizard.css">
+	<script src="scripts/search_wizard.js"></script>
 </head>
 
 <body>
 
 <h1>Search Studies</h1>
 
-<section>
-	<div class="row">
-		<fieldset id="search_fieldset">
-			<legend>Search</legend>
+<section id="search_form">
 
-			<div class="narrow-column">
-				<form action="">
+	<form action="">
 
-					<div class="row">
+		<div class="row">
 
-						<div class="equal-column">
-							<label for="accession_text">Accession:</label>
-						</div>
-
-						<div class="equal-column">
-							<input type="text" id="accession_text" name="accession_text">						
-						</div>
-
-					</div>
-
-						
-					<div class="row">
-
-						<div class="equal-column">
-							<label for="phenotype_text">Phenotypes:</label>
-						</div>
-
-						<div class="equal-column">
-							<input type="text" id="phenotype_text" name="phenotype_text" onkeyup="KeywordSearchGrassroots (this.value, 'Measured Variable');">
-						</div>
-
-					</div>
+			<div class="equal_column">
+				<fieldset>
+					<legend>Phenotypes</legend>
+					<label for="phenotype_text">Search:</label>
+					<input type="text" id="phenotype_text" name="phenotype_text" onkeyup="KeywordSearchGrassroots (this.value, 'Measured Variable');">
 
 					<div id="loader"></div>
 
 					<h4>Selected Phenotypes</h4>
 					<ul id="selected_phenotypes">
 					</ul>
+				</fieldset>
 
-				</form> 
 			</div>
 
-			<button type="button" id="search_btn" onclick="SearchStudies ()">Find Matching Studies</button>
-
-		</fieldset>
-
-		<div class="wide-column">
-			<div id="table-wrapper">
-				<div id="table-scroll">
-					<table id="phenotypes_table">
-						<thead>
-							<th>Title</th>		
-							<th>Variable Name</th>		
-							<th>Trait Name</th>  
-							<th>Trait Description</th>
-						</thead>
-
-						<tbody id="phenotypes_tbody">
-
-						</tbody>
-
-					</table>
-				</div>
+			<div class="equal_column">
+				<fieldset>
+					<legend>Accession</legend>						
+					<label for="accession_text">Search:</label>
+					<input type="text" id="accession_text" name="accession_text">						
+				</fieldset>
 			</div>
+
 		</div>
-	</div>
+
+	</form> 
+		
+
+		<div style></div>
+			<button type="button" id="search_btn" onclick="SearchStudies ()"><img src="images/list_search" /> Search </button>
+		</div>
+	
 
 </section>
 
 
+
+<dialog id="phenotypes_dialog">
+<!--	<span style="background-color: red; width: 100%; display:block; position:absolute;">
+		<image src="images/cancel" class="close_button" style="position: absolute" onclick="document.getElementById('phenotypes_dialog').close ()"></image>
+	</span>
+-->
+	<div id="table_wrapper">
+		<div id="table_scroll">
+			<table id="phenotypes_table">
+				<thead>
+					<th>
+						<image src="images/cancel" class="close_button" onclick="document.getElementById('phenotypes_dialog').close ()"></image>
+						Title</th>		
+					<th>Variable Name</th>		
+					<th>Trait Name</th>  
+					<th>Trait Description</th>
+				</thead>
+
+				<tbody id="phenotypes_tbody">
+
+				</tbody>
+
+			</table>
+		</div>
+	</div>
+</dialog>
+
 <section>
+
+	<h3>Matching Studies</h3>
 
 	<table id="studies_results_table">
 		<thead id="studies_results_thead">
