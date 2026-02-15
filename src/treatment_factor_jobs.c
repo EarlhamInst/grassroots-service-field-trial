@@ -568,8 +568,9 @@ static bool AddStringArraysToJSON (json_t *treatment_factor_json_p, const char *
 			if (array_p)
 				{
 					success_flag = true;
+					size_t i = 0;
 
-					while ((*values_ss) && success_flag)
+					while ((i < num_values) && success_flag)
 						{
 							json_t *str_p = json_string (*values_ss);
 
@@ -578,6 +579,7 @@ static bool AddStringArraysToJSON (json_t *treatment_factor_json_p, const char *
 									if (json_array_append_new (array_p, str_p) == 0)
 										{
 											++ values_ss;
+											++ i;
 										}
 									else
 										{
