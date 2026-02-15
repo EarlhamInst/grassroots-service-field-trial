@@ -39,7 +39,7 @@ static const char * const S_EMPTY_LIST_OPTION_S = "<empty>";
 
 static json_t *GetTableParameterHints (void);
 
-static bool AddStringArraysToJSON (json_t *treatment_factor_json_p, const char *key_s, char **values_ss);
+static bool AddStringArraysToJSON (json_t *treatment_factor_json_p, const char *key_s, char **values_ss, const size_t num_values);
 
 
 
@@ -468,13 +468,16 @@ json_t *GetTreatmentFactorAsFrictionlessData (const TreatmentFactor *treatment_f
 
 													if (SetJSONString (treatment_fd_p, FD_DESCRIPTION_S, value_s))
 														{
+															const Treatment * const treatment_p = treatment_factor_p -> tf_treatment_p;
+
 															KEY_S = "synonyms";
 
-															if (AddStringArraysToJSON (treatment_fd_p, KEY_S, treatment_factor_p -> tf_treatment_p -> tr_synonyms_ss))
+
+															if (AddStringArraysToJSON (treatment_fd_p, KEY_S, treatment_p -> tr_synonyms_ss, treatment_p -> tr_num_synonyms))
 																{
 																	KEY_S = "parents";
 
-																	if (AddStringArraysToJSON (treatment_fd_p, KEY_S, treatment_factor_p -> tf_treatment_p -> tr_parent_names_ss))
+																	if (AddStringArraysToJSON (treatment_fd_p, KEY_S, treatment_p -> tr_parent_names_ss, treatment_p -> tr_num_parents))
 																		{
 																			success_flag = true;
 
@@ -554,7 +557,7 @@ static json_t *GetTableParameterHints (void)
 }
 
 
-static bool AddStringArraysToJSON (json_t *treatment_factor_json_p, const char *key_s, char **values_ss)
+static bool AddStringArraysToJSON (json_t *treatment_factor_json_p, const char *key_s, char **values_ss, const size_t num_values)
 {
 	bool success_flag = false;
 
