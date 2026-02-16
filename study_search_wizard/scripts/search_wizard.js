@@ -22,6 +22,9 @@ const S_GRASSROOTS_SERVER_URL = "http://localhost:2000/grassroots/"
 
 const S_DJANGO_SERVER_URL = "http://localhost:8000/"
 
+
+const S_BACKEND = "public_backend"
+
 /**
  * Ajax search services for searching Treatments and Measured Variables
  *
@@ -74,7 +77,7 @@ async function RealKeywordSearchGrassroots (query, facet_type)
 			document.getElementById("loader").style.visibility = "visible";
 			//document.getElementById("loader").innerHTML = "Loading...";
 
-			const response = await fetch (S_GRASSROOTS_SERVER_URL + "/private_backend", {
+			const response = await fetch (S_GRASSROOTS_SERVER_URL + "/" + S_BACKEND, {
 				method: "POST",
 				body: req_body,
 			});
@@ -450,7 +453,7 @@ async function SearchStudies ()
 			loader.style.visibility = "visible";
 		}
 		
-	const response = await fetch (S_GRASSROOTS_SERVER_URL + "/private_backend", {
+	const response = await fetch (S_GRASSROOTS_SERVER_URL + "/" + S_BACKEND, {
 		method: "POST",
 		body: req_body,
 	});

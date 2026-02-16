@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="description" content="" />
+    <meta name="author" content="" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>Grassroots</title>
+    
+
+
+   <!-- Analytics -->
+
+<script>
+// Define dataLayer and the gtag function.
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+
+// Set default consent to 'denied' as a placeholder
+// Determine actual values based on your own requirements
+gtag('consent', 'default', {
+  'ad_storage': 'denied',
+  'ad_user_data': 'denied',
+  'ad_personalization': 'denied',
+  'analytics_storage': 'denied'
+});
+</script>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-9RQFH7EWX4">
+</script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+
+  gtag('js', new Date());
+  gtag('config', 'G-9RQFH7EWX4');
+</script>
+
+<!-- Create one update function for each consent parameter -->
+<script>
+  function consentGrantedAdStorage() {
+    gtag('consent', 'update', {
+      'ad_storage': 'granted'
+    });
+  }
+</script>
+
+
+<script>
+window.acceptrics = {};
+localStorage.setItem("__acceptrics_conf", JSON.stringify({"gcmAdvanced":"true","backgroundColor":"#000000","fontColor":"#ffffff","geoArea":"worldwide","accountNum":"svt373q5","useTranslation":"false"})); document.addEventListener("__acceptrics_loaded", () =>{window.acceptrics.initializeSettings();});
+</script>
+<script src="https://cdn.acceptrics.com?n=svt373q5"></script>
+
+
+
+    <!-- Core theme CSS freelancer (includes Bootstrap)-->
+    <link href="/static/fieldtrial/css/styles.css" rel="stylesheet"> 
+    <!-- font awesome -->
+    <link href="/static/fieldtrial/SCRIPTS/fontawesome-free-5.15.4-web/css/all.css" rel="stylesheet" type="text/css"/>
+    <!-- jQuery -->
+    <script type="text/javascript" src="/static/fieldtrial/SCRIPTS/jquery/jquery-3.7.1.min.js"></script>
+    <script type="text/javascript" src="/static/fieldtrial/SCRIPTS/jquery/jquery-ui.min.js"></script>
+    <!-- jQuery UI CSS -->
+    <link rel="stylesheet" href="/static/fieldtrial/SCRIPTS/jquery/jquery-ui.min.css" type="text/css"/>
+
+    <!-- **BOOTSTRAP 5.3.2** -->
+    <script src="/static/fieldtrial/SCRIPTS/bootstrap5.3.2/bootstrap.bundle.min.js"></script>     
+    <!-- Core theme JS  freelancer -->
+    <script src="/static/fieldtrial/js/scripts.js"></script> 
+    
+            
+    <!-- grassroots grassroots.css (modified) or site.css (original) -->
+    <link rel="stylesheet" href="/static/fieldtrial/site.css" type="text/css"/>
+    <!--<link href="https://grassroots.tools/css/site.css" rel="stylesheet">  -->
+    <link rel="stylesheet" href="/static/fieldtrial/overrides/style.css" type="text/css"/>
+    
+    <link rel="stylesheet" href="/css/site2.css" type="text/css"/>
+
+
+    <script type="text/javascript" src="/static/scripts/config.js"></script>
+
+
+  <link rel="stylesheet" href="styles/search_wizard.css">
+	<script src="scripts/search_wizard.js"></script>
+
+
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg bg-secondary text-uppercase fixed-top" id="mainNav">
+        <div class="container">
+            <a class="navbar-brand" href="/index.html" style="text-transform: none;">Grassroots Infrastructure</a>
+            <button class="navbar-toggler text-uppercase font-weight-bold bg-primary text-white rounded" type="button" data-bs-toggle="collapse" data-bs-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
+                Menu
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarResponsive">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item mx-0 mx-lg-1">
+                        <a class="nav-link py-3 px-0 px-lg-3 rounded" href="/services.html">Services</a>
+                    </li>
+                    <li class="nav-item mx-0 mx-lg-1">
+                        <a class="nav-link py-3 px-0 px-lg-3 rounded" target="_blank" href="https://grassroots.tools/documentation/">Docs</a>
+                    </li>
+                    <li class="nav-item mx-0 mx-lg-1">
+                        <a class="nav-link py-3 px-0 px-lg-3 rounded" target="_blank" href="https://opendata.earlham.ac.uk/">Data</a>
+                    </li>
+                    <li class="nav-item mx-0 mx-lg-1">
+                        <a class="nav-link py-3 px-0 px-lg-3 rounded" href="/about.html">About</a>
+                    </li>
+                    <li class="nav-item mx-0 mx-lg-1">
+                        <a class="nav-link py-3 px-0 px-lg-3 rounded" href="/dsw/">DSW</a>
+                    </li>
+                    <li class="nav-item mx-0 mx-lg-1">
+                        <a class="nav-link py-3 px-0 px-lg-3 rounded" href="/contact.html">Contact</a>
+                    </li>
+                </ul>
+                <img class="navbar-nav navbar-right" style="height:50px;margin-left:50px;"
+                src="/img/logo-white.png"/>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Page Content for new DSW -->
+
+
+<h1>Search Studies</h1>
+
+<section id="search_form">
+
+	<form action="">
+
+		<div class="row">
+
+			<div class="equal_column">
+				<fieldset class="search">
+					<legend>Phenotypes</legend>
+					<label for="phenotype_text">Search:</label>
+					<input type="text" id="phenotype_text" name="phenotype_text" onkeyup="KeywordSearchGrassroots (this.value, 'Measured Variable');">
+
+					<div id="loader"></div>
+
+					<p>Selected Phenotypes</p>
+					<ul id="selected_phenotypes">
+					</ul>
+				</fieldset>
+
+			</div>
+
+			<div class="equal_column">
+				<fieldset class="search">
+					<legend>Accession</legend>						
+					<label for="accession_text">Search:</label>
+					<input type="text" id="accession_text" name="accession_text">						
+				</fieldset>
+			</div>
+
+		</div>
+
+	</form> 
+		
+
+		<div style></div>
+			<button type="button" id="search_btn" onclick="SearchStudies ()"><img src="images/list_search" /> Search </button>
+		</div>
+	
+
+</section>
+
+
+
+<dialog id="phenotypes_dialog">
+<!--	<span style="background-color: red; width: 100%; display:block; position:absolute;">
+		<image src="images/cancel" class="close_button" style="position: absolute" onclick="document.getElementById('phenotypes_dialog').close ()"></image>
+	</span>
+-->
+	<div id="table_wrapper">
+		<div id="table_scroll">
+			<table id="phenotypes_table">
+				<thead>
+					<th>
+						<image src="images/cancel" class="close_button" onclick="document.getElementById('phenotypes_dialog').close ()"></image>
+						Title</th>		
+					<th>Variable Name</th>		
+					<th>Trait Name</th>  
+					<th>Trait Description</th>
+				</thead>
+
+				<tbody id="phenotypes_tbody">
+
+				</tbody>
+
+			</table>
+		</div>
+	</div>
+</dialog>
+
+<section>
+
+	<h3>Matching Studies</h3>
+
+	<table id="studies_results_table">
+		<thead id="studies_results_thead">
+			<tr id="studies_results_table_header_row">
+				<th>Name</th>		
+				<th>Description</th>		
+			</tr>
+		</thead>
+
+		<tbody id="studies_tbody">
+
+		</tbody>
+
+
+	</table>
+
+</section>
+
+  <!--footer-->
+<footer class="text-center">
+    <div class="footer-above">
+        <div class="container">
+            <div class="row">
+                <div class="footer-col col-md-12" style="text-align: left !important;">
+                    <h5 style="text-align: center;">Funding</h5>
+                    <p style="text-align: justify; font-size: 1.12em;">ACKNOWLEDGEMENT: This resource is fully open source and we encourage anyone who would benefits from it to use it. We request that users if publish their research that benefitted from this resource acknowledge the funding that enabled us to develop this resource. The Grassroots platform was developed with the support of the Biotechnology and Biological Sciences Research Council (BBSRC), 
+                        part of UK Research and Innovation; this research was funded by the BBSRC 
+                        Designing Future Wheat grant BB/P016855/1 and its constituent work packages(BBS/E/T/000PR9783 
+                        (DFW WP4 Data Access and Analysis) BBS/E/T/000PR9784 (DFW WP2 Added value and resilience) BBS/E/T/000PR9785 (DFW WP1 Increased efficiency and sustainability), 
+                        Cross Institute Strategic Programme Grant Delivering Sustainable Wheat BBX011003/1 and its 
+                        constituent work packages BBS/E/ER/230003A (DSW WP1 Targeted Sustainability-Trait Discovery),
+                         BBS/E/ER/230003B (DSW WP2 Delivering Resilience to Biotic Stress), 
+                         BBS/E/ER/230003C (DSW WP4 Sustainable Data Frameworks for Wheat) and 
+                         Core Capability Grants BB/CCG1720/1 and BB/CCG2220/1 and the work delivered via the
+                          BBSRC National Capability in e‐Infrastructure (BBS/E/T/000PR9814) 
+                        at the Earlham Institute by members of the e‐Infrastructure group.</p>
+                </div>
+            </div>
+
+
+
+            <!-- First Row for Earlham Institute and Project Code -->
+            <div class="row">
+                <div class="footer-col col-md-6" style="text-align: left !important;">
+                    <h5>Earlham Institute</h5>
+                    <p>Norwich Research Park<br/>
+                        Norwich<br/>
+                        NR4 7UZ<br/>
+                        UK</p>
+                </div>
+                <div class="footer-col col-md-6">
+                    <h5>Project Code</h5>
+                    <p>The project is fully open source and the source code is available on <a
+                            href="https://github.com/TGAC?q=grassroots" target="_blank">GitHub</a>. If you are using Grassroots in your research and publishing, please acknowledge us per acknowledgement section above.</p>
+                    <ul class="list-inline">
+                        <li class="list-inline-item">
+                            <a class="btn-social btn-outline" href="https://github.com/TGAC?q=grassroots"
+                               target="_blank">
+                                <i class="fab fa-fw fa-github"></i>
+                            </a>
+                        </li>
+                        <!-- Example of additional social media. Uncomment and modify as needed.
+                        <li class="list-inline-item">
+                            <a class="btn-social btn-outline" href="#">
+                                <i class="fa fa-fw fa-twitter"></i>
+                            </a>
+                        </li>
+                        -->
+                    </ul>
+                </div>
+            </div>
+
+<div class="row">
+<div class="col-lg-12">
+<ul class="footer_menu">
+<li>
+<a href="/terms.html">Terms of Use</a>
+</li>
+
+<li>
+<a href="/privacy.html">Privacy</a>
+</li>
+
+</ul>
+</div>
+
+</div>
+        </div>
+    </div>
+    <div class="footer-below">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-12">
+                    &copy; 2017 - 2025 Brought to you by <a href="http://www.earlham.ac.uk/" target="_blank">Earlham
+                    Institute</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+    <!-- Additional scripts if any -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Define the extra string to add to the base URL
+        const extraString = "test"; // BETA or TEST
+
+        // Get all the navigation links in the navbar
+        const navLinks = document.querySelectorAll('#mainNav .nav-link');
+
+        // Iterate over each link and update the href attribute
+        navLinks.forEach(link => {
+            const href = link.getAttribute('href');
+            // Check if the href is a relative URL
+            if (href && !href.startsWith('http')) {
+                ///link.setAttribute('href', `/${extraString}/${href}`);
+            }
+        });
+    });
+
+		document.getElementById ("phenotype_text").addEventListener ("keypress", KeywordSearchGrassrootsHandler);
+
+		</script>
+
+
+
+   </script>
+        
+</body>
+</html>
