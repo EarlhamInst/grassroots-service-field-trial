@@ -25,6 +25,11 @@ const S_DJANGO_SERVER_URL = "http://localhost:8000/"
 
 const S_BACKEND = "public_backend"
 
+
+const S_PHENOTYPE_HEADER = "data-phenotype";
+
+
+
 /**
  * Ajax search services for searching Treatments and Measured Variables
  *
@@ -117,7 +122,7 @@ function GetHitsFromJSON (response_json)
 				{
 					if (results.length == 1) 
 						{
-							hits = results[0].results;
+							hits = results [0].results;
 						}
 				}
 		}
@@ -125,6 +130,8 @@ function GetHitsFromJSON (response_json)
 	return hits;
 }
 
+
+const S_SCALE_CLASS_DATA_KEY = "data-scale-class"; 
 
 function LoadKeywordSearchResults (response_json) 
 {
@@ -139,6 +146,8 @@ function LoadKeywordSearchResults (response_json)
 					const hit = hits [i];
 					const data = hit.data;
 				
+					console.log ("hit [" + i + "]: " + JSON.stringify (hit));
+				
 					let tr = "<tr onclick=\"SelectRow (this)\"";
 
 					if (i % 2 == 1) 
@@ -146,8 +155,14 @@ function LoadKeywordSearchResults (response_json)
 							tr += " class=\"odd\"";
 						}
 				
-					tr += " data-var-name=\"data.variable [\"so:name\"]\">" + 
-						"<td>" + data ["so:name"] + "</td>\n" +
+						tr += " data-var-name=\"" + data.variable ["so:name"]+ "\"";
+						
+						if (data.scale ["so:name"])
+							{
+								tr += " " + S_SCALE_CLASS_DATA_KEY + "=\"" + data.scale ["so:name"] + "\"";
+							}
+							
+						tr += ">\n<td>" + data ["so:name"] + "</td>\n" +
 						"<td>" + data.variable ["so:name"] + "</td>\n" +
 						"<td>" + data.trait ["so:name"] + "</td>\n" +
 						"<td>" + data.trait ["so:description"] + "</td>\n";
@@ -173,6 +188,10 @@ function LoadKeywordSearchResults (response_json)
 }
 
 
+
+/**
+ * Add a given Phenotype to the list of selected ones
+ */
 function SelectRow (table_row) 
 {
 //	console.log ("selected table_row: ");
@@ -189,10 +208,16 @@ function SelectRow (table_row)
 
 	let phenotypes_list = document.getElementById ("selected_phenotypes");
 
+	let scale_class = table_row.getAttribute (S_SCALE_CLASS_DATA_KEY)
+
 	console.log ("var name: " + selected_variable);
 
-	const var_li = document.querySelector(`#selected_phenotypes li[data-var-name="${selected_variable}"]`);
+	console.log ("scale_class: " + scale_class);
 
+	/* 
+	 * Check to see if the phenotype is already on the list 
+	 */
+	const var_li = document.querySelector(`#selected_phenotypes li[data-var-name="${selected_variable}"]`);
 	if (var_li !== null) 
 		{	
 			console.log (selected_variable + " is already on list");
@@ -201,9 +226,6 @@ function SelectRow (table_row)
 		{
 			let phenotype_entry = document.createElement ("li");
 
-			phenotype_entry.setAttribute ("title", trait_description);
-			phenotype_entry.setAttribute ("data-var-name", selected_variable);
-			
 			/*
 				Create the delete button
 			*/
@@ -211,13 +233,33 @@ function SelectRow (table_row)
 			remove_button.type = "image"
 			remove_button.setAttribute ("src", "/grassroots/images/aiss/delete");
 			
+			let v = RemoveTags (selected_variable);
 			remove_button.setAttribute ("onclick", "RemoveSelectedPhenotype (this.parentElement)");
-			remove_button.setAttribute ("title", "Remove " + selected_variable + " from selected phenotypes");
+			remove_button.setAttribute ("title", "Remove " + v + " from selected phenotypes");
 
-
-		//	remove_button.innerHTML = "delete";
 			phenotype_entry.appendChild (remove_button);
-			phenotype_entry.appendChild (document.createTextNode (selected_variable));
+
+			phenotype_entry.setAttribute ("title", RemoveTags (trait_description));
+			phenotype_entry.setAttribute ("data-var-name", v);
+
+			phenotype_entry.appendChild (document.createTextNode (v));
+
+
+			if (scale_class)
+				{
+					/* Add the min and max boxes so the user can specify the range of values */
+					
+					let limits = document.createElement ("span");
+
+					limits.setAttribute ("class", "limits");
+					
+					phenotype_entry.appendChild (limits);
+					
+					AddNumericInput (limits, v, "Min: ", "-min");
+					AddNumericInput (limits, v, "Max: ", "-max");
+				}
+
+	
 			phenotypes_list.appendChild (phenotype_entry);
 		}
 
@@ -233,6 +275,28 @@ function SelectRow (table_row)
 		}
 }
 
+
+function AddNumericInput (parent_element, input_id, label_text, id_suffix)
+{
+	let box = document.createElement ("input");
+	const box_id = input_id + id_suffix;
+	
+	box.setAttribute ("id", box_id);
+	box.setAttribute ("name", box_id);
+	box.setAttribute ("type", "text");
+	box.setAttribute ("inputmode", "numeric");
+	box.setAttribute ("pattern", "/[\d]*[\.]*[\d]+/");	
+	
+	
+	let l = document.createElement ("label");
+	l.setAttribute ("for", box_id);
+	l.appendChild (document.createTextNode (label_text));
+	
+	parent_element.appendChild (l);
+	parent_element.appendChild (box);
+	
+	return box
+}
 
 function RemoveSelectedPhenotype (list_entry)
 {
@@ -306,7 +370,6 @@ function KeywordSearchGrassrootsHandler (event)
 }
 
 
-const phenotype_header = "data-phenotype";
 
 
 async function SearchStudies ()
@@ -340,7 +403,7 @@ async function SearchStudies ()
 	
 	for ( ; i >= 0; -- i)
 		{
-			if (first_row.item (i).getAttribute (phenotype_header))
+			if (first_row.item (i).getAttribute (S_PHENOTYPE_HEADER))
 				{
 					let j = study_table_rows.length - 1;
 					
@@ -355,7 +418,7 @@ async function SearchStudies ()
 		}
 	*/
 	
-	let cells = document.querySelectorAll ("#studies_results_table_header_row th[" + phenotype_header + "], #studies_results_table_header_row td[" + phenotype_header + "]");
+	let cells = document.querySelectorAll ("#studies_results_table_header_row th[" + S_PHENOTYPE_HEADER + "], #studies_results_table_header_row td[" + S_PHENOTYPE_HEADER + "]");
 	cells.forEach (function (cell) {
 		cell.remove ();
 	});
@@ -378,6 +441,9 @@ async function SearchStudies ()
 						{
 							console.log (i + ": adding " + var_name);
 
+							
+							
+							
 							
 							const trait_description = phenotype_items.item (i).getAttribute ("title");
 							
@@ -404,7 +470,7 @@ async function SearchStudies ()
 								
 							th.appendChild (document.createTextNode (var_name));					
 							th.setAttribute ("id", var_name);
-							th.setAttribute (phenotype_header, phenotype_header);
+							th.setAttribute (S_PHENOTYPE_HEADER, S_PHENOTYPE_HEADER);
 							thead.appendChild (th);
 	
 						}
@@ -521,7 +587,7 @@ function LoadStudySearchResults (response_json)
 									
 									if (study_phenotype)
 										{
-											tr += "\n<td " + phenotype_header + "=\"" + phenotype_header + "\"> ";
+											tr += "\n<td " + S_PHENOTYPE_HEADER + "=\"" + S_PHENOTYPE_HEADER + "\"> ";
 																						
 											const stats = study_phenotype.statistics;
 											
@@ -573,6 +639,16 @@ function LoadStudySearchResults (response_json)
 
 }
 
+
+/**
+ * Janghou's answer on how to strip html from https://stackoverflow.com/a/17980070
+ */
+function RemoveTags (html_source)
+{
+   var tmp = document.implementation.createHTMLDocument ("New").body;
+   tmp.innerHTML = html_source;
+   return tmp.textContent || tmp.innerText || "";
+}
 
 
 function GetTableHeaderForCell (td)
