@@ -29,6 +29,10 @@ const S_BACKEND = "public_backend"
 const S_PHENOTYPE_HEADER = "data-phenotype";
 
 
+const S_MIN_PHENOTYPE_SUFFIX = "-min";
+
+const S_MAX_PHENOTYPE_SUFFIX = "-max";
+
 
 /**
  * Ajax search services for searching Treatments and Measured Variables
@@ -255,8 +259,8 @@ function SelectRow (table_row)
 					
 					phenotype_entry.appendChild (limits);
 					
-					AddNumericInput (limits, v, "Min: ", "-min");
-					AddNumericInput (limits, v, "Max: ", "-max");
+					AddNumericInput (limits, v, "Min: ", S_MIN_PHENOTYPE_SUFFIX);
+					AddNumericInput (limits, v, "Max: ", S_MAX_PHENOTYPE_SUFFIX);
 				}
 
 	
@@ -378,7 +382,19 @@ async function SearchStudies ()
 
 
 	let accessions = "";
-	let phenotypes = "";
+
+	/** 
+	 * phenotypes is a json array where each object 
+	 * is of the form 
+	 * { 
+	 *.  "name": phnotype_variable_name,
+	 *   "min": min_value,
+	 *   "max": max_value
+	 *. }
+	 * 
+	 * where name is required and min and max are optional.
+   */	
+	let phenotypes_json = [];
 	
 	/*
 	 * Get the accessions
@@ -439,30 +455,30 @@ async function SearchStudies ()
 					
 					if (var_name) 
 						{
+							let min_limit = null;
+							let max_limit = null;
+							
 							console.log (i + ": adding " + var_name);
 
 							
-							
-							
-							
-							const trait_description = phenotype_items.item (i).getAttribute ("title");
-							
-							if (added_entry)
+							el = document.getElementById (var_name + S_MIN_PHENOTYPE_SUFFIX);
+							if (el)
 								{
-									phenotypes += ",";
+									min_limit = el.value;
 								}
 
-							phenotypes += var_name;
-							
-							if (!added_entry)
+							el = document.getElementById (var_name + S_MAX_PHENOTYPE_SUFFIX);
+							if (el)
 								{
-									added_entry = true;
+									max_limit = el.value;
 								}
-								
+							
+							AddPhenotype (phenotypes_json, var_name, min_limit, max_limit);
 								
 							/* Add phenotype as table column header */
 							let th = document.createElement ("th");
 							
+							const trait_description = phenotype_items.item (i).getAttribute ("title");
 							if (trait_description)
 								{
 									th.setAttribute ("title", trait_description);
@@ -496,7 +512,7 @@ async function SearchStudies ()
 										},
 										{
 											"param": "ST Search Study Phenotypes",
-											"current_value": phenotypes,
+											"current_value": phenotypes_json,
 										},
 										{
 											"param": "The level of data to get for matching Studies",
@@ -544,6 +560,29 @@ async function SearchStudies ()
 }
 
 
+/**
+  * Add a phenotype to the phenotypes json array 
+ */
+function AddPhenotype (phenotypes_json, variable_name, min_value, max_value)
+{
+	let phenotype_json = {};
+	
+	phenotype_json ["name"] = variable_name;
+	
+	if (min_value)
+		{
+			phenotype_json ["min"] = min_value;		
+		}
+
+	if (max_value)
+		{
+			phenotype_json ["max"] = max_value;		
+		}
+
+		phenotypes_json.push (phenotype_json);
+}
+
+
 function LoadStudySearchResults (response_json) 
 {
 	const hits = GetHitsFromJSON (response_json);
@@ -585,10 +624,10 @@ function LoadStudySearchResults (response_json)
 								{
 									const study_phenotype = data.phenotypes [phenotype_name];
 									
+									tr += "\n<td " + S_PHENOTYPE_HEADER + "=\"" + S_PHENOTYPE_HEADER + "\"> ";
+									
 									if (study_phenotype)
 										{
-											tr += "\n<td " + S_PHENOTYPE_HEADER + "=\"" + S_PHENOTYPE_HEADER + "\"> ";
-																						
 											const stats = study_phenotype.statistics;
 											
 											if (stats)
@@ -617,11 +656,12 @@ function LoadStudySearchResults (response_json)
 														}													
 														
 													tr += " </ul>\n";
-												}
-											
-											tr += " </td>\n";
-
+												}								
+			
 										}
+				
+									tr += " </td>\n";
+				
 									
 								}
 							

@@ -78,8 +78,8 @@ static NamedParameterType S_SEARCH_TRIAL_ID = { "Get all studies for this Field 
 static NamedParameterType S_SEARCH_STUDY_HAS_PLOTS = { "Study must have plot data", PT_BOOLEAN };
 
 
-static NamedParameterType S_SEARCH_STUDIES_ACCESSIONS STUDY_JOB_STRUCT_VAL("ST Search Study Accessions", PT_STRING);
-static NamedParameterType S_SEARCH_STUDIES_PHENOTYPES STUDY_JOB_STRUCT_VAL("ST Search Study Phenotypes", PT_STRING);
+static NamedParameterType S_SEARCH_STUDIES_ACCESSIONS STUDY_JOB_STRUCT_VAL ("ST Search Study Accessions", PT_STRING);
+static NamedParameterType S_SEARCH_STUDIES_PHENOTYPES STUDY_JOB_STRUCT_VAL ("ST Search Study Phenotypes", PT_JSON);
 
 
 
@@ -1099,7 +1099,7 @@ bool AddSearchStudyParams (ServiceData *data_p, ParameterSet *param_set_p)
 																		{
 																			if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, param_set_p, group_p, S_SEARCH_STUDIES_ACCESSIONS.npt_type, S_SEARCH_STUDIES_ACCESSIONS.npt_name_s, "Accessions", "Search for Studies containing these accessions", NULL, PL_WIZARD)) != NULL)
 																				{
-																					if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, param_set_p, group_p, S_SEARCH_STUDIES_PHENOTYPES.npt_type, S_SEARCH_STUDIES_PHENOTYPES.npt_name_s, "Phenotypes", "Search for Studies containing these phenotypes", NULL, PL_WIZARD)) != NULL)
+																					if ((param_p = EasyCreateAndAddJSONParameterToParameterSet (data_p, param_set_p, group_p, S_SEARCH_STUDIES_PHENOTYPES.npt_type, S_SEARCH_STUDIES_PHENOTYPES.npt_name_s, "Phenotypes", "Search for Studies containing these phenotypes", NULL, PL_WIZARD)) != NULL)
 																						{
 																							success_flag = true;
 																						}
@@ -1324,13 +1324,12 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 {
 	bool job_done_flag = false;
 	const char *accession_s = NULL;
-	const char *phenotypes_s = NULL;
+	const json_t *phenotypes_p = NULL;
 
 	GetCurrentStringParameterValueFromParameterSet (param_set_p, S_SEARCH_STUDIES_ACCESSIONS.npt_name_s, &accession_s);
-	GetCurrentStringParameterValueFromParameterSet (param_set_p, S_SEARCH_STUDIES_PHENOTYPES.npt_name_s, &phenotypes_s);
+	GetCurrentJSONParameterValueFromParameterSet (param_set_p, S_SEARCH_STUDIES_PHENOTYPES.npt_name_s, &phenotypes_p);
 
-
-	if ((!IsStringEmpty (accession_s)) || (!IsStringEmpty (phenotypes_s)))
+	if ((!IsStringEmpty (accession_s)) || (phenotypes_p != NULL))
 		{
 			ViewFormat format = VF_CLIENT_MINIMAL;
 
@@ -1389,35 +1388,55 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 						{
 
 
-							if (!IsStringEmpty (phenotypes_s))
+							if (phenotypes_p)
 								{
 									char *key_s = ConcatenateVarargsStrings (ST_PHENOTYPES_S, ".", "definition", ".", "so:name", NULL);
 
 									if (key_s)
 										{
-											LinkedList *phenotypes_p = ParseStringToStringLinkedList (phenotypes_s, ",", false);
+											const size_t num_phenotypes = json_array_size (phenotypes_p);
+											const char * const name_key_s = "name";
+											const char * const min_key_s = "min";
+											const char * const max_key_s = "max";
 
-											if (phenotypes_p)
+											if (num_phenotypes > 1)
 												{
-													StringListNode *node_p = (StringListNode *) (phenotypes_p -> ll_head_p);
+													bson_array_builder_t *bab_p;
 
-													if (phenotypes_p -> ll_size > 1)
+													if (BSON_APPEND_ARRAY_BUILDER_BEGIN (query_p, "$or", &bab_p))
 														{
+															size_t i = 0;
 
-															bson_array_builder_t *bab_p;
-
-															if (BSON_APPEND_ARRAY_BUILDER_BEGIN (query_p, "$or", &bab_p))
+															while (built_query_success_flag && (i < num_phenotypes))
 																{
-																	while (built_query_success_flag && node_p)
+																	const json_t *phenotype_p = json_array_get (phenotypes_p, i);
+																	const char *phenotype_s = GetJSONString (phenotype_p, name_key_s);
+
+																	if (phenotype_s)
 																		{
-																			const char *phenotype_s = node_p -> sln_string_s;
 																			bson_t phenotype_query;
 
 																			bson_init (&phenotype_query);
 
 																			if (BSON_APPEND_UTF8 (&phenotype_query, key_s, phenotype_s))
 																				{
+																					double value = 0.0;
+
+																					if (GetJSONReal (phenotype_p, min_key_s, &value))
+																						{
+
+																						}		/* if (GetJSONReal (phenotype_p, "min", &value)) */
+
+
+																					if (GetJSONReal (phenotype_p, max_key_s, &value))
+																						{
+
+																						}		/* if (GetJSONReal (phenotype_p, "max", &value)) */
+
+
 																					PrintBSONToLog (STM_LEVEL_INFO, __FILE__, __LINE__, query_p, "query after adding \"%s\"", phenotype_s);
+
+
 
 																					if (bson_array_builder_append_document (bab_p, &phenotype_query))
 																						{
@@ -1438,28 +1457,34 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 
 																			if (built_query_success_flag)
 																				{
-																					node_p = (StringListNode *) (node_p -> sln_node.ln_next_p);
+																					++ i;
 						 														}
 
-																		}		/* while (built_query_success_flag && node_p) */
+																		}		/* if (phenotype_s) */
 
-																	if (!bson_append_array_builder_end (query_p, bab_p))
-																		{
-																			built_query_success_flag = false;
-																			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to end array");
-																		}
+																}		/* while (built_query_success_flag && node_p) */
 
-																}		/* if (BSON_APPEND_ARRAY_BUILDER_BEGIN (query_p, "$or", &bab_p)) */
-															else
+															if (!bson_append_array_builder_end (query_p, bab_p))
 																{
 																	built_query_success_flag = false;
-																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to begin array");
+																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to end array");
 																}
 
-														}		/* if (phenotypes_p -> ll_size > 1) */
+														}		/* if (BSON_APPEND_ARRAY_BUILDER_BEGIN (query_p, "$or", &bab_p)) */
 													else
 														{
-															const char *phenotype_s = node_p -> sln_string_s;
+															built_query_success_flag = false;
+															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to begin array");
+														}
+
+												}		/* if (num_phenotypes > 1) */
+											else if (num_phenotypes == 1)
+												{
+													const json_t *phenotype_p = json_array_get (phenotypes_p, 0);
+													const char *phenotype_s = GetJSONString (phenotype_p, name_key_s);
+
+													if (phenotype_s)
+														{
 
 															if (!BSON_APPEND_UTF8 (query_p, key_s, phenotype_s))
 																{
@@ -1472,10 +1497,7 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 																}
 														}
 
-													FreeLinkedList (phenotypes_p);
-												}		/* if (phenotypes_p) */
-
-
+												}
 
 											FreeCopiedString (key_s);
 										}
