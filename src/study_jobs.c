@@ -1393,7 +1393,9 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 
 							if (phenotypes_p)
 								{
-									char *phenotype_definition_key_s = ConcatenateVarargsStrings (ST_PHENOTYPES_S, ".", "definition", ".", "so:name", NULL);
+									/* For range matching queries we'll need the subkey */
+									const char * const definition_key_s = "definition.so:name";
+									char *phenotype_definition_key_s = ConcatenateVarargsStrings (ST_PHENOTYPES_S, ".", definition_key_s, NULL);
 
 									if (phenotype_definition_key_s)
 										{
@@ -1444,7 +1446,10 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 
 																					if (elem_match_p)
 																						{
-																							if (BSON_APPEND_UTF8 (elem_match_p, phenotype_definition_key_s, phenotype_s))
+																							/*
+																							 *
+																							 */
+																							if (BSON_APPEND_UTF8 (elem_match_p, definition_key_s, phenotype_s))
 																								{
 																									if (min_p)
 																										{
@@ -1456,12 +1461,8 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 																										{
 																											built_query_success_flag = BuildWizardSubQuery (elem_match_p, "statistics.stato:0000151", "$lte", *max_p);
 																										}
-																								}
 
-
-																							if (built_query_success_flag)
-																								{
-																									if (BSON_APPEND_UTF8 (elem_match_p, phenotype_definition_key_s, phenotype_s))
+																									if (built_query_success_flag)
 																										{
 																											bson_t *sub_query_p = bson_new ();
 
@@ -1500,22 +1501,24 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 
 																												}		/* if (sub_query_p) (*/
 
-																										}
-																									else
-																										{
-																											built_query_success_flag = false;
-																											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_PHENOTYPES_S, phenotype_s);
+
 																										}
 																								}
+																							else
+																								{
+																									built_query_success_flag = false;
+																									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_PHENOTYPES_S, phenotype_s);
+																								}
+
+																							PrintBSONToLog (STM_LEVEL_INFO, __FILE__, __LINE__, elem_match_p, "elem_match_p after adding \"%s\"", phenotype_s);
 
 
-																						}
 
 
-																					if (!built_query_success_flag)
-																						{
+																						}		/* if (elem_match_p) */
 
-																						}
+
+
 																				}
 																			else
 																				{
@@ -3631,7 +3634,7 @@ json_t *GetStudyMaterialCounts (const Study * const study_p, const FieldTrialSer
 
 							if (loop_flag)
 								{
-									char *key_s;
+									const char *key_s;
 									json_t *value_p;
 
 									json_object_foreach (cache_p, key_s, value_p)
