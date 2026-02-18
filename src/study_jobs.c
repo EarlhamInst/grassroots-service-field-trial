@@ -241,6 +241,9 @@ static bool RunForAdvancedSearchStudyParams (FieldTrialServiceData *data_p, Para
 static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, ParameterSet *param_set_p, ServiceJob *job_p);
 
 
+static bool BuildWizardSubQuery (bson_t *elem_match_p, const char * const statistics_key_s, const char * const comp_s, const double64 value);
+
+
 /*
  * API DEFINITIONS
  */
@@ -1390,9 +1393,9 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 
 							if (phenotypes_p)
 								{
-									char *key_s = ConcatenateVarargsStrings (ST_PHENOTYPES_S, ".", "definition", ".", "so:name", NULL);
+									char *phenotype_definition_key_s = ConcatenateVarargsStrings (ST_PHENOTYPES_S, ".", "definition", ".", "so:name", NULL);
 
-									if (key_s)
+									if (phenotype_definition_key_s)
 										{
 											const size_t num_phenotypes = json_array_size (phenotypes_p);
 											const char * const name_key_s = "name";
@@ -1415,23 +1418,118 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 																	if (phenotype_s)
 																		{
 																			bson_t phenotype_query;
+																			double64 min = 0.0;
+																			double64 *min_p = NULL;
+																			double64 max = 0.0;
+																			double64 *max_p = NULL;
 
 																			bson_init (&phenotype_query);
 
-																			if (BSON_APPEND_UTF8 (&phenotype_query, key_s, phenotype_s))
+																			if (GetJSONReal (phenotype_p, min_key_s, &min))
 																				{
-																					double value = 0.0;
+																					min_p = &min;
+																				}		/* if (GetJSONReal (phenotype_p, "min", &value)) */
 
-																					if (GetJSONReal (phenotype_p, min_key_s, &value))
+
+																			if (GetJSONReal (phenotype_p, max_key_s, &max))
+																				{
+																					max_p = &max;
+																				}		/* if (GetJSONReal (phenotype_p, "max", &value)) */
+
+
+
+																			if (min_p || max_p)
+																				{
+																					bson_t *elem_match_p = bson_new ();
+
+																					if (elem_match_p)
+																						{
+																							if (BSON_APPEND_UTF8 (elem_match_p, phenotype_definition_key_s, phenotype_s))
+																								{
+																									if (min_p)
+																										{
+																											built_query_success_flag = BuildWizardSubQuery (elem_match_p, "statistics.stato:0000150", "$gte", *min_p);
+																										}
+
+
+																									if (built_query_success_flag && max_p)
+																										{
+																											built_query_success_flag = BuildWizardSubQuery (elem_match_p, "statistics.stato:0000151", "$lte", *max_p);
+																										}
+																								}
+
+
+																							if (built_query_success_flag)
+																								{
+																									if (BSON_APPEND_UTF8 (elem_match_p, phenotype_definition_key_s, phenotype_s))
+																										{
+																											bson_t *sub_query_p = bson_new ();
+
+																											if (sub_query_p)
+																												{
+																													bool sub_query_added_flag = false;
+
+																													/**
+																													 * Attach the elemMatch
+																													 */
+																													if (BSON_APPEND_DOCUMENT (sub_query_p, "$elemMatch", elem_match_p))
+																														{
+																															/**
+																															 * Attach the elemMatch
+																															 */
+																															if (BSON_APPEND_DOCUMENT (&phenotype_query, ST_PHENOTYPES_S, sub_query_p))
+																																{
+																																	sub_query_added_flag = true;
+																																}
+																															else
+																																{
+																																	PrintBSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, sub_query_p, "Failed to add \"%s\":  to query", ST_PHENOTYPES_S, sub_query_p);
+																																}
+
+																														}
+																													else
+																														{
+																															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_PHENOTYPES_S, phenotype_s);
+																														}
+
+																													if (!sub_query_added_flag)
+																														{
+																															bson_destroy (sub_query_p);
+																															built_query_success_flag = false;
+																														}
+
+																												}		/* if (sub_query_p) (*/
+
+																										}
+																									else
+																										{
+																											built_query_success_flag = false;
+																											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_PHENOTYPES_S, phenotype_s);
+																										}
+																								}
+
+
+																						}
+
+
+																					if (!built_query_success_flag)
 																						{
 
-																						}		/* if (GetJSONReal (phenotype_p, "min", &value)) */
-
-
-																					if (GetJSONReal (phenotype_p, max_key_s, &value))
+																						}
+																				}
+																			else
+																				{
+																					if (!BSON_APPEND_UTF8 (&phenotype_query, phenotype_definition_key_s, phenotype_s))
 																						{
+																							built_query_success_flag = false;
+																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_PHENOTYPES_S, phenotype_s);
+																						}
 
-																						}		/* if (GetJSONReal (phenotype_p, "max", &value)) */
+																				}
+
+
+																			if (built_query_success_flag)
+																				{
 
 
 																					PrintBSONToLog (STM_LEVEL_INFO, __FILE__, __LINE__, query_p, "query after adding \"%s\"", phenotype_s);
@@ -1449,16 +1547,9 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 																						}
 
 																				}
-																			else
-																				{
-																					built_query_success_flag = false;
-																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_PHENOTYPES_S, phenotype_s);
-																				}
 
-																			if (built_query_success_flag)
-																				{
-																					++ i;
-						 														}
+
+																			++ i;
 
 																		}		/* if (phenotype_s) */
 
@@ -1486,7 +1577,7 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 													if (phenotype_s)
 														{
 
-															if (!BSON_APPEND_UTF8 (query_p, key_s, phenotype_s))
+															if (!BSON_APPEND_UTF8 (query_p, phenotype_definition_key_s, phenotype_s))
 																{
 																	built_query_success_flag = false;
 																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_PHENOTYPES_S, phenotype_s);
@@ -1499,7 +1590,7 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 
 												}
 
-											FreeCopiedString (key_s);
+											FreeCopiedString (phenotype_definition_key_s);
 										}
 									else
 										{
@@ -6542,6 +6633,33 @@ static OperationStatus ProcessMeasuredVariables (ServiceJob *job_p, ParameterSet
 		}
 
 	return status;
+}
+
+
+
+static bool BuildWizardSubQuery (bson_t *elem_match_p, const char * const statistics_key_s, const char * const comp_s, const double64 value)
+{
+	bson_t *clause_p = bson_new ();
+
+	if (clause_p)
+		{
+			if (BSON_APPEND_DOUBLE (clause_p, comp_s, value))
+				{
+					if (BSON_APPEND_DOCUMENT (elem_match_p, statistics_key_s, clause_p))
+						{
+							return true;
+						}
+					else
+						{
+							PrintBSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, elem_match_p, "Failed to get add \"%s\": { \"%s\": " DOUBLE64_FMT "}", statistics_key_s, comp_s, value);
+
+						}
+				}
+
+			bson_destroy (clause_p);
+		}		/* if (clause_p) */
+
+	return false;
 }
 
 
