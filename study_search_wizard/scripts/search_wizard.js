@@ -571,12 +571,12 @@ function AddPhenotype (phenotypes_json, variable_name, min_value, max_value)
 	
 	if (min_value)
 		{
-			phenotype_json ["min"] = min_value;		
+			phenotype_json ["min"] = Number (min_value);		
 		}
 
 	if (max_value)
 		{
-			phenotype_json ["max"] = max_value;		
+			phenotype_json ["max"] = Number (max_value);		
 		}
 
 		phenotypes_json.push (phenotype_json);

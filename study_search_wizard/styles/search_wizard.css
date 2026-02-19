@@ -116,6 +116,13 @@ ul li input
 }
 
 
+
+ul li input[type=text]
+{
+	width 10em;
+}
+
+
 .equal_column input
 {
   margin-left: 1.0em;

@@ -244,6 +244,8 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 static bool BuildWizardSubQuery (bson_t *elem_match_p, const char * const statistics_key_s, const char * const comp_s, const double64 value);
 
 
+static bool BuildWizardPhenotypeQuery (bson_t *phenotype_query_p, const json_t *phenotype_p);
+
 /*
  * API DEFINITIONS
  */
@@ -1389,216 +1391,66 @@ static bool RunForWizardSearchStudyParams (FieldTrialServiceData *data_p, Parame
 
 					if (built_query_success_flag)
 						{
-
-
 							if (phenotypes_p)
 								{
-									/* For range matching queries we'll need the subkey */
-									const char * const definition_key_s = "definition.so:name";
-									char *phenotype_definition_key_s = ConcatenateVarargsStrings (ST_PHENOTYPES_S, ".", definition_key_s, NULL);
+									const size_t num_phenotypes = json_array_size (phenotypes_p);
 
-									if (phenotype_definition_key_s)
+									if (num_phenotypes > 1)
 										{
-											const size_t num_phenotypes = json_array_size (phenotypes_p);
-											const char * const name_key_s = "name";
-											const char * const min_key_s = "min";
-											const char * const max_key_s = "max";
+											bson_array_builder_t *bab_p;
 
-											if (num_phenotypes > 1)
+											if (BSON_APPEND_ARRAY_BUILDER_BEGIN (query_p, "$or", &bab_p))
 												{
-													bson_array_builder_t *bab_p;
+													size_t i = 0;
 
-													if (BSON_APPEND_ARRAY_BUILDER_BEGIN (query_p, "$or", &bab_p))
+													while (built_query_success_flag && (i < num_phenotypes))
 														{
-															size_t i = 0;
+															bson_t phenotype_query;
+															const json_t *phenotype_p = json_array_get (phenotypes_p, i);
 
-															while (built_query_success_flag && (i < num_phenotypes))
+															bson_init (&phenotype_query);
+
+															if (BuildWizardPhenotypeQuery (&phenotype_query, phenotype_p))
 																{
-																	const json_t *phenotype_p = json_array_get (phenotypes_p, i);
-																	const char *phenotype_s = GetJSONString (phenotype_p, name_key_s);
-
-																	if (phenotype_s)
+																	if (bson_array_builder_append_document (bab_p, &phenotype_query))
 																		{
-																			bson_t phenotype_query;
-																			double64 min = 0.0;
-																			double64 *min_p = NULL;
-																			double64 max = 0.0;
-																			double64 *max_p = NULL;
-
-																			bson_init (&phenotype_query);
-
-																			if (GetJSONReal (phenotype_p, min_key_s, &min))
-																				{
-																					min_p = &min;
-																				}		/* if (GetJSONReal (phenotype_p, "min", &value)) */
-
-
-																			if (GetJSONReal (phenotype_p, max_key_s, &max))
-																				{
-																					max_p = &max;
-																				}		/* if (GetJSONReal (phenotype_p, "max", &value)) */
-
-
-
-																			if (min_p || max_p)
-																				{
-																					bson_t *elem_match_p = bson_new ();
-
-																					if (elem_match_p)
-																						{
-																							/*
-																							 *
-																							 */
-																							if (BSON_APPEND_UTF8 (elem_match_p, definition_key_s, phenotype_s))
-																								{
-																									if (min_p)
-																										{
-																											built_query_success_flag = BuildWizardSubQuery (elem_match_p, "statistics.stato:0000150", "$gte", *min_p);
-																										}
-
-
-																									if (built_query_success_flag && max_p)
-																										{
-																											built_query_success_flag = BuildWizardSubQuery (elem_match_p, "statistics.stato:0000151", "$lte", *max_p);
-																										}
-
-																									if (built_query_success_flag)
-																										{
-																											bson_t *sub_query_p = bson_new ();
-
-																											if (sub_query_p)
-																												{
-																													bool sub_query_added_flag = false;
-
-																													/**
-																													 * Attach the elemMatch
-																													 */
-																													if (BSON_APPEND_DOCUMENT (sub_query_p, "$elemMatch", elem_match_p))
-																														{
-																															/**
-																															 * Attach the elemMatch
-																															 */
-																															if (BSON_APPEND_DOCUMENT (&phenotype_query, ST_PHENOTYPES_S, sub_query_p))
-																																{
-																																	sub_query_added_flag = true;
-																																}
-																															else
-																																{
-																																	PrintBSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, sub_query_p, "Failed to add \"%s\":  to query", ST_PHENOTYPES_S, sub_query_p);
-																																}
-
-																														}
-																													else
-																														{
-																															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_PHENOTYPES_S, phenotype_s);
-																														}
-
-																													if (!sub_query_added_flag)
-																														{
-																															bson_destroy (sub_query_p);
-																															built_query_success_flag = false;
-																														}
-
-																												}		/* if (sub_query_p) (*/
-
-
-																										}
-																								}
-																							else
-																								{
-																									built_query_success_flag = false;
-																									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_PHENOTYPES_S, phenotype_s);
-																								}
-
-																							PrintBSONToLog (STM_LEVEL_INFO, __FILE__, __LINE__, elem_match_p, "elem_match_p after adding \"%s\"", phenotype_s);
-
-
-
-
-																						}		/* if (elem_match_p) */
-
-
-
-																				}
-																			else
-																				{
-																					if (!BSON_APPEND_UTF8 (&phenotype_query, phenotype_definition_key_s, phenotype_s))
-																						{
-																							built_query_success_flag = false;
-																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_PHENOTYPES_S, phenotype_s);
-																						}
-
-																				}
-
-
-																			if (built_query_success_flag)
-																				{
-
-
-																					PrintBSONToLog (STM_LEVEL_INFO, __FILE__, __LINE__, query_p, "query after adding \"%s\"", phenotype_s);
-
-
-
-																					if (bson_array_builder_append_document (bab_p, &phenotype_query))
-																						{
-																							PrintBSONToLog (STM_LEVEL_INFO, __FILE__, __LINE__, query_p, "query after adding \"%s\"", phenotype_s);
-																						}
-																					else
-																						{
-																							built_query_success_flag = false;
-																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_PHENOTYPES_S, phenotype_s);
-																						}
-
-																				}
-
-
 																			++ i;
-
-																		}		/* if (phenotype_s) */
-
-																}		/* while (built_query_success_flag && node_p) */
-
-															if (!bson_append_array_builder_end (query_p, bab_p))
-																{
-																	built_query_success_flag = false;
-																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to end array");
-																}
-
-														}		/* if (BSON_APPEND_ARRAY_BUILDER_BEGIN (query_p, "$or", &bab_p)) */
-													else
-														{
-															built_query_success_flag = false;
-															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to begin array");
-														}
-
-												}		/* if (num_phenotypes > 1) */
-											else if (num_phenotypes == 1)
-												{
-													const json_t *phenotype_p = json_array_get (phenotypes_p, 0);
-													const char *phenotype_s = GetJSONString (phenotype_p, name_key_s);
-
-													if (phenotype_s)
-														{
-
-															if (!BSON_APPEND_UTF8 (query_p, phenotype_definition_key_s, phenotype_s))
-																{
-																	built_query_success_flag = false;
-																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_PHENOTYPES_S, phenotype_s);
+																		}
+																	else
+																		{
+																			PrintBSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, &phenotype_query, "bson_array_builder_append_document () failed");
+																			built_query_success_flag = false;
+																		}
 																}
 															else
 																{
-																	PrintBSONToLog (STM_LEVEL_INFO, __FILE__, __LINE__, query_p, "query after adding \"%s\"", phenotype_s);
+																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, phenotype_p, "BuildWizardPhenotypeQuery () failed");
+																	built_query_success_flag = false;
 																}
+
+
+
+														}		/* while (built_query_success_flag && node_p) */
+
+													if (!bson_append_array_builder_end (query_p, bab_p))
+														{
+															built_query_success_flag = false;
+															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to end array");
 														}
 
+												}		/* if (BSON_APPEND_ARRAY_BUILDER_BEGIN (query_p, "$or", &bab_p)) */
+											else
+												{
+													built_query_success_flag = false;
+													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to begin array");
 												}
 
-											FreeCopiedString (phenotype_definition_key_s);
-										}
-									else
+										}		/* if (num_phenotypes > 1) */
+									else if (num_phenotypes == 1)
 										{
-											built_query_success_flag = false;
-											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "ConcatenateVarargsStrings () failed to create key");
+											const json_t *phenotype_p = json_array_get (phenotypes_p, 0);
+
+											built_query_success_flag = BuildWizardPhenotypeQuery (query_p, phenotype_p);
 										}
 
 								}		/* if (!IsStringEmpty (accession_s)) */
@@ -6636,6 +6488,147 @@ static OperationStatus ProcessMeasuredVariables (ServiceJob *job_p, ParameterSet
 		}
 
 	return status;
+}
+
+
+
+static bool BuildWizardPhenotypeQuery (bson_t *phenotype_query_p, const json_t *phenotype_p)
+{
+	bool built_query_success_flag = false;
+
+
+	/* For range matching queries we'll need the subkey */
+	const char * const relative_definition_key_s = "definition.so:name";
+	char *full_definition_key_s = ConcatenateVarargsStrings (ST_PHENOTYPES_S, ".", relative_definition_key_s, NULL);
+
+	if (full_definition_key_s)
+		{
+			double64 min = 0.0;
+			double64 *min_p = NULL;
+			double64 max = 0.0;
+			double64 *max_p = NULL;
+			const char * const name_key_s = "name";
+			const char * const min_key_s = "min";
+			const char * const max_key_s = "max";
+
+			const char *phenotype_s = GetJSONString (phenotype_p, name_key_s);
+
+			if (phenotype_s)
+				{
+					if (GetJSONReal (phenotype_p, min_key_s, &min))
+						{
+							min_p = &min;
+						}		/* if (GetJSONReal (phenotype_p, "min", &value)) */
+
+
+					if (GetJSONReal (phenotype_p, max_key_s, &max))
+						{
+							max_p = &max;
+						}		/* if (GetJSONReal (phenotype_p, "max", &value)) */
+
+
+
+					if (min_p || max_p)
+						{
+							bson_t *elem_match_p = bson_new ();
+
+							if (elem_match_p)
+								{
+									/*
+									 *
+									 */
+									if (BSON_APPEND_UTF8 (elem_match_p, relative_definition_key_s, phenotype_s))
+										{
+											bool success_flag = true;
+
+											if (min_p)
+												{
+													success_flag = BuildWizardSubQuery (elem_match_p, "statistics.stato:0000150", "$gte", *min_p);
+												}
+
+
+											if (success_flag && max_p)
+												{
+													success_flag = BuildWizardSubQuery (elem_match_p, "statistics.stato:0000151", "$lte", *max_p);
+												}
+
+											if (success_flag)
+												{
+													bson_t *sub_query_p = bson_new ();
+
+													if (sub_query_p)
+														{
+															bool sub_query_added_flag = false;
+
+															/**
+															 * Attach the elemMatch
+															 */
+															if (BSON_APPEND_DOCUMENT (sub_query_p, "$elemMatch", elem_match_p))
+																{
+																	/**
+																	 * Attach the elemMatch
+																	 */
+																	if (BSON_APPEND_DOCUMENT (phenotype_query_p, ST_PHENOTYPES_S, sub_query_p))
+																		{
+																			sub_query_added_flag = true;
+																			built_query_success_flag = true;
+																		}
+																	else
+																		{
+																			PrintBSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, sub_query_p, "Failed to add \"%s\":  to query", ST_PHENOTYPES_S, sub_query_p);
+																		}
+
+																}
+															else
+																{
+																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", ST_PHENOTYPES_S, phenotype_s);
+																}
+
+															if (!sub_query_added_flag)
+																{
+																	bson_destroy (sub_query_p);
+																	built_query_success_flag = false;
+																}
+
+														}		/* if (sub_query_p) (*/
+
+
+												}
+
+										}		/* if (BSON_APPEND_UTF8 (elem_match_p, relative_phenotype_definition_key_s, phenotype_s)) */
+									else
+										{
+											built_query_success_flag = false;
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", relative_definition_key_s, phenotype_s);
+										}
+
+									PrintBSONToLog (STM_LEVEL_INFO, __FILE__, __LINE__, elem_match_p, "elem_match_p after adding \"%s\"", phenotype_s);
+
+
+								}		/* if (elem_match_p) */
+
+
+
+						}
+					else
+						{
+							if (BSON_APPEND_UTF8 (phenotype_query_p, full_definition_key_s, phenotype_s))
+								{
+									built_query_success_flag = true;
+								}
+							else
+								{
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add \"%s\": \"%s\" to query", full_definition_key_s, phenotype_s);
+								}
+
+						}
+
+				}		/* if (phenotype_s) */
+
+		}		/* if (phenotype_definition_key_s) */
+
+
+	return built_query_success_flag;
 }
 
 
