@@ -192,6 +192,143 @@ function LoadKeywordSearchResults (response_json)
 }
 
 
+function AddToPhenotypesList (selected_variable, trait_description, scale_class)
+{
+		/* 
+	 * Check to see if the phenotype is already on the list 
+	 */
+	let el = document.querySelector(`#selected_phenotypes li[data-var-name="${selected_variable}"]`);
+	if (el) 
+		{	
+			console.log (selected_variable + " is already on list");
+		}
+	else
+		{
+			let phenotype_entry = document.createElement ("li");
+
+			/*
+				Create the delete button
+			*/
+			let remove_button = document.createElement ("input");
+			remove_button.type = "image"
+			remove_button.setAttribute ("src", "/grassroots/images/aiss/delete");
+			
+			let v = RemoveTags (selected_variable);
+			remove_button.setAttribute ("onclick", "RemoveSelectedPhenotypeFromList (this.parentElement)");
+			remove_button.setAttribute ("title", "Remove " + v + " from selected phenotypes");
+
+			phenotype_entry.appendChild (remove_button);
+
+			phenotype_entry.setAttribute ("title", RemoveTags (trait_description));
+			phenotype_entry.setAttribute ("data-var-name", v);
+
+			phenotype_entry.appendChild (document.createTextNode (v));
+
+
+			if (scale_class)
+				{
+					/* Add the min and max boxes so the user can specify the range of values */
+					
+					let limits = document.createElement ("span");
+
+					limits.setAttribute ("class", "limits");
+					
+					phenotype_entry.appendChild (limits);
+					
+					AddNumericInput (limits, v, "Min: ", S_MIN_PHENOTYPE_SUFFIX);
+					AddNumericInput (limits, v, "Max: ", S_MAX_PHENOTYPE_SUFFIX);
+				}
+
+	
+			el = document.getElementById ("selected_phenotypes");
+			
+			if (el)
+				{
+					el.appendChild (phenotype_entry);
+				}
+			else
+				{
+					console.log ("selected_phenotypes element not found");
+				}
+		}
+}
+
+
+
+function AddToPhenotypesTable (selected_variable, trait_description, scale_class)
+{
+		/* 
+	 * Check to see if the phenotype is already on the list 
+	 */
+	let el = document.querySelector(`#selected_phenotypes tr[data-var-name="${selected_variable}"]`);
+	if (el) 
+		{	
+			console.log (selected_variable + " is already in table");
+		}
+	else
+		{
+			let v = RemoveTags (selected_variable);
+			let phenotype_row = document.createElement ("tr");
+
+			phenotype_row.setAttribute ("data-var-name", v);
+
+			/*
+				Create the delete button
+			*/
+			let remove_button = document.createElement ("input");
+			remove_button.type = "image"
+			remove_button.setAttribute ("src", "/grassroots/images/aiss/delete");
+
+			remove_button.setAttribute ("onclick", "RemoveSelectedPhenotypeFromTable (this.parentElement)");
+			remove_button.setAttribute ("title", "Remove " + v + " from selected phenotypes");
+
+			let cell = document.createElement ("td");
+			cell.appendChild (remove_button);
+			phenotype_row.appendChild (cell);
+			
+			/*
+			 * The variable name
+			 */
+			cell = document.createElement ("td");
+			cell.setAttribute ("title", RemoveTags (trait_description));
+			cell.setAttribute ("data-var-name", v);
+			cell.appendChild (document.createTextNode (v));
+			phenotype_row.appendChild (cell);
+
+
+			if ((scale_class) && (scale_class === "Numerical"))
+				{
+					/* Add the min and max boxes so the user can specify the range of values */
+					cell = document.createElement ("td");
+					AddNumericInput (cell, v, null, S_MIN_PHENOTYPE_SUFFIX);
+					phenotype_row.appendChild (cell);					
+
+
+					cell = document.createElement ("td");
+					AddNumericInput (cell, v, null, S_MAX_PHENOTYPE_SUFFIX);
+					phenotype_row.appendChild (cell);					
+				}
+			else
+				{
+					for (let i = 0; i < 2; ++ i) 
+						{
+							cell = document.createElement ("td");
+							phenotype_row.appendChild (cell);
+						}
+				}
+	
+			el = document.getElementById ("selected_phenotypes_tbody");
+			
+			if (el)
+				{
+					el.appendChild (phenotype_row);
+				}
+			else
+				{
+					console.log ("selected_phenotypes element not found");
+				}
+		}
+}
 
 /**
  * Add a given Phenotype to the list of selected ones
@@ -221,51 +358,8 @@ function SelectRow (table_row)
 	/* 
 	 * Check to see if the phenotype is already on the list 
 	 */
-	const var_li = document.querySelector(`#selected_phenotypes li[data-var-name="${selected_variable}"]`);
-	if (var_li !== null) 
-		{	
-			console.log (selected_variable + " is already on list");
-		}
-	else
-		{
-			let phenotype_entry = document.createElement ("li");
-
-			/*
-				Create the delete button
-			*/
-			let remove_button = document.createElement ("input");
-			remove_button.type = "image"
-			remove_button.setAttribute ("src", "/grassroots/images/aiss/delete");
-			
-			let v = RemoveTags (selected_variable);
-			remove_button.setAttribute ("onclick", "RemoveSelectedPhenotype (this.parentElement)");
-			remove_button.setAttribute ("title", "Remove " + v + " from selected phenotypes");
-
-			phenotype_entry.appendChild (remove_button);
-
-			phenotype_entry.setAttribute ("title", RemoveTags (trait_description));
-			phenotype_entry.setAttribute ("data-var-name", v);
-
-			phenotype_entry.appendChild (document.createTextNode (v));
-
-
-			if (scale_class)
-				{
-					/* Add the min and max boxes so the user can specify the range of values */
-					
-					let limits = document.createElement ("span");
-
-					limits.setAttribute ("class", "limits");
-					
-					phenotype_entry.appendChild (limits);
-					
-					AddNumericInput (limits, v, "Min: ", S_MIN_PHENOTYPE_SUFFIX);
-					AddNumericInput (limits, v, "Max: ", S_MAX_PHENOTYPE_SUFFIX);
-				}
-
-	
-			phenotypes_list.appendChild (phenotype_entry);
-		}
+	AddToPhenotypesTable (selected_variable, trait_description, scale_class);
+	//AddToPhenotypesList (selected_variable, trait_description, scale_class);
 
 
 
@@ -280,6 +374,22 @@ function SelectRow (table_row)
 }
 
 
+function ValidateNumericInput (elem)
+{
+	let v = elem.value;
+	
+	if (v.match ("^[+-]?([0-9]*[.])?[0-9]+$"))
+		{
+			
+		}
+	else
+		{
+			v.replaceAll (/[^\d+-.]/gi, "");
+		}
+	
+	elem.value = v;
+}
+
 function AddNumericInput (parent_element, input_id, label_text, id_suffix)
 {
 	let box = document.createElement ("input");
@@ -287,22 +397,24 @@ function AddNumericInput (parent_element, input_id, label_text, id_suffix)
 	
 	box.setAttribute ("id", box_id);
 	box.setAttribute ("name", box_id);
-	box.setAttribute ("type", "text");
-	box.setAttribute ("inputmode", "numeric");
-	box.setAttribute ("pattern", "/[\d]*[\.]*[\d]+/");	
-	
-	
-	let l = document.createElement ("label");
-	l.setAttribute ("for", box_id);
-	l.appendChild (document.createTextNode (label_text));
-	
-	parent_element.appendChild (l);
+	box.setAttribute ("type", "number");
+	box.setAttribute ("step", "any");
+
+	if (label_text) 
+		{
+			let l = document.createElement ("label");
+			l.setAttribute ("for", box_id);
+			l.appendChild (document.createTextNode (label_text));
+			
+			parent_element.appendChild (l);
+		}
+		
 	parent_element.appendChild (box);
 	
 	return box
 }
 
-function RemoveSelectedPhenotype (list_entry)
+function RemoveSelectedPhenotypeFromList (list_entry)
 {
 	let phenotypes_list = list_entry.parentElement;
 	const selected_variable = list_entry.getAttribute ("data-var-name");
@@ -310,6 +422,27 @@ function RemoveSelectedPhenotype (list_entry)
 	console.log ("phenotypes_list " + phenotypes_list);
 
 	phenotypes_list.removeChild (list_entry);
+
+	if (selected_variable)
+		{
+			const table_row = document.querySelector(`#phenotypes_tbody tr[data-var-name="${selected_variable}"]`);
+
+			if (table_row)
+				{
+					table_row.classList.remove ("selected");
+				}
+		}
+}
+
+
+function RemoveSelectedPhenotypeFromTable (table_row)
+{
+	let table = table_row.parentElement;
+	const selected_variable = table_row.getAttribute ("data-var-name");
+	console.log ("list_entry " + table_row);
+	console.log ("phenotypes_list " + table);
+
+	table.removeChild (table_row);
 
 	if (selected_variable)
 		{
@@ -375,6 +508,18 @@ function KeywordSearchGrassrootsHandler (event)
 
 
 
+function GetSelectedPhenotypesFromList ()
+{
+	return phenotype_items = document.querySelectorAll ('#selected_phenotypes li');
+}
+
+
+
+function GetSelectedPhenotypesFromTable ()
+{
+	return phenotype_items = document.querySelectorAll ('#selected_phenotypes_tbody tr');
+}
+
 
 async function SearchStudies ()
 {
@@ -408,7 +553,8 @@ async function SearchStudies ()
 	/*
 	 * Get the phenotypes
 	 */
-	const phenotype_items = document.querySelectorAll ('#selected_phenotypes li');
+	//const phenotype_items = GetSelectedPhenotypesFromList (); 
+	const phenotype_items = GetSelectedPhenotypesFromTable (); 
 	
 	let thead = document.getElementById ("studies_results_table_header_row");
 

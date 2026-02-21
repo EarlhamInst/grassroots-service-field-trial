@@ -144,8 +144,26 @@ localStorage.setItem("__acceptrics_conf", JSON.stringify({"gcmAdvanced":"true","
 					<div id="loader"></div>
 
 					<p>Selected Phenotypes</p>
+
+					<!--
 					<ul id="selected_phenotypes">
 					</ul>
+					-->
+					
+					<table id="selected_phenotypes">
+						<thead>
+							<tr>
+								<th></th>
+								<th>Variable</th>
+								<th>Min</th>
+								<th>Max</th>
+							<tr>
+						</thead>
+						<tbody id="selected_phenotypes_tbody">
+						</tbody>
+					</table>
+					
+				
 				</fieldset>
 
 			</div>
