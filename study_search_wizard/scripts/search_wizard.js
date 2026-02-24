@@ -18,14 +18,6 @@ const S_DEBOUNCE_DELAY = 200;
 
 const KeywordSearchGrassroots = Debounce (RealKeywordSearchGrassroots, S_DEBOUNCE_DELAY);
 
-const S_GRASSROOTS_SERVER_URL = "http://localhost:2000/grassroots/"
-
-const S_DJANGO_SERVER_URL = "http://localhost:8000/"
-
-
-const S_BACKEND = "public_backend"
-
-
 const S_PHENOTYPE_HEADER = "data-phenotype";
 
 
