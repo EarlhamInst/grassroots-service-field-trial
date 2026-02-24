@@ -435,14 +435,17 @@ function RemoveSelectedPhenotypeFromList (list_entry)
 }
 
 
-function RemoveSelectedPhenotypeFromTable (table_row)
+function RemoveSelectedPhenotypeFromTable (table_cell)
 {
-	let table = table_row.parentElement;
+	let table_row = table_cell.parentElement;
+	let table_body = table_row.parentElement;
 	const selected_variable = table_row.getAttribute ("data-var-name");
-	console.log ("list_entry " + table_row);
-	console.log ("phenotypes_list " + table);
+	console.log ("table row " + table_row);
+	console.log ("table body " + table_body);
 
-	table.removeChild (table_row);
+
+		
+	table_body.removeChild (table_row);
 
 	if (selected_variable)
 		{
