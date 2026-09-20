@@ -3458,9 +3458,9 @@ json_t *GetStudyMaterialCounts (const Study * const study_p, const FieldTrialSer
 												{
 													const StandardRow *sr_p = ((const StandardRow *) row_p);
 
-													if (sr_p -> sr_material_p)
+													if (sr_p -> sr_planted_material_p)
 														{
-															const char *accession_s = sr_p -> sr_material_p -> ma_accession_s;
+															const char *accession_s = sr_p -> sr_planted_material_p -> ma_accession_s;
 															json_int_t count = 0;
 
 															GetJSONInteger (cache_p, accession_s, &count);

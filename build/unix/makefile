@@ -78,6 +78,7 @@ SRCS 	= \
 	field_trial_mongodb.c \
 	gene_bank.c \
 	gene_bank_jobs.c \
+	guard_row.c \
 	handbook_generator.c \
 	image_util.c \
 	indexing.c \

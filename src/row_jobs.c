@@ -1293,7 +1293,7 @@ bool GetDiscardValueFromSubmissionJSON (const json_t *row_json_p)
 				}
 		}		/* if (value_s) */
 
-	value_s = GetJSONString (row_json_p, PL_ACCESSION_TABLE_TITLE_S);
+	value_s = GetJSONString (row_json_p, PL_PLOT_CATEGORY_TABLE_TITLE_S);
 	if (value_s)
 		{
 			if (Stricmp (value_s, "discard") == 0)
@@ -1319,10 +1319,35 @@ bool GetBlankValueFromSubmissionJSON (const json_t *row_json_p)
 				}
 		}		/* if (value_s) */
 
-	value_s = GetJSONString (row_json_p, PL_ACCESSION_TABLE_TITLE_S);
+	value_s = GetJSONString (row_json_p, PL_PLOT_CATEGORY_TABLE_TITLE_S);
 	if (value_s)
 		{
 			if (Stricmp (value_s, "blank") == 0)
+				{
+					return true;
+				}
+		}		/* if (value_s) */
+
+	return false;
+}
+
+
+bool GetGuardValueFromSubmissionJSON (const json_t *row_json_p)
+{
+	const char *value_s = GetJSONString (row_json_p, RO_GUARD_S);
+
+	if (value_s)
+		{
+			if (Stricmp (value_s, "1") == 0)
+				{
+					return true;
+				}
+		}		/* if (value_s) */
+
+	value_s = GetJSONString (row_json_p, PL_PLOT_CATEGORY_TABLE_TITLE_S);
+	if (value_s)
+		{
+			if (Stricmp (value_s, "guard") == 0)
 				{
 					return true;
 				}

@@ -385,13 +385,13 @@ static bool RunForEditPlotParams (FieldTrialServiceData *data_p, ParameterSet *p
 							if (!IsStringEmpty (accession_s))
 								{
 
-									if (active_sr_p -> sr_material_p)
+									if (active_sr_p -> sr_planted_material_p)
 										{
 											/* Check to see if the accession has been updated */
 
-											if (active_sr_p -> sr_material_p -> ma_accession_s)
+											if (active_sr_p -> sr_planted_material_p -> ma_accession_s)
 												{
-													if (Stricmp (accession_s, active_sr_p -> sr_material_p -> ma_accession_s))
+													if (Stricmp (accession_s, active_sr_p -> sr_planted_material_p -> ma_accession_s))
 														{
 															/* Accession has changed */
 															new_material_flag = true;
@@ -427,13 +427,13 @@ static bool RunForEditPlotParams (FieldTrialServiceData *data_p, ParameterSet *p
 
 													if (material_p)
 														{
-															if (active_sr_p -> sr_material_p)
+															if (active_sr_p -> sr_planted_material_p)
 																{
 																	/*  remove accession */
-																	FreeMaterial (active_sr_p -> sr_material_p);
+																	FreeMaterial (active_sr_p -> sr_planted_material_p);
 																}
 
-															active_sr_p -> sr_material_p = material_p;
+															active_sr_p -> sr_planted_material_p = material_p;
 														}
 													else
 														{
@@ -932,9 +932,9 @@ static bool AddEditPlotParams (ServiceData *data_p, ParameterSet *param_set_p, D
 
 											rack_index_p = & (sr_p -> sr_rack_index);
 
-											if (sr_p -> sr_material_p)
+											if (sr_p -> sr_planted_material_p)
 												{
-													accession_s = sr_p -> sr_material_p -> ma_accession_s;
+													accession_s = sr_p -> sr_planted_material_p -> ma_accession_s;
 												}
 										}
 								}

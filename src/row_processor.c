@@ -42,9 +42,9 @@ static json_t *HighlightPlotsContainingMaterial (struct JSONProcessor *processor
 				{
 					StandardRow *standard_row_p = (StandardRow *) row_p;
 
-					if ((row_processor_p -> rp_material_p) && (standard_row_p -> sr_material_p))
+					if ((row_processor_p -> rp_material_p) && (standard_row_p -> sr_planted_material_p))
 						{
-							if (bson_oid_compare (row_processor_p -> rp_material_p -> ma_id_p, standard_row_p -> sr_material_p -> ma_id_p) == 0)
+							if (bson_oid_compare (row_processor_p -> rp_material_p -> ma_id_p, standard_row_p -> sr_planted_material_p -> ma_id_p) == 0)
 								{
 									if (!SetJSONBoolean (row_json_p, DFT_SELECTED_S, true))
 										{

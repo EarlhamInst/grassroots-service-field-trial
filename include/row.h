@@ -41,6 +41,14 @@ typedef enum
 	 */
 	RT_BLANK,
 
+
+	/**
+	 * A plot, usually outside the experiment, to allow the farm machinery to e.g. change
+	 * their fertiliser rates, etc.
+	 */
+	RT_GUARD,
+
+
 	/**
 	 * The number of different values that a RowType can take.
 	 */
@@ -118,6 +126,8 @@ BASE_ROW_PREFIX const char *RO_DISCARD_S BASE_ROW_VAL ("discard");
 
 
 BASE_ROW_PREFIX const char *RO_BLANK_S BASE_ROW_VAL ("blank");
+
+BASE_ROW_PREFIX const char *RO_GUARD_S BASE_ROW_VAL ("guard");
 
 
 BASE_ROW_PREFIX const char *RO_ROW_TYPE_S BASE_ROW_VAL ("row_type");

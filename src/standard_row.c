@@ -72,8 +72,8 @@ static StandardRow *AllocateEmptyStandardRow (void)
 							row_p -> sr_observations_p = observations_p;
 							row_p -> sr_treatment_factor_values_p = tf_values_p;
 
-							row_p -> sr_material_p = NULL;
-							row_p -> sr_material_mem = MF_ALREADY_FREED;
+							row_p -> sr_planted_material_p = NULL;
+							row_p -> sr_planted_material_mem = MF_ALREADY_FREED;
 							row_p -> sr_replicate_index = 0;
 							row_p -> sr_replicate_control_flag = false;
 							row_p -> sr_store_code_s = NULL;
@@ -99,7 +99,7 @@ static StandardRow *AllocateEmptyStandardRow (void)
 }
 
 
-StandardRow *AllocateStandardRow (bson_oid_t *id_p, const uint32 rack_index, const uint32 study_index, const bool replicate_control_flag, const uint32 replicate, Material *material_p, MEM_FLAG material_mem, const char * const store_code_s, Plot *parent_plot_p)
+StandardRow *AllocateStandardRow (bson_oid_t *id_p, const uint32 rack_index, const uint32 study_index, const bool replicate_control_flag, const uint32 replicate, Material *planted_material_p, MEM_FLAG planted_material_mem, const char * const store_code_s, Plot *parent_plot_p)
 {
 	LinkedList *observations_p = AllocateLinkedList (FreeObservationNode);
 
@@ -124,8 +124,12 @@ StandardRow *AllocateStandardRow (bson_oid_t *id_p, const uint32 rack_index, con
 															 AddStandardRowFrictionlessDataDetails))
 										{
 											row_p -> sr_rack_index = rack_index;
-											row_p -> sr_material_p = material_p;
-											row_p -> sr_material_mem = material_mem;
+											row_p -> sr_planted_material_p = planted_material_p;
+											row_p -> sr_planted_material_mem = planted_material_mem;
+
+											row_p -> sr_planned_material_p = NULL;
+											row_p -> sr_planned_material_mem = MF_ALREADY_FREED;
+
 											row_p -> sr_observations_p = observations_p;
 											row_p -> sr_treatment_factor_values_p = tf_values_p;
 											row_p -> sr_replicate_index = replicate;
@@ -181,21 +185,33 @@ void ClearStandardRow (Row *row_p)
 
 	FreeLinkedList (standard_row_p -> sr_observations_p);
 
-	if ((standard_row_p -> sr_material_mem == MF_DEEP_COPY) || (standard_row_p -> sr_material_mem == MF_SHALLOW_COPY))
+	if ((standard_row_p -> sr_planted_material_mem == MF_DEEP_COPY) || (standard_row_p -> sr_planted_material_mem == MF_SHALLOW_COPY))
 		{
-			if (standard_row_p -> sr_material_p)
+			if (standard_row_p -> sr_planted_material_p)
 				{
-					FreeMaterial (standard_row_p -> sr_material_p);
+					FreeMaterial (standard_row_p -> sr_planted_material_p);
+				}
+		}
+
+	if ((standard_row_p -> sr_planned_material_mem == MF_DEEP_COPY) || (standard_row_p -> sr_planned_material_mem == MF_SHALLOW_COPY))
+		{
+			if (standard_row_p -> sr_planned_material_p)
+				{
+					FreeMaterial (standard_row_p -> sr_planned_material_p);
 				}
 		}
 }
 
 
-void SetStandardRowMaterial (StandardRow *row_p, Material *material_p, MEM_FLAG material_mem)
+
+
+bool SetStandardRowPlannedMaterial (StandardRow *row_p, Material *planned_material_p, MEM_FLAG planned_material_mems)
 {
+	bool success_flag = false;
 
+
+	return success_flag;
 }
-
 
 
 StandardRow *GetStandardRowFromJSON (const json_t *row_json_p, Plot *plot_p, Material *material_p, const Study *study_p, const ViewFormat format, FieldTrialServiceData *data_p)
@@ -320,8 +336,8 @@ StandardRow *GetStandardRowFromJSON (const json_t *row_json_p, Plot *plot_p, Mat
 															MEM_FLAG mf = material_to_use_p == material_p ? MF_SHADOW_USE : MF_SHALLOW_COPY;
 
 															row_p -> sr_rack_index = rack_index;
-															row_p -> sr_material_p = material_to_use_p;
-															row_p -> sr_material_mem = mf;
+															row_p -> sr_planted_material_p = material_to_use_p;
+															row_p -> sr_planted_material_mem = mf;
 															row_p -> sr_replicate_index = replicate;
 
 
@@ -395,7 +411,7 @@ StandardRow *GetStandardRowFromJSON (const json_t *row_json_p, Plot *plot_p, Mat
 
 	if (row_p)
 		{
-			if (material_to_use_p && (material_to_use_p != material_p) && (row_p -> sr_material_p != material_to_use_p))
+			if (material_to_use_p && (material_to_use_p != material_p) && (row_p -> sr_planted_material_p != material_to_use_p))
 				{
 					FreeMaterial (material_to_use_p);
 				}
@@ -570,21 +586,21 @@ void UpdateStandardRow (StandardRow *row_p, const uint32 rack_index, const bool 
 			row_p -> sr_rack_index = rack_index;
 		}
 
-	if (row_p -> sr_material_p)
+	if (row_p -> sr_planted_material_p)
 		{
-			if (row_p -> sr_material_p -> ma_id_p != material_p -> ma_id_p)
+			if (row_p -> sr_planted_material_p -> ma_id_p != material_p -> ma_id_p)
 				{
-					if ((row_p -> sr_material_mem == MF_DEEP_COPY) || (row_p -> sr_material_mem == MF_SHALLOW_COPY))
+					if ((row_p -> sr_planted_material_mem == MF_DEEP_COPY) || (row_p -> sr_planted_material_mem == MF_SHALLOW_COPY))
 						{
-							if (row_p -> sr_material_p)
+							if (row_p -> sr_planted_material_p)
 								{
-									FreeMaterial (row_p -> sr_material_p);
+									FreeMaterial (row_p -> sr_planted_material_p);
 								}
 						}
 				}
 
-			row_p -> sr_material_p = material_p;
-			row_p -> sr_material_mem = material_mem;
+			row_p -> sr_planted_material_p = material_p;
+			row_p -> sr_planted_material_mem = material_mem;
 		}
 
 	if (replicate_control_flag != IsStandardRowGenotypeControl (row_p))
@@ -886,11 +902,11 @@ bool AddStandardRowToPlotTable (const StandardRow *row_p, json_t *table_row_p, c
 		{
 			if ((row_p -> sr_replicate_index == 0) || (SetJSONInteger (table_row_p, PL_REPLICATE_TITLE_S, row_p -> sr_replicate_index)))
 				{
-					if (row_p -> sr_material_p)
+					if (row_p -> sr_planted_material_p)
 						{
-							if ((row_p -> sr_material_p -> ma_accession_s == NULL) || (SetJSONString (table_row_p, PL_ACCESSION_TABLE_TITLE_S, row_p -> sr_material_p -> ma_accession_s)))
+							if ((row_p -> sr_planted_material_p -> ma_accession_s == NULL) || (SetJSONString (table_row_p, PL_ACCESSION_TABLE_TITLE_S, row_p -> sr_planted_material_p -> ma_accession_s)))
 								{
-									GeneBank *gene_bank_p = GetGeneBankById (row_p -> sr_material_p -> ma_gene_bank_id_p, VF_CLIENT_MINIMAL, service_data_p);
+									GeneBank *gene_bank_p = GetGeneBankById (row_p -> sr_planted_material_p -> ma_gene_bank_id_p, VF_CLIENT_MINIMAL, service_data_p);
 
 									if (gene_bank_p)
 										{
@@ -937,13 +953,13 @@ bool AddStandardRowToJSON (const Row *base_row_p, json_t *row_json_p, const View
 	/*
 	 * If there's a material, add it
 	 */
-	if (row_p -> sr_material_p)
+	if (row_p -> sr_planted_material_p)
 		{
 			switch (format)
 			{
 				case VF_CLIENT_FULL:
 					{
-						json_t *material_json_p = GetMaterialAsJSON (row_p -> sr_material_p, true, data_p);
+						json_t *material_json_p = GetMaterialAsJSON (row_p -> sr_planted_material_p, true, data_p);
 
 						if (material_json_p)
 							{
@@ -959,20 +975,20 @@ bool AddStandardRowToJSON (const Row *base_row_p, json_t *row_json_p, const View
 							}
 						else
 							{
-								PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetMaterialAsJSON failed for \"%s\"", row_p -> sr_material_p -> ma_accession_s);
+								PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetMaterialAsJSON failed for \"%s\"", row_p -> sr_planted_material_p -> ma_accession_s);
 							}
 					}
 					break;
 
 				case VF_STORAGE:
 					{
-						if (AddNamedCompoundIdToJSON (row_json_p, row_p -> sr_material_p -> ma_id_p, SR_MATERIAL_ID_S))
+						if (AddNamedCompoundIdToJSON (row_json_p, row_p -> sr_planted_material_p -> ma_id_p, SR_MATERIAL_ID_S))
 							{
 								success_flag = true;
 							}
 						else
 							{
-								PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, row_json_p, "Failed to add material \"%s\" to row json", row_p -> sr_material_p -> ma_accession_s);
+								PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, row_json_p, "Failed to add material \"%s\" to row json", row_p -> sr_planted_material_p -> ma_accession_s);
 							}
 					}
 					break;
@@ -1116,7 +1132,7 @@ static bool AddStandardRowFrictionlessDataDetails (const Row *base_row_p, json_t
 
 	if (SetJSONInteger (row_fd_p, PL_RACK_TITLE_S, row_p -> sr_rack_index))
 		{
-			if ((! (row_p -> sr_material_p)) || (SetJSONString (row_fd_p, PL_ACCESSION_TABLE_TITLE_S, row_p -> sr_material_p -> ma_accession_s)))
+			if ((! (row_p -> sr_planted_material_p)) || (SetJSONString (row_fd_p, PL_ACCESSION_TABLE_TITLE_S, row_p -> sr_planted_material_p -> ma_accession_s)))
 				{
 					if (row_p -> sr_replicate_control_flag)
 						{
