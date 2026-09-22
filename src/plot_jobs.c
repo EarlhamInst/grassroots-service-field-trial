@@ -1233,7 +1233,9 @@ static OperationStatus CreateOrUpdateStandardRowFromJSON (StandardRow **row_pp, 
 
 							GetJSONStringAsInteger (table_row_json_p, PL_RACK_TITLE_S, &rack_plotwise_index);
 
-
+							/*
+							 * Calculate the replicate details
+							 */
 							if (!IsStringEmpty (rep_s))
 								{
 									if (Stricmp (rep_s, SR_REPLICATE_CONTROL_S) == 0)
@@ -1294,9 +1296,9 @@ static OperationStatus CreateOrUpdateStandardRowFromJSON (StandardRow **row_pp, 
 											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, table_row_json_p, "AllocateStandardRow () failed");
 										}
 
-								}
+								}		/* if (success_flag) */
 
-						}
+						}		/* if (material_p) */
 					else
 						{
 							AddTabularParameterErrorMessageToServiceJob (job_p, PL_PLOT_TABLE.npt_name_s, PL_PLOT_TABLE.npt_type, "Unknown accession", row_index, PL_ACCESSION_TABLE_TITLE_S);
@@ -1401,6 +1403,20 @@ static OperationStatus AddPlotFromJSON (ServiceJob *job_p, json_t *table_row_jso
 									else
 										{
 											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, table_row_json_p, "AllocateBlankRow () failed");
+										}
+								}
+							/* Is it a Guard Row? */
+							else if (GetGuardValueFromSubmissionJSON (table_row_json_p))
+								{
+									row_p = AllocateGuardRow (NULL, rack_studywise_index, plot_p);
+
+									if (row_p)
+										{
+											add_status = OS_SUCCEEDED;
+										}
+									else
+										{
+											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, table_row_json_p, "AllocateGuardRow () failed");
 										}
 								}
 							else

@@ -46,9 +46,28 @@ typedef struct StandardRow
 	 */
 	uint32 sr_rack_index;
 
-	Material *sr_material_p;
+	/**
+	 * The material that was planted in this row
+	 */
+	Material *sr_planted_material_p;
 
-	MEM_FLAG sr_material_mem;
+	/**
+	 * The memory status for sr_planted_material_p
+	 * @see sr_planted_material_p
+	 */
+	MEM_FLAG sr_planted_material_mem;
+
+
+	/**
+	 * The material that was planned for this row
+	 */
+	Material *sr_planned_material_p;
+
+	/**
+	 * The memory status for sr_planned_material_p
+	 * @see sr_planned_material_p
+	 */
+	MEM_FLAG sr_planned_material_mem;
 
 	LinkedList *sr_observations_p;
 
@@ -88,6 +107,12 @@ STANDARD_ROW_PREFIX const char *SR_MATERIAL_ID_S STANDARD_ROW_VAL ("material_id"
 
 
 STANDARD_ROW_PREFIX const char *SR_MATERIAL_S STANDARD_ROW_VAL ("material");
+
+
+STANDARD_ROW_PREFIX const char *SR_PLANNED_MATERIAL_ID_S STANDARD_ROW_VAL ("planned_material_id");
+
+STANDARD_ROW_PREFIX const char *SR_PLANNED_MATERIAL_S STANDARD_ROW_VAL ("planned_material");
+
 
 STANDARD_ROW_PREFIX const char *SR_STORE_CODE_S STANDARD_ROW_VAL ("store_code");
 
@@ -143,6 +168,9 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddStandardRowToJSON (const Row *row_p, json_
 
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddStandardRowToPlotTable (const StandardRow *row_p, json_t *row_json_p, const FieldTrialServiceData *service_data_p);
+
+
+DFW_FIELD_TRIAL_SERVICE_LOCAL bool SetStandardRowPlannedMaterial (StandardRow *row_p, Material *planned_material_p, MEM_FLAG planned_material_mem);
 
 
 #ifdef __cplusplus
