@@ -490,7 +490,7 @@ static LinkedList *GetFacets (ParameterSet *params_p)
 }
 
 
-static ServiceJobSet *RunDFWFieldTrialSearchService (Service *service_p, ParameterSet *param_set_p, User * UNUSED_PARAM (user_p), ProvidersStateTable * UNUSED_PARAM (providers_p))
+static ServiceJobSet *RunDFWFieldTrialSearchService (Service *service_p, ParameterSet *param_set_p, User *user_p, ProvidersStateTable * UNUSED_PARAM (providers_p))
 {
 	FieldTrialServiceData *data_p = (FieldTrialServiceData *) (service_p -> se_data_p);
 
@@ -537,7 +537,7 @@ static ServiceJobSet *RunDFWFieldTrialSearchService (Service *service_p, Paramet
 							 */
 							if (!RunForSearchFieldTrialParams (data_p, param_set_p, job_p))
 								{
-									if (!RunForSearchStudyParams (data_p, param_set_p, job_p))
+									if (!RunForSearchStudyParams (data_p, param_set_p, user_p, job_p))
 										{
 											if (!RunForSearchPlotParams (data_p, param_set_p, job_p))
 												{

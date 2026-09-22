@@ -1301,7 +1301,7 @@ static bool RunForAdvancedSearchStudyParams (FieldTrialServiceData *data_p, Para
 }
 
 
-bool RunForSearchStudyParams (FieldTrialServiceData *data_p, ParameterSet *param_set_p, ServiceJob *job_p)
+bool RunForSearchStudyParams (FieldTrialServiceData *data_p, ParameterSet *param_set_p, User *user_p, ServiceJob *job_p)
 {
 	bool run_flag = false;
 
@@ -2054,7 +2054,28 @@ static bool AddStudy (ServiceJob *job_p, ParameterSet *param_set_p, FieldTrialSe
 
 																																			if (num_existing_plots == 0)
 																																				{
+																																					char *id_s = GetBSONOidAsString (study_p -> st_id_p);
+
 																																					status = GenerateAndAddSkeletonPlotsToStudy (study_p, num_rows, num_cols, job_p, data_p);
+
+																																					/*
+																																					 * Since we've added some skeleton plots, we need to clear the cached version above
+																																					 */
+																																					char *id_s = GetBSONOidAsString (study_p -> st_id_p);
+
+																																					if (id_s)
+																																						{
+																																							if (data_p -> dftsd_study_cache_path_s)
+																																								{
+																																									ClearCachedStudy (id_s, data_p);
+																																								}
+
+																																							FreeBSONOidString (id_s);
+																																						}		/* if (id_s) */
+																																					else
+																																						{
+																																							PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "Failed to get study id for \"%s\"", study_p -> st_name_s);
+																																						}
 																																				}
 																																			else
 																																				{
@@ -4736,8 +4757,14 @@ bool GetMatchingStudies (bson_t *query_p, FieldTrialServiceData *data_p, Service
 
 																if (id_p)
 																	{
+																		/*
+																		 * Get the ObjectId
+																		 */
 																		if (GetMongoIdFromJSON (entry_p, id_p))
 																			{
+
+
+
 																				study_json_p = json_object ();
 
 																				if (study_json_p)
