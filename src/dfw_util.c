@@ -37,6 +37,8 @@
 	#define DFW_UTIL_DEBUG	(STM_LEVEL_NONE)
 #endif
 
+static const char * const S_ALL_STUDIES_JSON_S = "all.json";
+
 
 static char *GetCacheFilename (const char *id_s, const FieldTrialServiceData *data_p);
 
@@ -85,6 +87,81 @@ bool FindAndAddResultToServiceJob (const char *id_s, const ViewFormat format, Se
 	SetServiceJobStatus (job_p, status);
 	return (status == OS_SUCCEEDED);
 }
+
+
+
+bool CacheAllStudies (const FieldTrialServiceData *data_p)
+{
+
+
+}
+
+
+bool ClearAllStudiesCache (const FieldTrialServiceData *data_p)
+{
+	bool success_flag = false;
+	char *filename_s = NULL;
+	int res = GetAllStudiesCacheFilename (data_p, &filename_s);
+
+	if (res > 0)
+		{
+			bool remove_flag = RemoveFile (filename_s);
+
+			if (remove_flag)
+				{
+					success_flag = true;
+				}
+			else
+				{
+
+				}
+
+			FreeCopiedString (filename_s);
+		}
+	else if (res == 0)
+		{
+			/* nothing to do */
+			success_flag = true;
+		}
+
+	return success_flag;
+}
+
+
+json_t *GetAllStudiesCacheFile (const FieldTrialServiceData *data_p)
+{
+
+
+}
+
+
+
+int GetAllStudiesCacheFilename (const FieldTrialServiceData *data_p, char **full_filename_ss)
+{
+	int res = -1;
+
+	if (data_p -> dftsd_study_cache_path_s)
+		{
+			char *filename_s = GetCacheFilename (S_ALL_STUDIES_JSON_S, data_p);
+
+			if (filename_s)
+				{
+					*full_filename_ss = filename_s;
+					res = 1;
+				}
+			else
+				{
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetCacheFilename () failed for \"%s\" and \"%s\"", data_p -> dftsd_study_cache_path_s, S_ALL_STUDIES_JSON_S);
+				}
+		}
+	else
+		{
+			res = 0;
+		}
+
+	return res;
+}
+
 
 
 

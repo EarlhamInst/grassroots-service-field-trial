@@ -126,6 +126,8 @@ typedef struct Material
 
 	char *ma_accession_s;
 
+	char *ma_accession_full_name_s;
+
 } Material;
 
 
@@ -151,6 +153,9 @@ typedef struct Material
 MATERIAL_PREFIX const char *MA_ID_S MATERIAL_VAL ("id");
 
 MATERIAL_PREFIX const char *MA_ACCESSION_S MATERIAL_VAL ("accession");
+
+MATERIAL_PREFIX const char *MA_ACCESSION_FULL_S MATERIAL_VAL ("accession_full_name");
+
 
 MATERIAL_PREFIX const char *MA_BARCODE_S MATERIAL_VAL ("barcode");
 
@@ -195,13 +200,12 @@ extern "C"
 #endif
 
 
-DFW_FIELD_TRIAL_SERVICE_LOCAL	Material *AllocateMaterial (bson_oid_t *id_p, const char *accession_s, const char *species_s, const char *type_s, const char *selection_reason_s, const char *generation_s, const char *supplier_s, const char *source_s, const char *germplasm_origin_s, const char *treatment_s, bool gru_flag, bool cleaned_flag, uint32 tgw, const Study *area_p, const bson_oid_t *gene_bank_id_p, const FieldTrialServiceData *data_p);
-
+DFW_FIELD_TRIAL_SERVICE_LOCAL	Material *AllocateMaterial (bson_oid_t *id_p, const char *accession_s, const char *full_accession_s, const char *species_s, const char *type_s, const char *selection_reason_s, const char *generation_s, const char *supplier_s, const char *source_s, const char *germplasm_origin_s, const char *treatment_s, bool gru_flag, bool cleaned_flag, uint32 tgw, const Study *area_p, const bson_oid_t *gene_bank_id_p, const FieldTrialServiceData *data_p);
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL Material *AllocateMaterialByGermplasmID (bson_oid_t *id_p, const char *germplasm_id_s, const Study *area_p, const FieldTrialServiceData *data_p);
 
 
-DFW_FIELD_TRIAL_SERVICE_LOCAL Material *AllocateMaterialByAccession (bson_oid_t *id_p, const char *accession_s, bson_oid_t *gene_bank_id_p, const FieldTrialServiceData *data_p);
+DFW_FIELD_TRIAL_SERVICE_LOCAL Material *AllocateMaterialByAccession (bson_oid_t *id_p, const char *accession_s, const char *full_accession_s, bson_oid_t *gene_bank_id_p, const FieldTrialServiceData *data_p);
 
 
 
@@ -229,8 +233,7 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL Material *LoadMaterial (const int32 material_id, F
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL Material*GetOrCreateMaterialByInternalName (const char *material_s, Study *area_p, const FieldTrialServiceData *data_p);
 
-DFW_FIELD_TRIAL_SERVICE_LOCAL Material *GetOrCreateMaterialByAccession (const char *accession_s, GeneBank *gene_bank_p, const FieldTrialServiceData *data_p);
-
+DFW_FIELD_TRIAL_SERVICE_LOCAL Material *GetOrCreateMaterialByAccession (const char *accession_s, const char *full_accession_s, GeneBank *gene_bank_p, const FieldTrialServiceData *data_p);
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL Material *GetMaterialByGermplasmID (const char *material_s, Study *area_p, const FieldTrialServiceData *data_p);
 

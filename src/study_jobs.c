@@ -2061,7 +2061,6 @@ static bool AddStudy (ServiceJob *job_p, ParameterSet *param_set_p, FieldTrialSe
 																																					/*
 																																					 * Since we've added some skeleton plots, we need to clear the cached version above
 																																					 */
-																																					char *id_s = GetBSONOidAsString (study_p -> st_id_p);
 
 																																					if (id_s)
 																																						{

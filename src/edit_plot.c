@@ -423,7 +423,7 @@ static bool RunForEditPlotParams (FieldTrialServiceData *data_p, ParameterSet *p
 
 											if (gene_bank_p)
 												{
-													Material *material_p = GetOrCreateMaterialByAccession (accession_s, gene_bank_p, data_p);
+													Material *material_p = GetOrCreateMaterialByAccession (accession_s, NULL, gene_bank_p, data_p);
 
 													if (material_p)
 														{

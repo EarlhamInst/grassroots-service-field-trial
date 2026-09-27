@@ -10,7 +10,7 @@
 #include "material.h"
 
 
-Material *AllocateMaterial (bson_oid_t *id_p, const char *accession_s, const char *species_s, const char *type_s, const char *selection_reason_s, const char *generation_s, const char *supplier_s, const char *source_s, const char *germplasm_origin_s, const char *treatment_s, bool gru_flag, bool cleaned_flag, uint32 tgw, const Study *area_p, const bson_oid_t *gene_bank_id_p, const FieldTrialServiceData *data_p)
+Material *AllocateMaterial (bson_oid_t *id_p, const char *accession_s, const char *full_accession_s, const char *species_s, const char *type_s, const char *selection_reason_s, const char *generation_s, const char *supplier_s, const char *source_s, const char *germplasm_origin_s, const char *treatment_s, bool gru_flag, bool cleaned_flag, uint32 tgw, const Study *area_p, const bson_oid_t *gene_bank_id_p, const FieldTrialServiceData *data_p)
 {
 	char *copied_accession_s = NULL;
 
@@ -52,34 +52,48 @@ Material *AllocateMaterial (bson_oid_t *id_p, const char *accession_s, const cha
 
 																			if (copied_gene_bank_id_p)
 																				{
-																					Material *material_p = (Material *) AllocMemory (sizeof (Material));
+																					char *copied_accession_full_name_s = NULL;
 
-
-																					if (material_p)
+																					if ((IsStringEmpty (full_accession_s)) || ((copied_accession_full_name_s = EasyCopyToNewString (full_accession_s)) != NULL))
 																						{
-																							material_p -> ma_id_p = id_p;
-																							material_p -> ma_accession_s = copied_accession_s;
-																							material_p -> ma_gene_bank_id_p = copied_gene_bank_id_p;
-
-																							/*
-																							material_p -> ma_generation_s = copied_generation_s;
-																							material_p -> ma_selection_reason_s = copied_selection_reason_s;
-																							material_p -> ma_seed_supplier_s = copied_supplier_s;
-																							material_p -> ma_seed_source_s = copied_source_s;
-																							material_p -> ma_type_s = copied_type_s;
-																							material_p -> ma_seed_treatment_s = copied_treatment_s;
-																							material_p -> ma_species_name_s = copied_species_s;
-																							material_p -> ma_germplasm_origin_s = copied_germplasm_origin_s;
-																							material_p -> ma_parent_area_p = area_p;
-
-																							material_p -> ma_cleaned_flag = cleaned_flag;
-																							material_p -> ma_in_gru_flag = gru_flag;
-																							material_p -> ma_tgw = tgw;
-																							 */
+																							Material *material_p = (Material *) AllocMemory (sizeof (Material));
 
 
-																							return material_p;
-																						}		/* if (material_p) */
+																							if (material_p)
+																								{
+																									material_p -> ma_id_p = id_p;
+																									material_p -> ma_accession_s = copied_accession_s;
+																									material_p -> ma_gene_bank_id_p = copied_gene_bank_id_p;
+
+																									/*
+																									material_p -> ma_generation_s = copied_generation_s;
+																									material_p -> ma_selection_reason_s = copied_selection_reason_s;
+																									material_p -> ma_seed_supplier_s = copied_supplier_s;
+																									material_p -> ma_seed_source_s = copied_source_s;
+																									material_p -> ma_type_s = copied_type_s;
+																									material_p -> ma_seed_treatment_s = copied_treatment_s;
+																									material_p -> ma_species_name_s = copied_species_s;
+																									material_p -> ma_germplasm_origin_s = copied_germplasm_origin_s;
+																									material_p -> ma_parent_area_p = area_p;
+
+																									material_p -> ma_cleaned_flag = cleaned_flag;
+																									material_p -> ma_in_gru_flag = gru_flag;
+																									material_p -> ma_tgw = tgw;
+																									 */
+
+
+																									return material_p;
+																								}		/* if (material_p) */
+
+																							if (copied_accession_full_name_s)
+																								{
+																									FreeCopiedString (copied_accession_full_name_s);
+																								}
+																						}
+																					else
+																						{
+																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to copy full accession \"%s\"", full_accession_s);
+																						}
 
 																					FreeBSONOid (copied_gene_bank_id_p);
 																				}
@@ -309,6 +323,15 @@ json_t *GetMaterialAsJSON (const Material *material_p, const ViewFormat format, 
 
 									if (SetJSONString (material_json_p, MA_ACCESSION_S, material_p -> ma_accession_s))
 										{
+											if ((material_p -> ma_accession_full_name_s == NULL) || (SetJSONString (material_json_p, MA_ACCESSION_FULL_S, material_p -> ma_accession_full_name_s)))
+												{
+													success_flag = true;
+												}		/* if ((material_p -> ma_accession_full_name_s == NULL) || (SetJSONString (material_json_p, MA_ACCESSION_FULL_S, material_p -> ma_accession_full_name_s))) */
+											else
+												{
+													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, material_json_p, "Failed to add \"%s\": \"%s\"", MA_ACCESSION_FULL_S, material_p -> ma_accession_full_name_s);
+
+												}
 											/*
 											if (SetValidJSONString (material_json_p, MA_GERMPLASM_ORIGIN_S, material_p -> ma_germplasm_origin_s))
 												{
@@ -333,7 +356,6 @@ json_t *GetMaterialAsJSON (const Material *material_p, const ViewFormat format, 
 																															if (SetJSONInteger (material_json_p, MA_TGW_S, material_p -> ma_tgw))
 																																{
 											 */
-											success_flag = true;
 											/*
 																																}
 																															else
@@ -509,6 +531,8 @@ Material *GetMaterialFromJSON (const json_t *json_p, const ViewFormat format, co
 													const char *seed_source_s = GetJSONString (json_p, MA_SEED_SOURCE_S);
 													const char *germplasm_origin_s = GetJSONString (json_p, MA_GERMPLASM_ORIGIN_S);
 													const char *seed_treatment_s = GetJSONString (json_p, MA_SEED_TREATMENT_S);
+													const char *full_accession_s = GetJSONString (json_p, MA_ACCESSION_FULL_S);
+
 													bool in_gru_flag;
 													bool cleaned_flag;
 													uint32 tgw = 0;
@@ -518,7 +542,7 @@ Material *GetMaterialFromJSON (const json_t *json_p, const ViewFormat format, co
 													GetJSONBoolean (json_p, MA_CLEANED_NAME_S, &cleaned_flag);
 													GetJSONUnsignedInteger (json_p, MA_TGW_S, (int *) &tgw);
 
-													material_p = AllocateMaterial (id_p, accession_s, species_s, type_s, selection_reason_s, generation_s, seed_supplier_s, seed_source_s, germplasm_origin_s, seed_treatment_s, in_gru_flag, cleaned_flag, tgw, study_p, gene_bank_id_p, data_p);
+													material_p = AllocateMaterial (id_p, accession_s, full_accession_s, species_s, type_s, selection_reason_s, generation_s, seed_supplier_s, seed_source_s, germplasm_origin_s, seed_treatment_s, in_gru_flag, cleaned_flag, tgw, study_p, gene_bank_id_p, data_p);
 
 
 													if (material_p)

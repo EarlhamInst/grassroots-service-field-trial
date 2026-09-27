@@ -44,33 +44,57 @@ static char *GetRegex (const char *accession_s);
 
 
 
-Material *AllocateMaterialByAccession (bson_oid_t *id_p, const char *accession_s, bson_oid_t *gene_bank_id_p, const FieldTrialServiceData *data_p)
+Material *AllocateMaterialByAccession (bson_oid_t *id_p, const char *accession_s, const char *full_accession_s, bson_oid_t *gene_bank_id_p, const FieldTrialServiceData *data_p)
 {
 	char *copied_accession_s = NULL;
 
 	if ((copied_accession_s = EasyCopyToNewString (accession_s)) != NULL)
 		{
-			Material *material_p = (Material *) AllocMemory (sizeof (Material));
+			char *copied_full_accession_s = NULL;
 
-			if (material_p)
+			if ((full_accession_s == NULL) || (copied_full_accession_s = EasyCopyToNewString (full_accession_s)) != NULL)
 				{
-					material_p -> ma_id_p = id_p;
-					material_p -> ma_gene_bank_id_p = gene_bank_id_p;
-					material_p -> ma_accession_s = copied_accession_s;
+					Material *material_p = (Material *) AllocMemory (sizeof (Material));
 
-					return material_p;
-				}		/* if (material_p) */
+					if (material_p)
+						{
+							material_p -> ma_id_p = id_p;
+							material_p -> ma_gene_bank_id_p = gene_bank_id_p;
+							material_p -> ma_accession_s = copied_accession_s;
+
+							return material_p;
+						}		/* if (material_p) */
+					else
+						{
+							char *gene_bank_id_s = GetBSONOidAsString (gene_bank_id_p);
+
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to allocate Material with accession \"%s\" in gene bank \"%s\"", accession_s, gene_bank_id_s ? gene_bank_id_s : "");
+
+							if (gene_bank_id_s)
+								{
+									FreeBSONOidString (gene_bank_id_s);
+								}
+
+						}
+
+					if (copied_full_accession_s)
+						{
+							FreeCopiedString (copied_full_accession_s);
+						}
+				}
 			else
 				{
 					char *gene_bank_id_s = GetBSONOidAsString (gene_bank_id_p);
 
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to allocate Material with accession \"%s\" in gene bank \"%s\"", accession_s, gene_bank_id_s ? gene_bank_id_s : "");
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to copy full accession \"%s\" for Material in gene bank \"%s\"", full_accession_s, gene_bank_id_s ? gene_bank_id_s : "");
 
 					if (gene_bank_id_s)
 						{
 							FreeBSONOidString (gene_bank_id_s);
 						}
+
 				}
+
 
 			FreeCopiedString (copied_accession_s);
 		}
@@ -109,6 +133,12 @@ void FreeMaterial (Material *material_p)
 		{
 			FreeCopiedString (material_p -> ma_accession_s);
 		}
+
+	if (material_p -> ma_accession_full_name_s)
+		{
+			FreeCopiedString (material_p -> ma_accession_full_name_s);
+		}
+
 
 	/*
 	if (material_p -> ma_species_name_s)
@@ -301,7 +331,8 @@ Material *GetMaterialFromJSON (const json_t *json_p, const ViewFormat format, co
 
 											if (success_flag)
 												{
-													Material *material_p = AllocateMaterialByAccession (id_p, accession_s, gene_bank_id_p, data_p);
+													const char *full_accession_s = GetJSONString (json_p, MA_ACCESSION_FULL_S);
+													Material *material_p = AllocateMaterialByAccession (id_p, accession_s, full_accession_s, gene_bank_id_p, data_p);
 
 													if (material_p)
 														{
@@ -385,13 +416,13 @@ bool SaveMaterial (Material *material_p, const FieldTrialServiceData *data_p)
 
 
 
-Material *GetOrCreateMaterialByAccession (const char *accession_s, GeneBank *gene_bank_p, const FieldTrialServiceData *data_p)
+Material *GetOrCreateMaterialByAccession (const char *accession_s, const char *full_accession_s, GeneBank *gene_bank_p, const FieldTrialServiceData *data_p)
 {
 	Material *material_p = GetMaterialByAccession (accession_s, gene_bank_p, true, data_p);
 
 	if (!material_p)
 		{
-			material_p = AllocateMaterialByAccession (NULL, accession_s, gene_bank_p -> gb_id_p, data_p);
+			material_p = AllocateMaterialByAccession (NULL, accession_s, full_accession_s, gene_bank_p -> gb_id_p, data_p);
 
 			if (material_p)
 				{

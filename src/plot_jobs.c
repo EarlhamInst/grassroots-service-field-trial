@@ -36,6 +36,7 @@
 
 #include "blank_row.h"
 #include "discard_row.h"
+#include "guard_row.h"
 #include "standard_row.h"
 
 
@@ -1220,7 +1221,8 @@ static OperationStatus CreateOrUpdateStandardRowFromJSON (StandardRow **row_pp, 
 
 			if (!IsStringEmpty (accession_s))
 				{
-					Material *material_p = GetOrCreateMaterialByAccession (accession_s, gene_bank_p, data_p);
+					const char *full_accession_s =  GetJSONString (table_row_json_p, PL_ACCESSION_FULL_NAME_TABLE_TITLE_S);
+					Material *material_p = GetOrCreateMaterialByAccession (accession_s, full_accession_s, gene_bank_p, data_p);
 
 					if (material_p)
 						{
@@ -2558,7 +2560,7 @@ OperationStatus GenerateAndAddSkeletonPlotsToStudy (Study *study_p, const uint32
 
 							if (plot_p)
 								{
-									Material *material_p = GetOrCreateMaterialByAccession (S_DEFAULT_VARIETY_S, gru_gene_bank_p, data_p);
+									Material *material_p = GetOrCreateMaterialByAccession (S_DEFAULT_VARIETY_S, NULL, gru_gene_bank_p, data_p);
 									StandardRow *sr_p = AllocateStandardRow (NULL, rack_plotwise_index, plot_id, control_rep_flag, replicate, material_p, material_p ? MF_SHALLOW_COPY : MF_ALREADY_FREED, NULL, plot_p);
 
 									if (sr_p)
