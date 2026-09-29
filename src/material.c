@@ -61,6 +61,7 @@ Material *AllocateMaterialByAccession (bson_oid_t *id_p, const char *accession_s
 							material_p -> ma_id_p = id_p;
 							material_p -> ma_gene_bank_id_p = gene_bank_id_p;
 							material_p -> ma_accession_s = copied_accession_s;
+							material_p -> ma_accession_full_name_s = copied_full_accession_s;
 
 							return material_p;
 						}		/* if (material_p) */
