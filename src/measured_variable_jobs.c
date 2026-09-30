@@ -182,16 +182,17 @@ bool RunForSubmittedSpreadsheet (FieldTrialServiceData *data_p, ParameterSet *pa
 			/*
 			 * Has a spreadsheet been uploaded?
 			 */
-			if (phenotypes_json_p && (json_array_size (phenotypes_json_p) > 0))
+			size_t num_phenotypes;
+
+			if (phenotypes_json_p && ((num_phenotypes = json_array_size (phenotypes_json_p)) > 0))
 				{
 					size_t index = 0;
 					size_t num_successes = 0;
-					size_t num_phenotypes = json_array_size (phenotypes_json_p);
 					json_t *measured_variable_json_p;
 
 					json_array_foreach (phenotypes_json_p, index, measured_variable_json_p)
 						{
-							OperationStatus row_status = AddMeasuredVariablesFromJSON (job_p, index, phenotypes_json_p, GetTraitFromSpreadsheetJSON, GetMethodFromSpreadsheetJSON,
+							OperationStatus row_status = AddMeasuredVariablesFromJSON (job_p, index, measured_variable_json_p, GetTraitFromSpreadsheetJSON, GetMethodFromSpreadsheetJSON,
 																								 GetUnitFromSpreadsheetJSON, GetVariableFromSpreadsheetJSON,
 																								 GetScaleClassFromSpreadsheetJSON,
 																								 GetOntologyFromSpreadsheetJSON, data_p);
