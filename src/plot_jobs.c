@@ -1486,7 +1486,10 @@ static OperationStatus AddPlotFromJSON (ServiceJob *job_p, json_t *table_row_jso
 						{
 							if (SavePlot (plot_p, data_p))
 								{
-									add_status = OS_SUCCEEDED;
+									if (add_status != OS_PARTIALLY_SUCCEEDED)
+										{
+											add_status = OS_SUCCEEDED;
+										}
 								}
 							else
 								{
