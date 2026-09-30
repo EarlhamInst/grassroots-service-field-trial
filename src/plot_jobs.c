@@ -2436,6 +2436,8 @@ static void RemoveUnneededColumns (json_t *table_row_json_p, const json_t *unkno
 	json_object_del (table_row_json_p, PL_COLUMN_TITLE_S);
 	json_object_del (table_row_json_p, PL_RACK_TITLE_S);
 	json_object_del (table_row_json_p, PL_ACCESSION_TABLE_TITLE_S);
+	json_object_del (table_row_json_p, PL_ACCESSION_FULL_NAME_TABLE_TITLE_S);
+	json_object_del (table_row_json_p, PL_PLOT_CATEGORY_TABLE_TITLE_S);
 	json_object_del (table_row_json_p, PL_GENE_BANK_S);
 	json_object_del (table_row_json_p, S_TREATMENT_TITLE_S);
 	json_object_del (table_row_json_p, PL_REPLICATE_TITLE_S);
