@@ -698,7 +698,7 @@ OperationStatus GetAllStudiesContainingMeasuredVariable (const MeasuredVariable 
 	bool success_flag = true;
 
 
-	bson_t *query_p = BCON_NEW (ST_PHENOTYPES_S, BCON_OID (mv_p -> mv_variable_term_p -> st_name_s));
+	bson_t *query_p = BCON_NEW (ST_PHENOTYPES_S, BCON_UTF8 (mv_p -> mv_variable_term_p -> st_name_s));
 
 	if (query_p)
 		{
@@ -1007,7 +1007,8 @@ static OperationStatus AddMeasuredVariablesFromJSON (ServiceJob *job_p, const ui
 
 																	if (mv_p)
 																		{
-																			int res = CheckMeasuredVariable (mv_p, data_p);
+																			const char *existing_var_s = NULL;
+																			int res = CheckMeasuredVariable (mv_p, data_p, &existing_var_s);
 
 																			if (res == 0)
 																				{
@@ -1034,8 +1035,21 @@ static OperationStatus AddMeasuredVariablesFromJSON (ServiceJob *job_p, const ui
 																				}
 																			else if (res == -1)
 																				{
-																					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, table_row_json_p, "MeasuredVariable Trait, Measurement and Unit Combination already exist for different Variable " SIZET_FMT, current_row);
-																					AddTabularParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, "MeasuredVariable Trait, Measurement and Unit Combination already exist for different Variable", current_row, NULL);
+																					const char *var_s = GetMeasuredVariableName (mv_p);
+																					char *error_s = ConcatenateVarargsStrings ("MeasuredVariable Trait, Measurement and Unit Combination for ", var_s, " already exist for different Variable ", existing_var_s, NULL);
+
+																					if (error_s)
+																						{
+																							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, table_row_json_p, "MeasuredVariable Trait, Measurement and Unit Combination for %s already exist for different Variable %s on row " SIZET_FMT, var_s, existing_var_s, current_row);
+																							AddTabularParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, error_s, current_row, NULL);
+
+																							FreeCopiedString (error_s);
+																						}
+																					else
+																						{
+																							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, table_row_json_p, "MeasuredVariable Trait, Measurement and Unit Combination already exist for different Variable " SIZET_FMT, current_row);
+																							AddTabularParameterErrorMessageToServiceJob (job_p, S_PHENOTYPE_TABLE.npt_name_s, S_PHENOTYPE_TABLE.npt_type, "MeasuredVariable Trait, Measurement and Unit Combination already exist for different Variable", current_row, NULL);
+																						}
 																				}
 																		}		/* if (mv_p) */
 																	else
@@ -1203,7 +1217,7 @@ static SchemaTerm *GetSchemaTerm (const json_t *json_p, const char *id_key_s, co
 }
 
 
-int CheckMeasuredVariable (MeasuredVariable *var_p, const FieldTrialServiceData *data_p)
+int CheckMeasuredVariable (MeasuredVariable *var_p, const FieldTrialServiceData *data_p, const char **existing_variable_ss)
 {
 	int res = 0;
 
@@ -1233,8 +1247,16 @@ int CheckMeasuredVariable (MeasuredVariable *var_p, const FieldTrialServiceData 
 					else
 						{
 							res = -1;
+
+							const char *existing_name_s = GetMeasuredVariableName (saved_treatment_p);
 							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__,  "\"%s\" and \"%s\" have matching traits, measurements and units",
-													 GetMeasuredVariableName (var_p), GetMeasuredVariableName (saved_treatment_p));
+													 GetMeasuredVariableName (var_p), existing_name_s);
+
+
+							if (existing_variable_ss)
+								{
+									*existing_variable_ss = existing_name_s;
+								}
 
 						}
 

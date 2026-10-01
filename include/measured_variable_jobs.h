@@ -84,8 +84,7 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddMeasuredVariableToServiceJob (ServiceJob *
  * @return 1 if the MeasuredVariable already exists, 0 if it doesn't and -1 if the same combination
  * of trait, measurement and unit are in use for another variable
  */
-DFW_FIELD_TRIAL_SERVICE_LOCAL int CheckMeasuredVariable (MeasuredVariable *treatment_p, const FieldTrialServiceData *data_p);
-
+DFW_FIELD_TRIAL_SERVICE_LOCAL int CheckMeasuredVariable (MeasuredVariable *var_p, const FieldTrialServiceData *data_p, const char **existing_variable_ss);
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL json_t *GetMeasuredVariableIndexingData (Service *service_p);
 

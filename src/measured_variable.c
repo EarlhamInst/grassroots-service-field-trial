@@ -170,8 +170,6 @@ json_t *GetMeasuredVariableAsJSON (const MeasuredVariable *mv_p, const ViewForma
 				{
 					bool success_flag = false;
 
-
-
 					if (format == VF_CLIENT_MINIMAL)
 						{
 							const char *variable_s = GetMeasuredVariableName (mv_p);
@@ -198,7 +196,7 @@ json_t *GetMeasuredVariableAsJSON (const MeasuredVariable *mv_p, const ViewForma
 												{
 													if (json_object_set_new (phenotype_json_p, MV_SCALE_S, scale_json_p) == 0)
 														{
-															if (format == VF_STORAGE)
+															if ((format == VF_STORAGE) || (format == VF_INDEXING))
 																{
 																	if (AddCompoundIdToJSON (phenotype_json_p, mv_p -> mv_id_p))
 																		{
@@ -463,9 +461,21 @@ OperationStatus SaveMeasuredVariable (MeasuredVariable *mv_p, ServiceJob *job_p,
 
 											if (status != OS_SUCCEEDED)
 												{
+													char *error_s = NULL;
 													status = OS_PARTIALLY_SUCCEEDED;
 													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, index_json_p, "Failed to index Measured Variable \"%s\" as JSON to Lucene", mv_p -> mv_variable_term_p -> st_name_s);
-													AddGeneralErrorMessageToServiceJob (job_p, "Measured Variable saved but failed to index for searching");
+
+													error_s = ConcatenateVarargsStrings ("Measured Variable \"", mv_p -> mv_variable_term_p -> st_name_s, "\" saved but failed to index for searching", NULL);
+
+													if (error_s)
+														{
+															AddGeneralErrorMessageToServiceJob (job_p, error_s);
+															FreeCopiedString (error_s);
+														}
+													else
+														{
+															AddGeneralErrorMessageToServiceJob (job_p, "Measured Variable saved but failed to index for searching");
+														}
 												}
 
 											json_decref (index_json_p);
