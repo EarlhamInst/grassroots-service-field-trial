@@ -495,7 +495,7 @@ void ClearObservation (Observation *observation_p)
 
 	if (observation_p -> ob_metadata_p)
 		{
-			ClearObservationMetadata (observation_p -> ob_metadata_p);
+			FreeObservationMetadata (observation_p -> ob_metadata_p);
 		}
 
 
@@ -811,10 +811,10 @@ Observation *GetObservationFromJSON (const json_t *observation_json_p, FieldTria
 																					if (!observation_p)
 																						{
 																							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, observation_json_p, "Failed to allocate Observation");
-
-																							FreeObservationMetadata (metadata_p);
 																						}
 
+																					/* The Observation has made a deep copy of the metadata so we can free it */
+																					FreeObservationMetadata (metadata_p);
 																				}
 																		}
 																}

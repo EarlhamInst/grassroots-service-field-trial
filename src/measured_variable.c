@@ -357,6 +357,7 @@ MeasuredVariable *GetMeasuredVariableFromJSON (const json_t *phenotype_json_p, c
 
 																}		/* if (GetNamedIdFromJSON (phenotype_json_p, MV_ONTOLOGY_S, ontology_id_p)) */
 
+															FreeBSONOid (ontology_id_p);
 														}		/* if (ontology_id_p) */
 
 

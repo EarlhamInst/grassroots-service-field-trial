@@ -55,6 +55,9 @@ static bool AddStandardRowFromJSON (Row *row_p, const json_t *row_json_p, const 
 static StandardRow *AllocateEmptyStandardRow (void);
 
 
+static bool GetReplicateDetailsFromJSON (const json_t *row_json_p, bool *rep_control_flag_p, uint32 *replicate_p);
+
+
 static StandardRow *AllocateEmptyStandardRow (void)
 {
 	LinkedList *observations_p = AllocateLinkedList (FreeObservationNode);
@@ -219,6 +222,9 @@ StandardRow *GetStandardRowFromJSON (const json_t *row_json_p, Plot *plot_p, Mat
 	StandardRow *row_p = NULL;
 	Material *material_to_use_p = material_p;
 
+	/*
+	 * If we haven't got a plot, let's get it
+	 */
 	if (!plot_p)
 		{
 			bson_oid_t *plot_id_p = GetNewUnitialisedBSONOid ();
@@ -236,12 +242,24 @@ StandardRow *GetStandardRowFromJSON (const json_t *row_json_p, Plot *plot_p, Mat
 
 	if (plot_p)
 		{
-			row_p = AllocateEmptyStandardRow ();
+			uint32 rack_index = 0;
+			Material *planted_material_p = NULL;
+			MEM_FLAG planted_material_mem = MF_ALREADY_FREED;
 
-			if (row_p)
+			if (GetJSONUnsignedInteger (row_json_p, SR_RACK_INDEX_S, &rack_index))
 				{
-					if (PopulateRowFromJSON (& (row_p -> sr_base), plot_p, row_json_p, format, data_p))
+					uint32 study_index = 0;
+
+					if (GetJSONUnsignedInteger (row_json_p, RO_STUDY_INDEX_S, &study_index))
 						{
+							const char *store_code_s = GetJSONString (row_json_p, SR_STORE_CODE_S);
+							bool rep_control_flag = false;
+							uint32 replicate_index = 1;
+							bool material_flag = true;
+
+							GetReplicateDetailsFromJSON (row_json_p, &rep_control_flag, &replicate_index);
+
+
 							if (format != VF_CLIENT_MINIMAL)
 								{
 									/*
@@ -250,8 +268,9 @@ StandardRow *GetStandardRowFromJSON (const json_t *row_json_p, Plot *plot_p, Mat
 									if (!material_to_use_p)
 										{
 											bson_oid_t *material_id_p = GetNewUnitialisedBSONOid ();
-
 											bool success_flag = true;
+
+											material_flag = false;
 
 											if (material_id_p)
 												{
@@ -261,6 +280,7 @@ StandardRow *GetStandardRowFromJSON (const json_t *row_json_p, Plot *plot_p, Mat
 
 															if (material_to_use_p)
 																{
+																	material_flag = true;
 																	success_flag = true;
 																}
 															else
@@ -293,116 +313,63 @@ StandardRow *GetStandardRowFromJSON (const json_t *row_json_p, Plot *plot_p, Mat
 
 										}		/* if (!material_to_use_p) */
 
-									if (material_to_use_p)
+								}		/* if (format != VF_CLIENT_MINIMAL) */
+
+
+							if (material_flag)
+								{
+									bson_oid_t *id_p = GetNewUnitialisedBSONOid ();
+
+									if (id_p)
 										{
-											json_int_t rack_index = -1;
-
-											if (GetJSONInteger (row_json_p, SR_RACK_INDEX_S, &rack_index))
+											if (GetMongoIdFromJSON (row_json_p, id_p))
 												{
-													bool rep_control_flag = false;
-													uint32 replicate = 1;
-													const json_t *rep_json_p = json_object_get (row_json_p, SR_REPLICATE_S);
+													row_p = AllocateStandardRow (id_p, rack_index, study_index, rep_control_flag, replicate_index, planted_material_p, planted_material_mem, store_code_s, plot_p);
 
-													if (rep_json_p)
+													if (row_p)
 														{
-															if (json_is_string (rep_json_p))
+															if (GetObservationsFromJSON (row_json_p, row_p, data_p))
 																{
-																	const char *rep_s = json_string_value (rep_json_p);
-
-																	if (rep_s)
+																	if (!GetTreatmentFactorValuesFromJSON (row_json_p, row_p, study_p, data_p))
 																		{
-																			if (Stricmp (rep_s, SR_REPLICATE_CONTROL_S) == 0)
-																				{
-																					rep_control_flag = true;
-																				}
-																			else
-																				{
-																					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, row_json_p, "Invalid replicate value \"%s\"", rep_s);
-																				}
-																		}
-																	else
-																		{
-																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, row_json_p, "Missing replicate value");
-																		}
-																}
-															else if (json_is_integer (rep_json_p))
-																{
-																	replicate = json_integer_value (rep_json_p);
-																}
-														}
-
-													if ((replicate != 0) || (rep_control_flag))
-														{
-															MEM_FLAG mf = material_to_use_p == material_p ? MF_SHADOW_USE : MF_SHALLOW_COPY;
-
-															row_p -> sr_rack_index = rack_index;
-															row_p -> sr_planted_material_p = material_to_use_p;
-															row_p -> sr_planted_material_mem = mf;
-															row_p -> sr_replicate_index = replicate;
-
-
-															SetStandardRowGenotypeControl (row_p, rep_control_flag);
-
-
-															if (row_p)
-																{
-																	const char *store_code_s = GetJSONString (row_json_p, SR_STORE_CODE_S);
-
-																	if (SetStandardRowStoreCode (row_p, store_code_s))
-																		{
-																			if (GetObservationsFromJSON (row_json_p, row_p, data_p))
-																				{
-																					if (!GetTreatmentFactorValuesFromJSON (row_json_p, row_p, study_p, data_p))
-																						{
-																							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, row_json_p, "GetTreatmentFactorValuesFromJSON failed");
-																							FreeRow (& (row_p -> sr_base));
-																							row_p = NULL;
-
-																							/* id_p and material_to_use_p have been freed by FreeRow () */
-																							material_to_use_p = NULL;
-																						}
-																				}
-																			else
-																				{
-																					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, row_json_p, "GetObservationsFromJSON failed");
-																					FreeRow (& (row_p -> sr_base));
-																					row_p = NULL;
-
-																					/* id_p has been freed by FreeRow () */
-																					material_to_use_p = NULL;
-																				}
-
-																		}		/* if (SetStandardRowStoreCode (row_p, store_code_s)) */
-																	else
-																		{
-																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, row_json_p, "SetStandardRowStoreCode () failed");
+																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, row_json_p, "GetTreatmentFactorValuesFromJSON failed");
 																			FreeRow (& (row_p -> sr_base));
 																			row_p = NULL;
 
-																			/* id_p has been freed by FreeRow () */
+																			/* id_p and material_to_use_p have been freed by FreeRow () */
 																			material_to_use_p = NULL;
 																		}
+																}
+															else
+																{
+																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, row_json_p, "GetObservationsFromJSON failed");
+																	FreeRow (& (row_p -> sr_base));
+																	row_p = NULL;
 
+																	/* id_p has been freed by FreeRow () */
+																	material_to_use_p = NULL;
 																}
 
-														}		/* if ((replicate != 0) || (rep_control_flag)) */
+														}
+												}
 
-												}		/* if (GetJSONInteger (json_p, SR_RACK_INDEX_S, &rack_index)) */
-
-										}		/* if (material_to_use_p) */
-									else
-										{
-											char id_s [MONGO_OID_STRING_BUFFER_SIZE];
-
-											bson_oid_to_string (plot_p -> pl_id_p, id_s);
-											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get row's material for plot \"%s\" at [" UINT32_FMT ", " UINT32_FMT "]", id_s, plot_p -> pl_row_index, plot_p -> pl_column_index);
+											if (!row_p)
+												{
+													FreeBSONOid (id_p);
+												}
 										}
 
-								}		/* if (format == VF_CLIENT_FULL) */
 
-						}		/* if (PopulateRowFromJSON (& (row_p -> sr_base), plot_p, row_json_p, format, data_p)) */
 
-				}		/* if (row_p) */
+
+								}
+
+
+
+						}		/* if (GetJSONUnsignedInteger (row_json_p, RO_STUDY_INDEX_S, &study_index)) */
+
+				}		/* if (GetJSONUnsignedInteger (row_json_p, SR_RACK_INDEX_S, &rack_index)) */
+
 
 		}		/* if (plot_p) */
 
@@ -428,6 +395,47 @@ StandardRow *GetStandardRowFromJSON (const json_t *row_json_p, Plot *plot_p, Mat
 			return NULL;
 		}
 }
+
+
+static bool GetReplicateDetailsFromJSON (const json_t *row_json_p, bool *rep_control_flag_p, uint32 *replicate_p)
+{
+	bool set_flag = false;
+	const json_t *rep_json_p = json_object_get (row_json_p, SR_REPLICATE_S);
+
+	if (rep_json_p)
+		{
+			if (json_is_string (rep_json_p))
+				{
+					const char *rep_s = json_string_value (rep_json_p);
+
+					if (rep_s)
+						{
+							if (Stricmp (rep_s, SR_REPLICATE_CONTROL_S) == 0)
+								{
+									*rep_control_flag_p = true;
+									set_flag = true;
+								}
+							else
+								{
+									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, row_json_p, "Invalid replicate value \"%s\"", rep_s);
+								}
+						}
+					else
+						{
+							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, row_json_p, "Missing replicate value");
+						}
+				}
+			else if (json_is_integer (rep_json_p))
+				{
+					*replicate_p = json_integer_value (rep_json_p);
+					set_flag = true;
+				}
+		}
+
+	return set_flag;
+}
+
+
 
 //
 //bool SaveRow (Row *row_p, const FieldTrialServiceData *data_p, bool insert_flag)

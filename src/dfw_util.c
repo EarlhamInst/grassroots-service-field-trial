@@ -37,7 +37,7 @@
 	#define DFW_UTIL_DEBUG	(STM_LEVEL_NONE)
 #endif
 
-static const char * const S_ALL_STUDIES_JSON_S = "all.json";
+static const char * const S_ALL_STUDIES_JSON_S = "all";
 
 
 static char *GetCacheFilename (const char *id_s, const FieldTrialServiceData *data_p);

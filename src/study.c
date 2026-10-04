@@ -1379,6 +1379,7 @@ json_t *GetStudyAsJSON (Study *study_p, const ViewFormat format, JSONProcessor *
 
 				}		/* if (AddCommonStudyJSONValues (study_p, study_json_p, format, data_p)) */
 
+			json_decref (study_json_p);
 		}		/* if (study_json_p) */
 
 	return NULL;

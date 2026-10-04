@@ -365,6 +365,7 @@ static ServiceMetadata *GetTreatmentSubmissionServiceMetadata (Service *service_
 									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to allocate input term %s for service metadata", term_url_s);
 								}
 
+							FreeServiceMetadata (metadata_p);
 						}		/* if (metadata_p) */
 					else
 						{

@@ -82,6 +82,7 @@ static NamedParameterType S_SEARCH_STUDIES_ACCESSIONS STUDY_JOB_STRUCT_VAL ("ST 
 static NamedParameterType S_SEARCH_STUDIES_PHENOTYPES STUDY_JOB_STRUCT_VAL ("ST Search Study Phenotypes", PT_JSON);
 
 
+static NamedParameterType S_SEARCH_ALL_STUDIES = { "Get all studies", PT_BOOLEAN };
 
 
 
@@ -1057,6 +1058,7 @@ bool GetSearchStudyParameterTypeForNamedParameter (const char *param_name_s, Par
 					STUDY_SEARCH_STUDIES,
 					STUDY_ID,
 					//STUDY_GET_ALL_PLOTS,
+					S_SEARCH_ALL_STUDIES,
 					STUDY_DETAIL_LEVEL,
 					STUDY_LOCATIONS_LIST,
 					STUDY_HARVEST_YEAR,
@@ -1086,75 +1088,84 @@ bool AddSearchStudyParams (ServiceData *data_p, ParameterSet *param_set_p)
 
 			if ((param_p = EasyCreateAndAddBooleanParameterToParameterSet (data_p, param_set_p, group_p, STUDY_SEARCH_STUDIES.npt_name_s, "Search Studies", "Get the matching Studies", &search_flag, PL_ADVANCED)) != NULL)
 				{
-					if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, param_set_p, group_p, STUDY_ID.npt_type, STUDY_ID.npt_name_s, "Id", "The id of the Study", NULL, PL_ADVANCED)) != NULL)
-						{
-							if (AddStudyLevelDetailParameter (param_set_p, group_p, data_p))
-								{
-									if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, param_set_p, group_p, S_SEARCH_TRIAL_ID.npt_type, S_SEARCH_TRIAL_ID.npt_name_s, "Parent Field Trial", "Get all Studies for a given Field Trial", NULL, PL_ADVANCED)) != NULL)
-										{
-											if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, param_set_p, group_p, STUDY_LOCATIONS_LIST.npt_type, STUDY_LOCATIONS_LIST.npt_name_s, "Locations", "The available locations", NULL, PL_ADVANCED)) != NULL)
-												{
-													if (SetUpLocationsListParameter ((FieldTrialServiceData *) data_p, (StringParameter *) param_p, NULL, GetUnsetLocationValue ()))
-														{
-															uint32 year = 2017;
 
-															if ((param_p = EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, param_set_p, group_p, STUDY_SOWING_YEAR.npt_name_s, "Sowing year", "Year that the Study was/will be sown", &year, PL_ADVANCED)) != NULL)
+					if ((param_p = EasyCreateAndAddBooleanParameterToParameterSet (data_p, param_set_p, group_p, S_SEARCH_ALL_STUDIES.npt_name_s, "Get all Studies", "Get all of the studies Studies", &search_flag, PL_ADVANCED)) != NULL)
+						{
+							if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, param_set_p, group_p, STUDY_ID.npt_type, STUDY_ID.npt_name_s, "Id", "The id of the Study", NULL, PL_ADVANCED)) != NULL)
+								{
+									if (AddStudyLevelDetailParameter (param_set_p, group_p, data_p))
+										{
+											if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, param_set_p, group_p, S_SEARCH_TRIAL_ID.npt_type, S_SEARCH_TRIAL_ID.npt_name_s, "Parent Field Trial", "Get all Studies for a given Field Trial", NULL, PL_ADVANCED)) != NULL)
+												{
+													if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, param_set_p, group_p, STUDY_LOCATIONS_LIST.npt_type, STUDY_LOCATIONS_LIST.npt_name_s, "Locations", "The available locations", NULL, PL_ADVANCED)) != NULL)
+														{
+															if (SetUpLocationsListParameter ((FieldTrialServiceData *) data_p, (StringParameter *) param_p, NULL, GetUnsetLocationValue ()))
 																{
-																	if ((param_p = EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, param_set_p, group_p, STUDY_HARVEST_YEAR.npt_name_s, "Harvest year", "Year that the Study was/will be harvested", &year, PL_ADVANCED)) != NULL)
+																	uint32 year = 2017;
+
+																	if ((param_p = EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, param_set_p, group_p, STUDY_SOWING_YEAR.npt_name_s, "Sowing year", "Year that the Study was/will be sown", &year, PL_ADVANCED)) != NULL)
 																		{
-																			if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, param_set_p, group_p, S_SEARCH_STUDIES_ACCESSIONS.npt_type, S_SEARCH_STUDIES_ACCESSIONS.npt_name_s, "Accessions", "Search for Studies containing these accessions", NULL, PL_WIZARD)) != NULL)
+																			if ((param_p = EasyCreateAndAddUnsignedIntParameterToParameterSet (data_p, param_set_p, group_p, STUDY_HARVEST_YEAR.npt_name_s, "Harvest year", "Year that the Study was/will be harvested", &year, PL_ADVANCED)) != NULL)
 																				{
-																					if ((param_p = EasyCreateAndAddJSONParameterToParameterSet (data_p, param_set_p, group_p, S_SEARCH_STUDIES_PHENOTYPES.npt_type, S_SEARCH_STUDIES_PHENOTYPES.npt_name_s, "Phenotypes", "Search for Studies containing these phenotypes", NULL, PL_WIZARD)) != NULL)
+																					if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, param_set_p, group_p, S_SEARCH_STUDIES_ACCESSIONS.npt_type, S_SEARCH_STUDIES_ACCESSIONS.npt_name_s, "Accessions", "Search for Studies containing these accessions", NULL, PL_WIZARD)) != NULL)
 																						{
-																							success_flag = true;
+																							if ((param_p = EasyCreateAndAddJSONParameterToParameterSet (data_p, param_set_p, group_p, S_SEARCH_STUDIES_PHENOTYPES.npt_type, S_SEARCH_STUDIES_PHENOTYPES.npt_name_s, "Phenotypes", "Search for Studies containing these phenotypes", NULL, PL_WIZARD)) != NULL)
+																								{
+																									success_flag = true;
+																								}
+																							else
+																								{
+																									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", S_SEARCH_STUDIES_PHENOTYPES.npt_name_s);
+																								}
 																						}
 																					else
 																						{
-																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", S_SEARCH_STUDIES_PHENOTYPES.npt_name_s);
+																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", S_SEARCH_STUDIES_ACCESSIONS.npt_name_s);
 																						}
 																				}
 																			else
 																				{
-																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", S_SEARCH_STUDIES_ACCESSIONS.npt_name_s);
+																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_HARVEST_YEAR.npt_name_s);
 																				}
 																		}
 																	else
 																		{
-																			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_HARVEST_YEAR.npt_name_s);
+																			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_SOWING_YEAR.npt_name_s);
 																		}
+
 																}
 															else
 																{
-																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_SOWING_YEAR.npt_name_s);
+																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SetUpLocationsListParameter failed");
 																}
 
 														}
 													else
 														{
-															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SetUpLocationsListParameter failed");
+															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_LOCATIONS_LIST.npt_name_s);
 														}
 
-												}
+												}		/* if ((param_p = EasyCreateAndAddParameterToParameterSet (data_p, param_set_p, group_p, S_SEARCH_TRIAL_ID_S.npt_type, S_SEARCH_TRIAL_ID_S.npt_name_s, "Parent Field Trial", "Get all Studies for a given Field Trial", def, PL_ADVANCED)) != NULL) */
 											else
 												{
-													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_LOCATIONS_LIST.npt_name_s);
+													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", S_SEARCH_TRIAL_ID.npt_name_s);
 												}
 
-										}		/* if ((param_p = EasyCreateAndAddParameterToParameterSet (data_p, param_set_p, group_p, S_SEARCH_TRIAL_ID_S.npt_type, S_SEARCH_TRIAL_ID_S.npt_name_s, "Parent Field Trial", "Get all Studies for a given Field Trial", def, PL_ADVANCED)) != NULL) */
+										}
 									else
 										{
-											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", S_SEARCH_TRIAL_ID.npt_name_s);
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddStudyLevelDetailParameter () failed");
 										}
-
 								}
 							else
 								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddStudyLevelDetailParameter () failed");
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_ID.npt_name_s);
 								}
-						}
+
+						}		/* if ((param_p = EasyCreateAndAddBooleanParameterToParameterSet (data_p, param_set_p, group_p, S_SEARCH_ALL_STUDIES.npt_name_s, "Get all Studies", "Get all of the studies Studies", &search_flag, PL_ADVANCED)) != NULL) */
 					else
 						{
-							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", STUDY_ID.npt_name_s);
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to add %s parameter", S_SEARCH_ALL_STUDIES.npt_name_s);
 						}
 
 				}
@@ -1184,83 +1195,40 @@ static bool RunForAdvancedSearchStudyParams (FieldTrialServiceData *data_p, Para
 		{
 			if ((search_flag_p != NULL) && (*search_flag_p == true))
 				{
-					const char *id_s = NULL;
+					const bool *all_flag_p = NULL;
 
-					GetStudyLevelDetailParameterValue (param_set_p, &format);
+					GetCurrentBooleanParameterValueFromParameterSet (param_set_p, S_SEARCH_ALL_STUDIES.npt_name_s, &all_flag_p);
 
-					/*
-					 * Are we searching for all studies within a trial?
-					 */
-					if (GetCurrentStringParameterValueFromParameterSet (param_set_p, S_SEARCH_TRIAL_ID.npt_name_s, &id_s))
+					if ((all_flag_p != NULL) && (*all_flag_p == true))
 						{
-							if (!IsStringEmpty (id_s))
+							char *filename_s = NULL;
+							int res = GetAllStudiesCacheFilename (data_p, &filename_s);
+							bool set_results_flag = false;
+
+							if (filename_s)
 								{
+									json_error_t err;
 
-									/* Is it a single id or a list? */
-									if (DoesStringContainWhitespace (id_s))
+									json_t *all_studies_p = json_load_file (filename_s, 0, &err);
+
+									if (all_studies_p)
 										{
-
-										}
-
-									/*
-									 * We're building up a query for the given parameters
-									 */
-									bson_t *query_p = bson_new ();
-
-									if (query_p)
-										{
-											bool built_query_success_flag = true;
-
-											bson_oid_t *id_p = GetBSONOidFromString (id_s);
-
-											if (id_p)
+											if (SetServiceJobResults (job_p, all_studies_p))
 												{
-													if (!BSON_APPEND_OID (query_p, ST_PARENT_FIELD_TRIAL_S, id_p))
-														{
-															FreeBSONOid (id_p);
-															built_query_success_flag = false;
-														}
+													SetServiceJobStatus (job_p, OS_SUCCEEDED);
+
+													set_results_flag = true;
+													job_done_flag = true;
 												}
 											else
 												{
+													json_decref (all_studies_p);
 												}
-
-											if (!built_query_success_flag)
-												{
-													const char *prefix_s = "Failed to build Field Trial query";
-													char *error_s = ConcatenateVarargsStrings (prefix_s, " for ", id_s, NULL);
-
-													if (error_s)
-														{
-															AddParameterErrorMessageToServiceJob  (job_p, S_SEARCH_TRIAL_ID.npt_name_s, S_SEARCH_TRIAL_ID.npt_type, error_s);
-															FreeCopiedString (error_s);
-														}
-													else
-														{
-															AddParameterErrorMessageToServiceJob  (job_p, S_SEARCH_TRIAL_ID.npt_name_s, S_SEARCH_TRIAL_ID.npt_type, prefix_s);
-														}
-												}
-										}		/* if (query_p) */
-
-									/*
-									 * Search with our given criteria
-									 */
-									if (GetMatchingStudies (query_p, data_p, job_p, format))
-										{
 
 										}
-
-									job_done_flag = true;
 								}
-						}
 
-					if (!job_done_flag)
-						{
-							if (GetStudyForGivenId (data_p, param_set_p, job_p, format, NULL))
-								{
-									job_done_flag = true;
-								}		/* if (GetStudyForGivenId (data_p, param_set_p, job_p)) */
-							else
+							if (!set_results_flag)
 								{
 									/*
 									 * We're building up a query for the given parameters
@@ -1269,27 +1237,152 @@ static bool RunForAdvancedSearchStudyParams (FieldTrialServiceData *data_p, Para
 
 									if (query_p)
 										{
-											if (AddStudyLocationCriteria (query_p, param_set_p))
+											if (GetMatchingStudies (query_p, data_p, job_p, format))
 												{
-													if (AddStudyDateCriteria (query_p, param_set_p))
+													if (job_p -> sj_result_p)
 														{
-															/*
-															 * Search with our given criteria
-															 */
-															if (GetMatchingStudies (query_p, data_p, job_p, format))
+
+															if (filename_s)
 																{
-																	job_done_flag = true;
+																	res = json_dump_file (job_p -> sj_result_p, filename_s, JSON_INDENT (2));
+
+																	if (res != 0)
+																		{
+
+																		}
+
 																}
+														}
 
-														}		/* if (AddStudyLocationCriteria (query_p, param_set_p)) */
-
-												}		/* if (AddStudyLocationCriteria (query_p, param_set_p)) */
+													job_done_flag = true;
+												}
 
 											bson_destroy (query_p);
 										}		/* if (query_p) */
 
+								}
 
-								}		/* if (GetStudyForGivenId (data_p, param_set_p, job_p)) else ... */
+							if (filename_s)
+								{
+									FreeCopiedString (filename_s);
+								}
+
+						}		/* if ((all_flag_p != NULL) && (*all_flag_p == true)) */
+					else
+						{
+
+						}
+
+					if (!job_done_flag)
+						{
+							const char *id_s = NULL;
+
+							GetStudyLevelDetailParameterValue (param_set_p, &format);
+
+							/*
+							 * Are we searching for all studies within a trial?
+							 */
+							if (GetCurrentStringParameterValueFromParameterSet (param_set_p, S_SEARCH_TRIAL_ID.npt_name_s, &id_s))
+								{
+									if (!IsStringEmpty (id_s))
+										{
+
+											/* Is it a single id or a list? */
+											if (DoesStringContainWhitespace (id_s))
+												{
+
+												}
+
+											/*
+											 * We're building up a query for the given parameters
+											 */
+											bson_t *query_p = bson_new ();
+
+											if (query_p)
+												{
+													bool built_query_success_flag = true;
+
+													bson_oid_t *id_p = GetBSONOidFromString (id_s);
+
+													if (id_p)
+														{
+															if (!BSON_APPEND_OID (query_p, ST_PARENT_FIELD_TRIAL_S, id_p))
+																{
+																	FreeBSONOid (id_p);
+																	built_query_success_flag = false;
+																}
+														}
+													else
+														{
+														}
+
+													if (!built_query_success_flag)
+														{
+															const char *prefix_s = "Failed to build Field Trial query";
+															char *error_s = ConcatenateVarargsStrings (prefix_s, " for ", id_s, NULL);
+
+															if (error_s)
+																{
+																	AddParameterErrorMessageToServiceJob  (job_p, S_SEARCH_TRIAL_ID.npt_name_s, S_SEARCH_TRIAL_ID.npt_type, error_s);
+																	FreeCopiedString (error_s);
+																}
+															else
+																{
+																	AddParameterErrorMessageToServiceJob  (job_p, S_SEARCH_TRIAL_ID.npt_name_s, S_SEARCH_TRIAL_ID.npt_type, prefix_s);
+																}
+														}
+												}		/* if (query_p) */
+
+											/*
+											 * Search with our given criteria
+											 */
+											if (GetMatchingStudies (query_p, data_p, job_p, format))
+												{
+
+												}
+
+											job_done_flag = true;
+										}
+								}
+
+							if (!job_done_flag)
+								{
+									if (GetStudyForGivenId (data_p, param_set_p, job_p, format, NULL))
+										{
+											job_done_flag = true;
+										}		/* if (GetStudyForGivenId (data_p, param_set_p, job_p)) */
+									else
+										{
+											/*
+											 * We're building up a query for the given parameters
+											 */
+											bson_t *query_p = bson_new ();
+
+											if (query_p)
+												{
+													if (AddStudyLocationCriteria (query_p, param_set_p))
+														{
+															if (AddStudyDateCriteria (query_p, param_set_p))
+																{
+																	/*
+																	 * Search with our given criteria
+																	 */
+																	if (GetMatchingStudies (query_p, data_p, job_p, format))
+																		{
+																			job_done_flag = true;
+																		}
+
+																}		/* if (AddStudyLocationCriteria (query_p, param_set_p)) */
+
+														}		/* if (AddStudyLocationCriteria (query_p, param_set_p)) */
+
+													bson_destroy (query_p);
+												}		/* if (query_p) */
+
+
+										}		/* if (GetStudyForGivenId (data_p, param_set_p, job_p)) else ... */
+
+								}
 
 						}
 				}
@@ -4843,6 +4936,7 @@ bool GetMatchingStudies (bson_t *query_p, FieldTrialServiceData *data_p, Service
 									SetServiceJobStatus (job_p, status);
 								}		/* if (json_is_array (results_p)) */
 
+							json_decref (results_p);
 						}		/* if (results_p) */
 
 					if (opts_p)

@@ -177,6 +177,9 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL void *GetVersionedObjectFromResource (DataResource
 DFW_FIELD_TRIAL_SERVICE_LOCAL bool SetUpListParameterFromJSON (const FieldTrialServiceData *data_p, StringParameter *param_p, const char *active_id_s, const char *empty_option_s, const char *name_key_s, json_t *objects_p);
 
 
+DFW_FIELD_TRIAL_SERVICE_LOCAL int GetAllStudiesCacheFilename (const FieldTrialServiceData *data_p, char **full_filename_ss);
+
+
 #ifdef __cplusplus
 }
 #endif
