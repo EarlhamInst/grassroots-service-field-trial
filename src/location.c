@@ -330,6 +330,19 @@ Location *GetLocationFromJSON (const json_t *location_json_p, const FieldTrialSe
 
 											location_p = AllocateLocation (address_p, order, soil_s, min_ph_p, max_ph_p, loc_type, id_p);
 
+											/*
+											 * The ph values have been deep copied so we can free them here
+											 */
+											if (min_ph_p)
+												{
+													FreeMemory (min_ph_p);
+												}
+
+											if (max_ph_p)
+												{
+													FreeMemory (max_ph_p);
+												}
+
 											if (location_p)
 												{
 													return location_p;
