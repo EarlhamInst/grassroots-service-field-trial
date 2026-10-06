@@ -380,6 +380,8 @@ static bool AddBrowseTrialHistoryParams (ServiceData *data_p, ParameterSet *para
 
 	if (trials_p)
 		{
+			FieldTrial *local_trial_p = NULL;
+
 			/*
 			 * If we don't have an active trial, use the first one in the json results array
 			 */
@@ -391,9 +393,13 @@ static bool AddBrowseTrialHistoryParams (ServiceData *data_p, ParameterSet *para
 								{
 									json_t *trial_json_p = json_array_get (trials_p, 0);
 
-									active_trial_p = GetFieldTrialFromJSON (trial_json_p, VF_CLIENT_MINIMAL, ft_data_p);
+									local_trial_p = GetFieldTrialFromJSON (trial_json_p, VF_CLIENT_MINIMAL, ft_data_p);
 
-									if (!active_trial_p)
+									if (local_trial_p)
+										{
+											active_trial_p = local_trial_p;
+										}
+									else
 										{
 											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, trial_json_p, "GetFieldTrialFromJSON () failed");
 										}
@@ -406,10 +412,14 @@ static bool AddBrowseTrialHistoryParams (ServiceData *data_p, ParameterSet *para
 					char *id_s = NULL;
 					const char *id_to_use_s = original_id_s;
 
-					if (!id_to_use_s)
+					if (!original_id_s)
 						{
 							id_s = GetBSONOidAsString (active_trial_p -> ft_id_p);
-							id_to_use_s = id_s;
+
+							if (id_s)
+								{
+									id_to_use_s = id_s;
+								}
 						}
 
 					if (id_to_use_s)
@@ -439,6 +449,10 @@ static bool AddBrowseTrialHistoryParams (ServiceData *data_p, ParameterSet *para
 									FreeBSONOidString (id_s);
 								}
 
+							if (id_to_use_s != original_id_s)
+								{
+									FreeBSONOidString (id_to_use_s);
+								}
 						}
 					else
 						{
@@ -447,6 +461,11 @@ static bool AddBrowseTrialHistoryParams (ServiceData *data_p, ParameterSet *para
 
 
 
+				}
+
+			if (local_trial_p)
+				{
+					FreeFieldTrial (local_trial_p);
 				}
 
 			json_decref (trials_p);

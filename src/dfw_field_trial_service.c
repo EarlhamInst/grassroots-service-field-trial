@@ -50,7 +50,7 @@
 #include "study_manager.h"
 #include "browse_programme_history.h"
 #include "browse_trial_history.h"
-//#include "browse_study_history.h"
+#include "browse_study_history.h"
 
 #include "copy_study.h"
 
@@ -83,12 +83,13 @@ ServicesArray *GetServices (User *user_p, GrassrootsServer *grassroots_p)
 {
 	uint32 num_services = 0;
 	Service *all_in_one_submission_service_p = NULL; // GetDFWFieldTrialSubmissionService (grassroots_p);
+	Service *field_trial_submission_service_p = NULL; //GetFieldTrialSubmissionService (grassroots_p);
 	Service *search_service_p = GetDFWFieldTrialSearchService (grassroots_p);
-	Service *field_trial_submission_service_p = GetFieldTrialSubmissionService (grassroots_p);
-	Service *study_submission_service_p = GetStudySubmissionService (grassroots_p);
+
 	Service *location_submission_service_p = GetLocationSubmissionService (grassroots_p);
+	Service *study_submission_service_p = GetStudySubmissionService (grassroots_p);
 	Service *gene_bank_submission_service_p = GetGeneBankSubmissionService (grassroots_p);
-	Service *material_submission_service_p = NULL; // GetMaterialSubmissionService (grassroots_p);
+	Service *material_submission_service_p = NULL; //// GetMaterialSubmissionService (grassroots_p);
 	Service *measured_variables_submission_service_p = GetMeasuredVariablesSubmissionService (grassroots_p);
 	Service *crop_submission_service_p = GetCropSubmissionService (grassroots_p);
 	Service *plots_submission_service_p = GetPlotsSubmissionService (grassroots_p);
@@ -101,21 +102,11 @@ ServicesArray *GetServices (User *user_p, GrassrootsServer *grassroots_p)
 	Service *study_manager_service_p = GetStudyManagerService (grassroots_p);
 	Service *programme_history_browser_service_p = GetBrowseProgrammeHistoryService (grassroots_p);
 	Service *trial_history_browser_service_p = GetBrowseTrialHistoryService (grassroots_p);
-	Service *study_history_browser_service_p = NULL; // GetBrowseStudyHistoryService (grassroots_p);
+	Service *study_history_browser_service_p = GetBrowseStudyHistoryService (grassroots_p);
 	Service *copy_study_service_p = GetStudyCopyService (grassroots_p);
 
 
 	if (all_in_one_submission_service_p)
-		{
-			++ num_services;
-		}
-
-	if (search_service_p)
-		{
-			++ num_services;
-		}
-
-	if (study_submission_service_p)
 		{
 			++ num_services;
 		}
@@ -125,7 +116,17 @@ ServicesArray *GetServices (User *user_p, GrassrootsServer *grassroots_p)
 			++ num_services;
 		}
 
+	if (search_service_p)
+		{
+			++ num_services;
+		}
+
 	if (location_submission_service_p)
+		{
+			++ num_services;
+		}
+
+	if (study_submission_service_p)
 		{
 			++ num_services;
 		}
@@ -224,10 +225,14 @@ ServicesArray *GetServices (User *user_p, GrassrootsServer *grassroots_p)
 					Service **service_pp = services_p -> sa_services_pp;
 
 					service_pp = AddValidService (service_pp, all_in_one_submission_service_p);
-					service_pp = AddValidService (service_pp, search_service_p);
+				  service_pp = AddValidService (service_pp, search_service_p);
 					service_pp = AddValidService (service_pp, field_trial_submission_service_p);
+
 					service_pp = AddValidService (service_pp, study_submission_service_p);
+
+
 					service_pp = AddValidService (service_pp, location_submission_service_p);
+
 					service_pp = AddValidService (service_pp, gene_bank_submission_service_p);
 					service_pp = AddValidService (service_pp, material_submission_service_p);
 					service_pp = AddValidService (service_pp, plots_submission_service_p);
@@ -255,15 +260,18 @@ ServicesArray *GetServices (User *user_p, GrassrootsServer *grassroots_p)
 			FreeService (all_in_one_submission_service_p);
 		}
 
+
 	if (search_service_p)
 		{
 			FreeService (search_service_p);
 		}
 
+
 	if (field_trial_submission_service_p)
 		{
 			FreeService (field_trial_submission_service_p);
 		}
+
 
 	if (study_submission_service_p)
 		{
@@ -274,6 +282,7 @@ ServicesArray *GetServices (User *user_p, GrassrootsServer *grassroots_p)
 		{
 			FreeService (location_submission_service_p);
 		}
+
 
 	if (gene_bank_submission_service_p)
 		{
@@ -354,6 +363,7 @@ ServicesArray *GetServices (User *user_p, GrassrootsServer *grassroots_p)
 		{
 			FreeService (copy_study_service_p);
 		}
+
 
 	return NULL;
 }

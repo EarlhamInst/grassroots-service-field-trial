@@ -382,6 +382,8 @@ static bool AddBrowseProgrammeHistoryParams (ServiceData *data_p, ParameterSet *
 
 	if (programmes_p)
 		{
+			Programme *first_programme_p = NULL;
+
 			/*
 			 * If we don't have an active programme, use the first one in the json results array
 			 */
@@ -393,9 +395,13 @@ static bool AddBrowseProgrammeHistoryParams (ServiceData *data_p, ParameterSet *
 								{
 									json_t *programme_json_p = json_array_get (programmes_p, 0);
 
-									active_programme_p = GetProgrammeFromJSON (programme_json_p, VF_CLIENT_MINIMAL, ft_data_p);
+									first_programme_p = GetProgrammeFromJSON (programme_json_p, VF_CLIENT_MINIMAL, ft_data_p);
 
-									if (!active_programme_p)
+									if (first_programme_p)
+										{
+											active_programme_p = first_programme_p;
+										}
+									else
 										{
 											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, programme_json_p, "GetProgrammeFromJSON () failed");
 										}
@@ -442,6 +448,10 @@ static bool AddBrowseProgrammeHistoryParams (ServiceData *data_p, ParameterSet *
 						}
 
 
+					if (first_programme_p)
+						{
+							FreeProgramme (first_programme_p);
+						}
 
 				}
 

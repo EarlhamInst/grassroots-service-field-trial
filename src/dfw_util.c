@@ -723,6 +723,11 @@ json_t *GetAllJSONVersionsOfObject (const char *id_s, FieldTrialDatatype collect
 
 							if (RunVersionSearch (data_p -> dftsd_backup_collection_ss [collection_type], DFT_BACKUPS_ID_KEY_S, id_s, NULL, results_p, opts_p, data_p))
 								{
+									if (opts_p)
+										{
+											FreeBSON (opts_p);
+										}
+
 									return results_p;
 								}		/* if (RunVersionSearch (data_p -> dftsd_backup_collection_ss [collection_type], id_s, MONGO_ID_S, results_p, NULL, data_p)) */
 

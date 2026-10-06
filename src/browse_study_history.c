@@ -311,8 +311,13 @@ static bool AddStudyVersionsList (Study *active_study_p, const char *id_s, Param
 		{
 			param_p -> pa_read_only_flag = read_only_flag;
 
+			if ((active_study_p != NULL) && (active_study_p -> st_metadata_p != NULL))
+				{
+					timestamp_s = active_study_p -> st_metadata_p -> me_timestamp_s;
+				}
 
-			if (SetUpVersionsParameter (dfw_data_p, (StringParameter *) param_p, id_s, active_study_p  ? active_study_p -> st_timestamp_s : NULL, DFTD_FIELD_TRIAL))
+
+			if (SetUpVersionsParameter (dfw_data_p, (StringParameter *) param_p, id_s, timestamp_s, DFTD_STUDY))
 				{
 					/*
 					 * We want to update all of the values in the form
@@ -365,9 +370,9 @@ static bool SetUpVersionsParameter (const FieldTrialServiceData *data_p, StringP
 												{
 													const char *value_s = FT_DEFAULT_TIMESTAMP_S;
 
-													if (study_p -> st_timestamp_s)
+													if ((study_p -> st_metadata_p) && (study_p -> st_metadata_p -> me_timestamp_s))
 														{
-															value_s = study_p -> st_timestamp_s;
+															value_s = study_p -> st_metadata_p -> me_timestamp_s;
 
 															if (param_value_s && (strcmp (param_value_s, value_s) == 0))
 																{
