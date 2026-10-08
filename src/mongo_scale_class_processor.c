@@ -460,27 +460,12 @@ static json_t *GetNextDocAsJSON (mongoc_cursor_t *cursor_p)
 
 	if (mongoc_cursor_next (cursor_p, &doc_p))
 		{
-			char *doc_s = ConvertBSONToJSON (doc_p, NULL);
+			json_p = ConvertBSONToJSON (doc_p, NULL);
 
-			if (doc_s)
-				{
-					json_error_t err;
-
-					json_p = json_loads (doc_s, 0, &err);
-
-					if (!json_p)
-						{
-							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to load json from \"%s\" error at %d\n", doc_s, err.position);
-						}
-
-					bson_free (doc_s);
-				}
-			else
+			if (!json_p)
 				{
 					puts ("Failed to convert bson to json");
 				}
-
-			//bson_destroy (doc_p);
 		}
 
 
@@ -852,56 +837,38 @@ static bool WritePlotRows (bson_oid_t *plot_id_p, mongoc_collection_t *plots_col
 
 									if (mongoc_collection_update_one (plots_collection_p, query_p, update_p, NULL, &reply, &error))
 										{
-											char *reply_s = ConvertBSONToJSON (&reply, NULL);
+											json_t *reply_p = ConvertBSONToJSON (&reply, NULL);
 
-											if (reply_s)
+											if (reply_p)
 												{
-													json_error_t err;
-													json_t *reply_p = json_loads (reply_s, 0, &err);
+													json_t *modified_p = json_object_get (reply_p, "modifiedCount");
 
-													if (reply_p)
+													if (modified_p)
 														{
-															json_t *modified_p = json_object_get (reply_p, "modifiedCount");
-
-															if (modified_p)
+															if (json_is_integer (modified_p))
 																{
-																	if (json_is_integer (modified_p))
-																		{
-																			int count = json_integer_value (modified_p);
+																	int count = json_integer_value (modified_p);
 
-																			if (count == 1)
-																				{
-																					success_flag = true;
-																				}
-																			else
-																				{
-																					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, reply_p, "modified value is %d not 1", count);
-																				}
+																	if (count == 1)
+																		{
+																			success_flag = true;
 																		}
 																	else
 																		{
-																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, reply_p, "modified value is not an integer");
+																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, reply_p, "modified value is %d not 1", count);
 																		}
 																}
 															else
 																{
-																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, reply_p, "Failed to get modified value");
+																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, reply_p, "modified value is not an integer");
 																}
-
-															json_decref (reply_p);
 														}
 													else
 														{
-															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to load reply \"%s\" from mongoc_collection_update_one () as json", reply_s);
+															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, reply_p, "Failed to get modified value");
 														}
 
-				  	  	  	  		// PrintLog (STM_LEVEL_INFO, __FILE__, __LINE__, "mongoc_collection_update_one () reply \"%s\"", reply_s);
-
-													bson_free (reply_s);
-												}		/* if (reply_s) */
-											else
-												{
-													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to convert reply from mongoc_collection_update_one () to json", reply_s);
+													json_decref (reply_p);
 												}
 
 										}		/* if (mongoc_collection_update_one (plots_collection_p, query_p, update_p, NULL, &reply, &error)) */

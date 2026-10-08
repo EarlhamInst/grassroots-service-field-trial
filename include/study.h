@@ -66,6 +66,9 @@ STUDY_PREFIX const char *ST_LOCATION_ID_S STUDY_VAL ("address_id");
 STUDY_PREFIX const char *ST_LOCATION_S STUDY_VAL ("address");
 
 
+STUDY_PREFIX const char *ST_CODE_S STUDY_VAL ("code");
+
+
 STUDY_PREFIX const char *ST_CONTACT_S STUDY_VAL ("contact");
 
 STUDY_PREFIX const char *ST_CURATOR_S STUDY_VAL ("curator");
@@ -201,6 +204,13 @@ typedef struct Study
 
 	char *st_slope_s;
 
+
+	/**
+	 * The internal code for a Study from the hosting
+	 * organization.
+	 */
+	char *st_code_s;
+
 	/**
 	 * A LinkedList of PlotNodes
 	 * for all of the Plots in this
@@ -326,7 +336,7 @@ extern "C"
 
 
 
-DFW_FIELD_TRIAL_SERVICE_LOCAL Study *AllocateStudy (bson_oid_t *id_p,  Metadata *metadata_p, const char *name_s, const char *data_url_s, const char *aspect_s, const char *slope_s,
+DFW_FIELD_TRIAL_SERVICE_LOCAL Study *AllocateStudy (bson_oid_t *id_p,  Metadata *metadata_p,  const char *name_s, const char *data_url_s, const char *aspect_s, const char *slope_s,
 																										struct Location *location_p, FieldTrial *parent_field_trial_p,
 																										MEM_FLAG parent_field_trial_mem, Crop *current_crop_p, Crop *previous_crop_p, const char *description_s,
 																										const char *design_s, const char *growing_conditions_s, const char *phenotype_gathering_notes_s,
@@ -339,6 +349,7 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL Study *AllocateStudy (bson_oid_t *id_p,  Metadata 
 																										const char *plan_changes_s, const char *physical_samples_collected_s, const char *data_not_included_s,
 																										const char *photo_url_s, const char *image_collection_notes_s,
 																										const char *gps_notes_s,
+																										const char *code_s,
 																										const FieldTrialServiceData *data_p);
 
 
