@@ -1741,8 +1741,8 @@ static bool UpdateStudyStringValue (char **variable_ss, const ParameterSet * con
 								}
 							else
 								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "%s for Study \"%s\"", error_s, study_id_s);
-									AddParameterErrorMessageToServiceJob (job_p, param_p -> npt_name_s, param_p -> npt_type, error_s);
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to set \"%s\" to \"%s\" for Study \"%s\"", param_p -> npt_name_s, value_s, study_id_s);
+									AddParameterErrorMessageToServiceJob (job_p, param_p -> npt_name_s, param_p -> npt_type, "Failed to set value");
 								}
 
 							success_flag = false;
@@ -1771,7 +1771,34 @@ static bool UpdateStudyUnsignedIntValue (uint32 **variable_pp, const ParameterSe
 
 	if (GetCurrentUnsignedIntParameterValueFromParameterSet (param_set_p, param_p -> npt_name_s, &value_p))
 		{
-			*variable_pp = value_p;
+			if (value_p)
+				{
+					/* Does the storage exist? */
+					if (*variable_pp == NULL)
+						{
+							*variable_pp = (uint32 *) AllocMemory (sizeof (uint32));
+
+							if (*variable_pp == NULL)
+								{
+									success_flag = false;
+								}
+						}
+
+					if (*variable_pp)
+						{
+							**variable_pp = *value_p;
+						}
+
+				}
+			else
+				{
+					if (*variable_pp)
+						{
+							FreeMemory (*variable_pp);
+						}
+
+					*variable_pp = NULL;
+				}
 		}
 
 	return success_flag;
@@ -1785,7 +1812,34 @@ static bool UpdateStudyDoubleValue (double64 **variable_pp, const ParameterSet *
 
 	if (GetCurrentDoubleParameterValueFromParameterSet (param_set_p, param_p -> npt_name_s, &value_p))
 		{
-			*variable_pp = value_p;
+			if (value_p)
+				{
+					/* Does the storage exist? */
+					if (*variable_pp == NULL)
+						{
+							*variable_pp = (double64 *) AllocMemory (sizeof (double));
+
+							if (*variable_pp == NULL)
+								{
+									success_flag = false;
+								}
+						}
+
+					if (*variable_pp)
+						{
+							**variable_pp = *value_p;
+						}
+
+				}
+			else
+				{
+					if (*variable_pp)
+						{
+							FreeMemory (*variable_pp);
+						}
+
+					*variable_pp = NULL;
+				}
 		}
 
 	return success_flag;
@@ -1799,12 +1853,34 @@ static bool UpdateStudyJSONValue (json_t **variable_pp, const ParameterSet * con
 
 	if (GetCurrentJSONParameterValueFromParameterSet (param_set_p, param_p -> npt_name_s, &value_p))
 		{
-			if (*variable_pp)
+			if (value_p)
 				{
-					json_decref (*variable_pp);
+					json_t *copied_value_p = json_deep_copy (value_p);
+
+					if (copied_value_p)
+						{
+							if (*variable_pp)
+								{
+									json_decref (*variable_pp);
+								}
+
+							*variable_pp = copied_value_p;
+						}
+					else
+						{
+							success_flag = false;
+						}
+				}
+			else
+				{
+					if (*variable_pp)
+						{
+							json_decref (*variable_pp);
+						}
+
+					*variable_pp = NULL;
 				}
 
-			*variable_pp = (json_t *) value_p;
 		}
 
 	return success_flag;
