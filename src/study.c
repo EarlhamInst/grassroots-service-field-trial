@@ -326,13 +326,13 @@ Study *AllocateStudy (bson_oid_t *id_p,  Metadata *metadata_p,  const char *name
 
 																																																																					if (copied_code_s)
 																																																																						{
-																																																																							FreeCopiedString (code_s);
+																																																																							FreeCopiedString (copied_code_s);
 																																																																						}
 
 																																																																				}		/* if (CloneValidString (code_s, &copied_code_s)) */
 																																																																			else
 																																																																				{
-
+																																																																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to clone code \"%s\"", code_s);
 																																																																				}
 
 

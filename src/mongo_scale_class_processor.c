@@ -877,6 +877,7 @@ static bool WritePlotRows (bson_oid_t *plot_id_p, mongoc_collection_t *plots_col
 		  	  	  	  		PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, rows_p, "mongoc_collection_update_one () failed for \"%s\" with error code: " UINT32_FMT " domain: " UINT32_FMT " message: \"%s\"", rows_s, error.code, error.domain, error.message);
 										}
 
+									bson_destroy (&reply);
   	  						bson_destroy (update_p);
   	  					}
   	  	  	  else
