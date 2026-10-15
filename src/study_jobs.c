@@ -5918,7 +5918,7 @@ static bool AddGeneralSubmissionStudyParams (Study *active_study_p, const char *
 	FieldTrialServiceData *dfw_data_p = (FieldTrialServiceData *) data_p;
 	Parameter *param_p = NULL;
 
-	if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_NAME.npt_type, STUDY_NAME.npt_name_s, "Name", "The name of the Study", active_study_p ? active_study_p -> st_name_s : NULL, PL_ALL_AND_WIZARD)) != NULL)
+	if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, group_p, STUDY_NAME.npt_type, STUDY_NAME.npt_name_s, "Study Name", "The name of the Study", active_study_p ? active_study_p -> st_name_s : NULL, PL_ALL_AND_WIZARD)) != NULL)
 		{
 			param_p -> pa_required_flag = true;
 			param_p -> pa_read_only_flag = read_only_flag;
