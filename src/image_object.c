@@ -118,7 +118,7 @@ json_t *GetImageObjectAsJSON (const ImageObject * const image_p, const ViewForma
 						break;
 
 					case VF_CLIENT_MINIMAL:
-
+						success_flag = true;
 						break;
 
 
@@ -146,6 +146,7 @@ json_t *GetImageObjectAsJSON (const ImageObject * const image_p, const ViewForma
 
 					case VF_INDEXING:
 					case VF_REFERENCE:
+						success_flag = true;
 						break;
 
 					case VF_NUM_FORMATS:

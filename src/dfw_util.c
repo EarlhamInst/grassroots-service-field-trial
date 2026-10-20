@@ -342,81 +342,122 @@ char *GetFrictionlessDataFilename (const char * const name_s, const FieldTrialSe
 }
 
 
+
+void *GetDFWObjectByNamedStringField (const char * const key_s, const char * const value_s, FieldTrialDatatype collection_type, void *(*get_obj_from_json_fn) (const json_t *json_p, const ViewFormat format, const FieldTrialServiceData *data_p), const ViewFormat format, const FieldTrialServiceData *data_p)
+{
+	void *result_p = NULL;
+	bson_t *query_p = bson_new ();
+
+	if (query_p)
+		{
+			if (BSON_APPEND_UTF8 (query_p, key_s, value_s))
+				{
+					result_p = GetDFWObjectByQuery (query_p, collection_type, get_obj_from_json_fn, format, data_p);
+				}		/* if (BSON_APPEND_UTF8 (query_p, key_s, value_s)) */
+			else
+				{
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "BSON_APPEND_UTF8 () failed for \"%s\": \"%s\"", key_s, value_s);
+				}
+
+			bson_destroy (query_p);
+		}		/* if (query_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for \"%s\": \"%s\"", key_s, value_s);
+		}
+
+
+	return result_p;
+}
+
+
 void *GetDFWObjectByNamedId (const bson_oid_t *id_p, FieldTrialDatatype collection_type, const char *id_key_s, void *(*get_obj_from_json_fn) (const json_t *json_p, const ViewFormat format, const FieldTrialServiceData *data_p), const ViewFormat format, const FieldTrialServiceData *data_p)
 {
 	void *result_p = NULL;
+	bson_t *query_p = bson_new ();
+	char id_s [MONGO_OID_STRING_BUFFER_SIZE];
+
+	bson_oid_to_string (id_p, id_s);
+
+	if (query_p)
+		{
+
+			if (BSON_APPEND_OID (query_p, id_key_s, id_p))
+				{
+					result_p = GetDFWObjectByQuery (query_p, collection_type, get_obj_from_json_fn, format, data_p);
+				}		/* if (BSON_APPEND_OID (query_p, MONGO_ID_S, id_p)) */
+			else
+				{
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for object_id_s with id \"%s\"", id_s);
+				}
+
+			bson_destroy (query_p);
+		}		/* if (query_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for object_id_s with id \"%s\"", id_s);
+		}
+
+
+	return result_p;
+}
+
+
+void *GetDFWObjectByQuery (const bson_t *query_p, FieldTrialDatatype collection_type, void *(*get_obj_from_json_fn) (const json_t *json_p, const ViewFormat format, const FieldTrialServiceData *data_p), const ViewFormat format, const FieldTrialServiceData *data_p)
+{
+	json_t *result_p = NULL;
 	MongoTool *tool_p = GetConfiguredMongoTool (data_p, NULL);
 
 	if (tool_p)
 		{
 			if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [collection_type]))
 				{
-					bson_t *query_p = bson_new ();
-					char id_s [MONGO_OID_STRING_BUFFER_SIZE];
+					json_t *results_p = NULL;
 
-					bson_oid_to_string (id_p, id_s);
-
-					if (query_p)
+					#if DFW_UTIL_DEBUG >= STM_LEVEL_FINER
 						{
-							if (BSON_APPEND_OID (query_p, id_key_s, id_p))
+							PrintBSONToLog (STM_LEVEL_FINER, __FILE__, __LINE__, query_p, "GetDFWObjectById query ");
+						}
+					#endif
+
+					results_p = GetAllMongoResultsAsJSON (tool_p, query_p, NULL);
+
+					if (results_p)
+						{
+							if (json_is_array (results_p))
 								{
-									json_t *results_p = NULL;
+									size_t num_results = json_array_size (results_p);
 
-									#if DFW_UTIL_DEBUG >= STM_LEVEL_FINER
+									if (num_results == 1)
 										{
-											PrintBSONToLog (STM_LEVEL_FINER, __FILE__, __LINE__, query_p, "GetDFWObjectById query ");
-										}
-									#endif
+											json_t *res_p = json_array_get (results_p, 0);
 
-									results_p = GetAllMongoResultsAsJSON (tool_p, query_p, NULL);
+											result_p = get_obj_from_json_fn (res_p, format, data_p);
 
-									if (results_p)
-										{
-											if (json_is_array (results_p))
+											if (!result_p)
 												{
-													size_t num_results = json_array_size (results_p);
-
-													if (num_results == 1)
-														{
-															json_t *res_p = json_array_get (results_p, 0);
-
-															result_p = get_obj_from_json_fn (res_p, format, data_p);
-
-															if (!result_p)
-																{
-																	PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, res_p, "failed to create object for id \"%s\"", id_s);
-																}
-
-														}		/* if (num_results == 1) */
-													else
-														{
-															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, SIZET_FMT " results when searching for object_id_s with id \"%s\"", num_results, id_s);
-														}
-
-												}		/* if (json_is_array (results_p) */
-											else
-												{
-													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "Results are not an array");
+													PrintBSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, query_p, "failed to create object from query, query");
+													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, res_p, "failed to create object from query, result");
 												}
 
-											json_decref (results_p);
-										}		/* if (results_p) */
+										}		/* if (num_results == 1) */
 									else
 										{
-											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get results searching for object_id_s with id \"%s\"", id_s);
+											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, SIZET_FMT " results when searching", num_results);
+											PrintBSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, query_p, "query:");
 										}
 
-								}		/* if (BSON_APPEND_OID (query_p, MONGO_ID_S, id_p)) */
+								}		/* if (json_is_array (results_p) */
 							else
 								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for object_id_s with id \"%s\"", id_s);
+									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, results_p, "Results are not an array");
 								}
 
-							bson_destroy (query_p);
-						}		/* if (query_p) */
+							json_decref (results_p);
+						}		/* if (results_p) */
 					else
 						{
-							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for object_id_s with id \"%s\"", id_s);
+							PrintBSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, query_p, "No results from GetAllMongoResultsAsJSON ()");
 						}
 
 				}		/* if (SetMongoToolCollection (tool_p, data_p -> dftsd_collection_ss [collection_type])) */
@@ -432,9 +473,11 @@ void *GetDFWObjectByNamedId (const bson_oid_t *id_p, FieldTrialDatatype collecti
 			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetConfiguredMongoTool () failed");
 		}
 
-
 	return result_p;
 }
+
+
+
 
 
 void *GetDFWObjectById (const bson_oid_t *id_p, FieldTrialDatatype collection_type, void *(*get_obj_from_json_fn) (const json_t *json_p, const ViewFormat format, const FieldTrialServiceData *data_p), const ViewFormat format, const FieldTrialServiceData *data_p)
@@ -1226,57 +1269,6 @@ bool GetValidUnsignedIntFromJSON (const json_t *study_json_p, const char *key_s,
 	return success_flag;
 }
 
-
-json_t *GetImageObject (const char *image_url_s, const char *thumbnail_url_s)
-{
-/*
-	"@context": "https://schema.org",
-  "@type": "ImageObject",
-  "author": "Jane Doe",
-  "contentLocation": "Puerto Vallarta, Mexico",
-  "contentUrl": "mexico-beach.jpg",
-  "datePublished": "2008-01-25",
-  "description": "I took this picture while on vacation last year.",
-  "name": "Beach in Mexico"
-*/
-	json_t *image_json_p = json_object ();
-
-  if (image_json_p)
-  	{
-  		if (SetJSONString (image_json_p, "@type", "ImageObject"))
-  			{
-  	  		if (SetJSONString (image_json_p, "contentUrl", image_url_s))
-  	  			{
-  	  	  		if ((!thumbnail_url_s) || (SetJSONString (image_json_p, "thumbnail", thumbnail_url_s)))
-  	  	  			{
-  	  	  				return image_json_p;
-  	  	  			}		/* if (SetJSONString (image_json_p, "thumbnail, thumbnail_url_s)) */
-  	  				else
-  	  					{
-  	  						PrintJSONToErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, image_json_p, "Failed to set \"thumbnail\": \"%s\"", thumbnail_url_s);
-  	  					}
-
-  	  			}		/* if (SetJSONString (image_json_p, "contentUrl", image_url_s)) */
-  				else
-  					{
-  						PrintJSONToErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, image_json_p, "Failed to set \"contentUrl\": \"%s\"", image_url_s);
-  					}
-
-  			}		/* if (SetJSONString (image_json_p, "@type", "ImageObject")) */
-			else
-				{
-					PrintJSONToErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, image_json_p, "Failed to set \"@type\": \"ImageObject\" for \"%s\"", image_url_s);
-				}
-
-  		json_decref (image_json_p);
-  	}		/* if (image_json_p) */
-  else
-  	{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create image object for \"%s\"", image_url_s);
-  	}
-
-  return NULL;
-}
 
 
 

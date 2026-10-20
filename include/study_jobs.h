@@ -274,6 +274,11 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL json_t *GetStudyMaterialCounts (const Study * cons
 DFW_FIELD_TRIAL_SERVICE_LOCAL json_t *GetAllStudyIdsHavingObservations (const FieldTrialServiceData *data_p);
 
 
+
+DFW_FIELD_TRIAL_SERVICE_LOCAL Study *GetStudyByCode (const char * const study_code_s, FieldTrialServiceData *dfw_data_p);
+
+
+
 #ifdef __cplusplus
 }
 #endif

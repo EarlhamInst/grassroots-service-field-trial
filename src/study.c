@@ -55,8 +55,6 @@
 /*
  * STATIC PROTOTYPES
  */
-static void *GetStudyCallback (const json_t *json_p, const ViewFormat format, const FieldTrialServiceData *data_p);
-
 
 static bool AddPlotsToJSON (Study *study_p, json_t *study_json_p, const ViewFormat format, JSONProcessor *processor_p, const FieldTrialServiceData *data_p);
 
@@ -1934,7 +1932,7 @@ static bool AddValidCropToJSON (Crop *crop_p, json_t *study_json_p, const char *
 
 
 
-static void *GetStudyCallback (const json_t *json_p, const ViewFormat format, const FieldTrialServiceData *data_p)
+void *GetStudyCallback (const json_t *json_p, const ViewFormat format, const FieldTrialServiceData *data_p)
 {
 	return GetStudyFromJSON (json_p, format, data_p);
 }

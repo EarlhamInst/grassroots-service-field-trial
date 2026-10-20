@@ -559,30 +559,53 @@ json_t *GetPlotAsJSON (Plot *plot_p, const ViewFormat format, JSONProcessor *pro
 
 
 
-bool AddImageToPlot (Plot *plot_p, const char * const full_image_url_s, const char * const thumbnail_s)
+bool AddImageToPlotByParts (Plot *plot_p, const char * const full_image_url_s, const char * const thumbnail_s)
 {
 	ImageObject *image_p = AllocateImageObject (full_image_url_s, thumbnail_s);
 
 	if (image_p)
 		{
-			ImageObjectNode *node_p = AllocateImageObjectNode (image_p);
-
-			if (node_p)
+			if (AddImageToPlot (plot_p, image_p))
 				{
-					LinkedListAddTail (plot_p -> pl_images_p, & (node_p -> ion_base_node));
-
 					return true;
 				}		/* if (node_p) */
 			else
 				{
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AllocateImageObjectNode () failed for \"%s\" and \"%s\"", full_image_url_s, thumbnail_s);
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddImageToPlot () failed for \"%s\" and \"%s\"",
+											 full_image_url_s ? full_image_url_s : "",
+											 thumbnail_s ? thumbnail_s : "");
 				}
 
 			FreeImageObject (image_p);
 		}		/* if (image_p) */
 	else
 		{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AllocateImageObject () failed for \"%s\" and \"%s\"", full_image_url_s, thumbnail_s);
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AllocateImageObject () failed for \"%s\" and \"%s\"",
+									 full_image_url_s ? full_image_url_s : "",
+									 thumbnail_s ? thumbnail_s : "");
+		}
+
+	return false;
+}
+
+
+
+bool AddImageToPlot (Plot *plot_p, ImageObject *image_p)
+{
+	ImageObjectNode *node_p = AllocateImageObjectNode (image_p);
+
+	if (node_p)
+		{
+			LinkedListAddTail (plot_p -> pl_images_p, & (node_p -> ion_base_node));
+
+			return true;
+		}		/* if (node_p) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AllocateImageObjectNode () failed for \"%s\" and \"%s\"",
+									 image_p -> io_full_image_url_s ? image_p -> io_full_image_url_s : "",
+									 image_p -> io_thumbnail_image_url_s ? image_p -> io_thumbnail_image_url_s : ""
+									);
 		}
 
 	return false;
@@ -603,8 +626,7 @@ Plot *GetPlotFromJSON (const json_t *plot_json_p, Study *parent_study_p, const V
 				{
 					const char *treatments_s = GetJSONString (plot_json_p, PL_TREATMENT_S);
 					const char *comment_s = GetJSONString (plot_json_p, PL_COMMENT_S);
-					const char *image_s = GetJSONString (plot_json_p, PL_IMAGE_S);
-					const char *thumbnail_s = GetJSONString (plot_json_p, PL_THUMBNAIL_S);
+
 					double64 *width_p = NULL;
 					double64 *length_p = NULL;
 					uint32 *sowing_order_p = NULL;
@@ -676,16 +698,66 @@ Plot *GetPlotFromJSON (const json_t *plot_json_p, Study *parent_study_p, const V
 
 													if (plot_p)
 														{
-															json_t *rows_array_p = json_object_get (plot_json_p, PL_ROWS_S);
+															const char *image_s = GetJSONString (plot_json_p, PL_IMAGE_S);
+															const char *thumbnail_s = GetJSONString (plot_json_p, PL_THUMBNAIL_S);
+															json_t *value_p = json_object_get (plot_json_p, PL_ROWS_S);
 
-															if (rows_array_p)
+															if (value_p)
 																{
-																	if (!GetPlotRows (plot_p, rows_array_p, parent_study_p, format, data_p))
+																	if (!GetPlotRows (plot_p, value_p, parent_study_p, format, data_p))
 																		{
 																			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, plot_json_p, "GetPlotRows () failed for format %d in study \"%s\"", format, parent_study_p ? parent_study_p -> st_name_s : "NULL");
-
 																		}
 																}
+
+															/* Load the images */
+															value_p = json_object_get (plot_json_p, PL_IMAGES_S);
+															if (value_p)
+																{
+																	const size_t num_images = json_array_size (value_p);
+																	size_t i;
+																	size_t num_successes = 0;
+																	const json_t *image_json_p;
+
+																	json_array_foreach (value_p, i, image_json_p)
+																		{
+																			ImageObject *image_p = GetImageObjectFromJSON (image_json_p);
+
+																			if (image_p)
+																				{
+																					if (AddImageToPlot (plot_p, image_p))
+																						{
+																							++ num_successes;
+																						}
+																					else
+																						{
+																							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, image_json_p, "Failed to add image to plot " UINT32_FMT ", " UINT32_FMT " in study \"%s\"",
+																																 plot_p -> pl_row_index, plot_p -> pl_column_index, parent_study_p -> st_name_s);
+
+																							FreeImageObject (image_p);
+																						}
+
+																				}
+																			else
+																				{
+																					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, image_json_p, "GetImageObjectFromJSON () failed for plot " UINT32_FMT ", " UINT32_FMT " in study \"%s\"",
+																														 plot_p -> pl_row_index, plot_p -> pl_column_index, parent_study_p -> st_name_s);
+
+																				}
+
+																		}		/* json_array_foreach (value_p, i, image_json_p) */
+
+																}		/* if (value_p) */
+
+															/*
+															 * For backward compatibility, get the old style
+															 * image and thumbnail
+															 */
+															if (image_s || thumbnail_s)
+																{
+
+																}
+
 														}
 													else
 														{
