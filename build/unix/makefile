@@ -81,6 +81,7 @@ SRCS 	= \
 	gene_bank_jobs.c \
 	guard_row.c \
 	handbook_generator.c \
+	image_importer.c \
 	image_object.c \
 	image_util.c \
 	indexing.c \

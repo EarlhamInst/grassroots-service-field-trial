@@ -156,6 +156,7 @@ static void GetCacheList (ServiceJob *job_p, const bool full_path_flag, const Fi
 
 static LinkedList *GetFieldTrialFiles (const char * const path_s, const char * const local_pattern_s, const bool full_path_flag);
 
+
 static OperationStatus GenerateAllFrictionlessDataStudies (ServiceJob *job_p, FieldTrialServiceData *data_p);
 
 
@@ -728,6 +729,7 @@ static void GetCacheList (ServiceJob *job_p, const bool full_path_flag, const Fi
 }
 
 
+
 static LinkedList *GetFieldTrialFiles (const char * const path_s, const char * const local_pattern_s, const bool full_path_flag)
 {
 	LinkedList *files_p = NULL;
@@ -744,7 +746,12 @@ static LinkedList *GetFieldTrialFiles (const char * const path_s, const char * c
 
 	if (pattern_s)
 		{
-			if (! (files_p = GetMatchingFiles (pattern_s, full_path_flag)))
+			const char *patterns_ss [2];
+
+			*patterns_ss = pattern_s;
+			* (patterns_ss + 1) = NULL;
+
+			if (! (files_p = GetMatchingFiles (patterns_ss, full_path_flag, false, NULL)))
 				{
 					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetMatchingFiles failed for pattern: \"%s\"", pattern_s);
 				}
