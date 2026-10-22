@@ -16,7 +16,7 @@
 #include "string_utils.h"
 #include "study_jobs.h"
 #include "row_jobs.h"
-
+#include "mongodb_tool.h"
 
 
 /*
@@ -47,12 +47,13 @@ static char *GetUrlForImage (const char * const filename_s, const char * const r
 
 
 
-void RunImportImages (const char * const import_path_s, const FieldTrialServiceData * const data_p)
+OperationStatus RunImportImages (const char * const import_path_s, const FieldTrialServiceData * const data_p)
 {
+	OperationStatus status = OS_FAILED_TO_START;
 	LinkedList *files_p = NULL;
 	const char *root_path_s = data_p -> dftsd_assets_path_s;
 
-	char **patterns_ss = GetImageFilenamesForMatching (root_path_s);
+	char **patterns_ss = GetImageFilenamesForMatching (import_path_s);
 
 	if (patterns_ss)
 		{
@@ -77,8 +78,9 @@ void RunImportImages (const char * const import_path_s, const FieldTrialServiceD
 							StringListNode *node_p = (StringListNode *) (files_p -> ll_head_p);
 							char *current_code_s = "";
 							Study *current_study_p = NULL;
-
+							char current_study_id_s [MONGO_OID_STRING_BUFFER_SIZE] = {};
 							const char *root_url_s = data_p -> dftsd_fd_url_s;
+							uint32 num_successes = 0;
 
 							enum parts
 								{
@@ -89,6 +91,8 @@ void RunImportImages (const char * const import_path_s, const FieldTrialServiceD
 									PA_PLOT,
 									PA_NUM_PARTS
 								};
+
+
 
 
 							while (node_p)
@@ -102,6 +106,8 @@ void RunImportImages (const char * const import_path_s, const FieldTrialServiceD
 												{
 													StringListNode *parts_node_p = (StringListNode *) (parts_p -> ll_head_p);
 													const char *code_s = parts_node_p -> sln_string_s;
+
+
 
 
 													/*
@@ -119,7 +125,32 @@ void RunImportImages (const char * const import_path_s, const FieldTrialServiceD
 
 															current_study_p = GetStudyByCode (parts_node_p -> sln_string_s, data_p);
 
-															if (!current_study_p)
+															if (current_study_p)
+																{
+																	PopulateBSONOidIntoString (current_study_p -> st_id_p, current_study_id_s);
+
+																	char *study_assets_path_s = MakeFilename (data_p -> dftsd_assets_path_s, current_study_id_s);
+
+																	if (study_assets_path_s)
+																		{
+																			if (EnsureDirectoryExists (study_assets_path_s))
+																				{
+
+																				}
+																			else
+																				{
+
+																				}
+
+																			FreeCopiedString (study_assets_path_s);
+																		}
+																	else
+																		{
+
+																		}
+
+																}
+															else
 																{
 
 																}
@@ -170,7 +201,11 @@ void RunImportImages (const char * const import_path_s, const FieldTrialServiceD
 
 																					if (AddImageToPlot (plot_p, image_p))
 																						{
-																							SavePlot (plot_p, data_p);
+																							if (SavePlot (plot_p, data_p))
+																								{
+																									++ num_successes;
+																								}
+
 																						}
 																					else
 																						{
@@ -204,6 +239,15 @@ void RunImportImages (const char * const import_path_s, const FieldTrialServiceD
 									FreeStudy (current_study_p);
 								}
 
+							if (num_successes == files_p -> ll_size)
+								{
+									status = OS_SUCCEEDED;
+								}
+							else if (num_successes > 0)
+								{
+									status = OS_PARTIALLY_SUCCEEDED;
+								}
+
 						}		/* if (LinkedListSort (files_p, SortByName)) */
 
 					FreeLinkedList (files_p);
@@ -221,6 +265,7 @@ void RunImportImages (const char * const import_path_s, const FieldTrialServiceD
 		}		/* if (patterns_ss) */
 
 
+	return status;
 }
 
 

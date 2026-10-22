@@ -80,6 +80,8 @@
 #include "plot.h"
 #include "measured_variable.h"
 
+#include "image_importer.h"
+
 /*
  * Static declarations
  */
@@ -119,6 +121,10 @@ static NamedParameterType S_GENERATE_STUDY_METADATA = { "SS Generate Phenotypes 
 
 
 static NamedParameterType S_ADD_MONGODB_INDEXES = { "SS Add MongoDB Indexes", PT_BOOLEAN };
+
+
+static NamedParameterType S_IMPORT_IMAGES = { "SS Import Images", PT_STRING };
+
 
 
 static const char *GetFieldTrialIndexingServiceName (const Service *service_p);
@@ -1390,6 +1396,21 @@ static ServiceJobSet *RunFieldTrialIndexingService (Service *service_p, Paramete
 								}
 						}
 
+
+					/*
+					 * Import Images
+					 */
+					if (GetCurrentStringParameterValueFromParameterSet (param_set_p, S_IMPORT_IMAGES.npt_name_s, &id_s))
+						{
+							if (!IsStringEmpty (id_s))
+								{
+									OperationStatus s = RunImportImages (id_s, data_p);
+
+									MergeServiceJobStatus (job_p, s);
+
+								}
+						}
+
 				}
 
 		}
@@ -1549,6 +1570,7 @@ static bool GetIndexingParameterTypeForNamedParameter (const Service * UNUSED_PA
 			S_ROTHAMSTED_TERMS,
 			S_GENERATE_STUDY_METADATA,
 			S_ADD_MONGODB_INDEXES,
+			S_IMPORT_IMAGES,
 			NULL
 		};
 
@@ -1607,7 +1629,10 @@ static ParameterSet *GetFieldTrialIndexingServiceParameters (Service *service_p,
 																																		{
 																																			if ((param_p = EasyCreateAndAddBooleanParameterToParameterSet (data_p, params_p, manager_group_p, S_ADD_MONGODB_INDEXES.npt_name_s, "Add MongoDB Indexes", "Add MongoDB Indexes for faster data handling", &b, PL_ALL)) != NULL)
 																																				{
-																																					return params_p;
+																																					if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, manager_group_p, S_IMPORT_IMAGES.npt_type, S_IMPORT_IMAGES.npt_name_s, "Import Images", "Import a folder of images for a Study's Plots", NULL, PL_ALL)) != NULL)
+																																						{
+																																							return params_p;
+																																						}
 																																				}
 																																		}
 																																}

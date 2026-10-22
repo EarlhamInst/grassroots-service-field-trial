@@ -18,7 +18,7 @@ extern "C"
 #endif
 
 
-	DFW_FIELD_TRIAL_SERVICE_LOCAL	void RunImportImages (const char * const import_path_s, const FieldTrialServiceData * const data_p);
+DFW_FIELD_TRIAL_SERVICE_LOCAL	OperationStatus RunImportImages (const char * const import_path_s, const FieldTrialServiceData * const data_p);
 
 
 #ifdef __cplusplus
