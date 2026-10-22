@@ -14,6 +14,10 @@
 #include "dfw_util.h"
 #include "study.h"
 #include "string_utils.h"
+#include "study_jobs.h"
+#include "row_jobs.h"
+
+
 
 /*
  *
@@ -39,9 +43,11 @@ static int SortByName (const void *v0_p, const void *v1_p);
 static char **GetImageFilenamesForMatching (const char * const root_path_s);
 
 
+static char *GetUrlForImage (const char * const filename_s, const char * const root_path_s, const char * const root_url_s);
 
 
-void RunImportImages (const FieldTrialServiceData * const data_p)
+
+void RunImportImages (const char * const import_path_s, const FieldTrialServiceData * const data_p)
 {
 	LinkedList *files_p = NULL;
 	const char *root_path_s = data_p -> dftsd_assets_path_s;
@@ -72,6 +78,8 @@ void RunImportImages (const FieldTrialServiceData * const data_p)
 							char *current_code_s = "";
 							Study *current_study_p = NULL;
 
+							const char *root_url_s = data_p -> dftsd_fd_url_s;
+
 							enum parts
 								{
 									PA_CODE,
@@ -85,14 +93,16 @@ void RunImportImages (const FieldTrialServiceData * const data_p)
 
 							while (node_p)
 								{
-									LinkedList *parts_p = ParseStringToStringLinkedList (node_p -> sln_string_s, delimiter_s, false);
+									const char * const filename_s = node_p -> sln_string_s;
+									LinkedList *parts_p = ParseStringToStringLinkedList (filename_s, delimiter_s, false);
 
 									if (parts_p)
 										{
-
 											if (parts_p -> ll_size == PA_NUM_PARTS)
 												{
 													StringListNode *parts_node_p = (StringListNode *) (parts_p -> ll_head_p);
+													const char *code_s = parts_node_p -> sln_string_s;
+
 
 													/*
 													 * The first node contains the code, so let's check if it's changed
@@ -106,21 +116,95 @@ void RunImportImages (const FieldTrialServiceData * const data_p)
 																	current_study_p = NULL;
 
 																}
-														}
 
- 												}
+															current_study_p = GetStudyByCode (parts_node_p -> sln_string_s, data_p);
+
+															if (!current_study_p)
+																{
+
+																}
+
+														}		/* if (strcmp (parts_node_p -> sln_string_s, current_code_s) != 0) */
+
+													/* Now find the matching plot and add the image to its list */
+													if (current_study_p)
+														{
+															char *url_s = GetUrlForImage (filename_s, root_path_s, root_url_s);
+
+															if (url_s)
+																{
+																	/* Let's get the plot */
+																	const char *date_s;
+																	const char *flight_s;
+																	const char *wavelength_s;
+																	const char *plot_s;
+																	uint32 study_index = 0;
+																	Row *row_p = NULL;
+
+																	parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
+																	date_s = parts_node_p -> sln_string_s;
+
+																	parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
+																	flight_s = parts_node_p -> sln_string_s;
+
+																	parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
+																	wavelength_s = parts_node_p -> sln_string_s;
+
+																	parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
+																	plot_s = parts_node_p -> sln_string_s;
+
+
+																	/*
+																	 * Get the study index from plot_s
+																	 */
+																	row_p = GetRowByStudyIndex (study_index, current_study_p, VF_STORAGE, data_p);
+
+																	if (row_p)
+																		{
+																			Plot *plot_p = row_p -> ro_plot_p;
+
+																			ImageObject *image_p = AllocateImageObject (url_s, NULL);
+
+																			if (image_p)
+																				{
+
+																					if (AddImageToPlot (plot_p, image_p))
+																						{
+																							SavePlot (plot_p, data_p);
+																						}
+																					else
+																						{
+																							FreeImageObject (image_p);
+																						}
+
+																				}		/* if (image_p) */
+																			else
+																				{
+
+																				}
+
+
+																		}		/* if (row_p) */
+
+																	FreeCopiedString (url_s);
+																}		/* if (url_s) */
+
+														}		/* if (current_study_p) */
+
+ 												}		/* if (parts_p -> ll_size == PA_NUM_PARTS) */
 
 											FreeLinkedList (parts_p);
 										}		/* if (parts_p) */
 
-
 									node_p = (StringListNode *) (node_p -> sln_node.ln_next_p);
 								}		/* while (node_p) */
 
+							if (current_study_p)
+								{
+									FreeStudy (current_study_p);
+								}
 
-							ParseStringToStringLinkedList ()
-
-						}
+						}		/* if (LinkedListSort (files_p, SortByName)) */
 
 					FreeLinkedList (files_p);
 				}		/* if (files_p) */
@@ -135,9 +219,6 @@ void RunImportImages (const FieldTrialServiceData * const data_p)
 
 			FreeMemory (patterns_ss);
 		}		/* if (patterns_ss) */
-
-
-
 
 
 }
@@ -275,5 +356,8 @@ static int SortByName (const void *v0_p, const void *v1_p)
 
 
 
-
+static char *GetUrlForImage (const char * const filename_s, const char * const root_path_s, const char * const root_url_s)
+{
+	return NULL;
+}
 

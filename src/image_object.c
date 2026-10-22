@@ -18,6 +18,7 @@
 
 static bool GetImageObjectAsSchemaOrgObject (json_t *image_json_p, const ImageObject * const image_p);
 
+static int CompareNullableStrings (const char * const value_0_s, const char * const value_1_s);
 
 /*
  * API DEFINITIONS
@@ -225,6 +226,45 @@ void FreeImageObjectNode (ListItem *node_p)
 	FreeMemory (image_node_p);
 }
 
+
+int CompareImageObjects (const ImageObject * const image_0_p, const ImageObject * const image_1_p)
+{
+	int res = CompareNullableStrings (image_0_p -> io_full_image_url_s, image_1_p -> io_full_image_url_s);
+
+	if (res == 0)
+		{
+			res = CompareNullableStrings (image_0_p -> io_thumbnail_image_url_s, image_1_p -> io_thumbnail_image_url_s);
+		}
+
+	return res;
+}
+
+
+static int CompareNullableStrings (const char * const value_0_s, const char * const value_1_s)
+{
+	int res = 0;
+
+	if (value_0_s)
+		{
+			if (value_1_s)
+				{
+					res = strcmp (value_0_s, value_1_s);
+				}
+			else
+				{
+					res = -1;
+				}
+		}
+	else
+		{
+			if (value_1_s)
+				{
+					res = 1;
+				}
+		}
+
+	return res;
+}
 
 /*
  * STATIC DEFINITIONS

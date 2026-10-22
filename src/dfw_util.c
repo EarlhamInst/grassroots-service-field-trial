@@ -313,6 +313,23 @@ char *GetFrictionlessDataURL (const char *const name_s, const FieldTrialServiceD
 }
 
 
+static char *GetAssetURL (const char * const root_url_s, const char * const name_s, const char * const suffix_s)
+{
+	char *url_s = NULL;
+
+	if (suffix_s)
+		{
+
+		}
+	else
+		{
+
+		}
+
+	return url_s;
+}
+
+
 char *GetFrictionlessDataFilename (const char * const name_s, const FieldTrialServiceData *data_p)
 {
 	char *full_study_filename_s = NULL;

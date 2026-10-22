@@ -84,6 +84,12 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL ImageObjectNode *AllocateImageObjectNode (ImageObj
 DFW_FIELD_TRIAL_SERVICE_LOCAL void FreeImageObjectNode (ListItem *node_p);
 
 
+
+DFW_FIELD_TRIAL_SERVICE_LOCAL int CompareImageObjects (const ImageObject * const image_0_p, const ImageObject * const image_1_p);
+
+
+
+
 #ifdef __cplusplus
 }
 #endif

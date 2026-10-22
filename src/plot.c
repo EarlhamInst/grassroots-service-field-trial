@@ -592,7 +592,19 @@ bool AddImageToPlotByParts (Plot *plot_p, const char * const full_image_url_s, c
 
 bool AddImageToPlot (Plot *plot_p, ImageObject *image_p)
 {
-	ImageObjectNode *node_p = AllocateImageObjectNode (image_p);
+	/* Check if the image is already on the plot's list */
+	ImageObjectNode *node_p = (ImageObjectNode *) (plot_p -> pl_images_p -> ll_head_p);
+
+	while (node_p)
+		{
+			if (CompareImageObjects (image_p, node_p -> ion_image_p) == 0)
+				{
+					/* Image is already on list */
+					return true;
+				}
+		}
+
+	node_p = AllocateImageObjectNode (image_p);
 
 	if (node_p)
 		{
