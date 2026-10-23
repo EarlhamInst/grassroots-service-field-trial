@@ -275,7 +275,7 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL json_t *GetAllStudyIdsHavingObservations (const Fi
 
 
 
-DFW_FIELD_TRIAL_SERVICE_LOCAL Study *GetStudyByCode (const char * const study_code_s, FieldTrialServiceData *dfw_data_p);
+DFW_FIELD_TRIAL_SERVICE_LOCAL Study *GetStudyByCode (const char * const study_code_s, const FieldTrialServiceData * const dfw_data_p);
 
 
 

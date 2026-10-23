@@ -625,7 +625,7 @@ bool AddImageToPlot (Plot *plot_p, ImageObject *image_p)
 
 
 
-Plot *GetPlotFromJSON (const json_t *plot_json_p, Study *parent_study_p, const ViewFormat format, FieldTrialServiceData *data_p)
+Plot *GetPlotFromJSON (const json_t *plot_json_p, Study *parent_study_p, const ViewFormat format, const FieldTrialServiceData *data_p)
 {
 	Plot *plot_p = NULL;
 	json_int_t row;

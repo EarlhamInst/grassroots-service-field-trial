@@ -77,6 +77,10 @@ ImageMetadata *GetImageMetadataForImageFile (const char *path_s)
 
       exif_data_unref (exif_p);
     }
+  else
+  	{
+
+  	}
 
   return NULL;
 }

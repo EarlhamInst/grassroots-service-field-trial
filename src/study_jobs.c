@@ -4132,40 +4132,34 @@ static OperationStatus ProcessDistinctValues (bson_oid_t *study_id_p, const char
 
 
 
-Study *GetStudyByCode (const char * const study_code_s, FieldTrialServiceData *data_p)
+Study *GetStudyByCode (const char * const study_code_s, const FieldTrialServiceData * const data_p)
 {
 	Study *study_p = NULL;
 	MongoTool *mongo_p = GetConfiguredMongoTool (data_p, NULL);
 
 	if (mongo_p)
 		{
-			if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_STUDY]))
+			bson_t *query_p = bson_new ();
+
+			if (query_p)
 				{
-					bson_t *query_p = bson_new ();
-
-					if (query_p)
+					if (BSON_APPEND_UTF8 (query_p, ST_CODE_S, study_code_s))
 						{
-							if (BSON_APPEND_UTF8 (query_p, ST_CODE_S, study_code_s))
-								{
-
-								}		/* if (BSON_APPEND_UTF8 (query_p, ST_CODE_S, study_code_s)) */
-							else
-								{
-									PrintBSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, query_p, "Failed to append \"%s\": \"%s\" to query", ST_CODE_S, study_code_s);
-								}
-
-							bson_destroy (query_p);
-						}		/* if (query_p) */
+							study_p = GetDFWObjectByQuery (query_p, DFTD_STUDY, GetStudyCallback, VF_CLIENT_FULL, data_p);
+						}		/* if (BSON_APPEND_UTF8 (query_p, ST_CODE_S, study_code_s)) */
 					else
 						{
-							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for study code \"%s\"", study_code_s);
+							PrintBSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, query_p, "Failed to append \"%s\": \"%s\" to query", ST_CODE_S, study_code_s);
 						}
 
-				}		/* if (SetMongoToolCollection (mongo_p, data_p -> dftsd_collection_ss [DFTD_STUDY])) */
+					bson_destroy (query_p);
+				}		/* if (query_p) */
 			else
 				{
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "SetMongoToolCollection () for \"%s\" failed", data_p -> dftsd_collection_ss [DFTD_STUDY]);
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to create query for study code \"%s\"", study_code_s);
 				}
+
+
 
 			FreeMongoTool (mongo_p);
 		}		/* if (mongo_p) */
