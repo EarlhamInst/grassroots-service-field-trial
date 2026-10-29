@@ -17,6 +17,9 @@
 #include "study_jobs.h"
 #include "row_jobs.h"
 #include "mongodb_tool.h"
+#include "math_utils.h"
+#include "filesystem_utils.h"
+
 
 
 /*
@@ -43,7 +46,7 @@ static int SortByName (const void *v0_p, const void *v1_p);
 static char **GetImageFilenamesForMatching (const char * const root_path_s);
 
 
-static bool CopyImageFile (const char *full_image_filename_s, const char *current_study_id_s, char **image_url_ss, const FieldTrialServiceData * const data_p);
+static bool CopyImageFile (const char *full_image_filename_s, const char *current_study_id_s, const uint32 study_index, char **image_url_ss, const FieldTrialServiceData * const data_p);
 
 
 static bool GetStudyIndex (const char * const plot_s, uint32 *index_p);
@@ -136,32 +139,32 @@ OperationStatus RunImportImages (const char * const import_path_s, const FieldTr
 															/* Now find the matching plot and add the image to its list */
 															if (current_study_p)
 																{
-																	char *image_url_s = NULL;
+																	/* Let's get the plot */
+																	const char *date_s;
+																	const char *flight_s;
+																	const char *wavelength_s;
+																	const char *plot_s;
+																	uint32 study_index = 0;
+																	Row *row_p = NULL;
 
-																	if (CopyImageFile (full_image_filename_s, current_study_id_s, &image_url_s, data_p))
+																	parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
+																	date_s = parts_node_p -> sln_string_s;
+
+																	parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
+																	flight_s = parts_node_p -> sln_string_s;
+
+																	parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
+																	wavelength_s = parts_node_p -> sln_string_s;
+
+																	parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
+																	plot_s = parts_node_p -> sln_string_s;
+
+
+																	if (GetStudyIndex (plot_s, &study_index))
 																		{
-																			/* Let's get the plot */
-																			const char *date_s;
-																			const char *flight_s;
-																			const char *wavelength_s;
-																			const char *plot_s;
-																			uint32 study_index = 0;
-																			Row *row_p = NULL;
+																			char *image_url_s = NULL;
 
-																			parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
-																			date_s = parts_node_p -> sln_string_s;
-
-																			parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
-																			flight_s = parts_node_p -> sln_string_s;
-
-																			parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
-																			wavelength_s = parts_node_p -> sln_string_s;
-
-																			parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
-																			plot_s = parts_node_p -> sln_string_s;
-
-
-																			if (GetStudyIndex (plot_s, &study_index))
+																			if (CopyImageFile (full_image_filename_s, current_study_id_s, study_index, &image_url_s, data_p))
 																				{
 																					/*
 																					 * Get the study index from plot_s
@@ -212,14 +215,17 @@ OperationStatus RunImportImages (const char * const import_path_s, const FieldTr
 
 																						}
 
-																				}		/* if (GetStudyIndex (plot_s, &study_index)) */
-																			else
-																				{
-																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get study_index from \"%s\"", plot_s);
-																				}
 
-																			FreeCopiedString (image_url_s);
-																		}		/* if (CopyImageFile (full_image_filename_s, current_study_id_s, &image_url_s, data_p)) */
+																					FreeCopiedString (image_url_s);
+																				}		/* if (CopyImageFile (full_image_filename_s, current_study_id_s, &image_url_s, data_p)) */
+
+
+																		}		/* if (GetStudyIndex (plot_s, &study_index)) */
+																	else
+																		{
+																			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get study_index from \"%s\"", plot_s);
+																		}
+
 
 																}		/* if (current_study_p) */
 
@@ -292,81 +298,165 @@ OperationStatus ImportImage (Study *study_p, const ViewFormat format, const Fiel
 /**
  * Copy the image file into the appropriate directory and calculate the url for the copied file.
  *
- * @param full_image_filename_s The path to the image file that will be used,
- * @param current_study_id_s The Id for the current sStudy as a string
- * @param image_url_ss A pointer to the string where the resultant image url will be set upon success,
+ * @param full_image_filename_s The path to the image file that will be used.
+ * @param current_study_id_s The Id for the current sStudy as a string.
+ * @param study_index The study index of this plot within its Study.
+ * @param image_url_ss A pointer to the string where the resultant image url will be set upon success.
  * @param data_p The configured FieldTrialServiceData.
- * @return <code>true</code> if the file was copied successfully and teh image url set, <code>false</code> otherwise.
+ * @return <code>true</code> if the file was copied successfully and the image url set, <code>false</code> otherwise.
  */
-static bool CopyImageFile (const char *full_image_filename_s, const char *current_study_id_s, char **image_url_ss, const FieldTrialServiceData * const data_p)
+static bool CopyImageFile (const char *full_image_filename_s, const char *current_study_id_s, const uint32 study_index, char **image_url_ss, const FieldTrialServiceData * const data_p)
 {
 	bool success_flag = false;
-	char *study_assets_path_s = MakeFilename (data_p -> dftsd_assets_path_s, current_study_id_s);
 
-	if (study_assets_path_s)
+
+	char *study_index_s = ConvertUnsignedIntegerToString (study_index);
+
+	if (study_index_s)
 		{
-			if (EnsureDirectoryExists (study_assets_path_s))
+			char sep_s [2];
+			const char c = GetFileSeparatorChar ();
+			char *dest_filename_s;
+			const size_t l = strlen (data_p -> dftsd_assets_path_s);
+			char *study_assets_path_s;
+
+			*sep_s = c;
+			* (sep_s + 1) = '\0';
+
+
+			if (IsRotatedImage (full_image_filename_s))
 				{
-					char *local_image_filename_s = GetFilenameOnly (full_image_filename_s);
+					const char * const rotated_s = "rotated";
+					char *rotated_dir_s = MakeFilename (study_assets_path_s, rotated_s);
 
-					if (local_image_filename_s)
+					if (rotated_dir_s)
 						{
-							char *dest_filename_s = MakeFilename (study_assets_path_s, local_image_filename_s);
 
-							if (dest_filename_s)
+							if (EnsureDirectoryExists (study_assets_path_s))
 								{
-									if (CopyToNewFile (full_image_filename_s, dest_filename_s, NULL))
-										{
-											const char * const filename_from_root_s = dest_filename_s + strlen (data_p -> dftsd_assets_path_s);
 
-											char *image_url_s = MakeFilename (data_p -> dftsd_fd_url_s, filename_from_root_s);
-
-											if (image_url_s)
-												{
-													*image_url_ss = image_url_s;
-													success_flag = true;
-												}		/* if (image_url_s) */
-											else
-												{
-													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "MakeFilename () failed for \"%s\" and \"%s\"", data_p -> dftsd_fd_url_s, filename_from_root_s);
-												}
-
-										}		/* if (CopyToNewFile (full_image_filename_s, dest_filename_s)) */
-									else
-										{
-											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "CopyToNewFile () failed for \"%s\" and \"%s\"", full_image_filename_s, dest_filename_s);
-										}
-
-									FreeCopiedString (dest_filename_s);
-								}		/* if (dest_filename_s) */
-							else
-								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "MakeFilename () failed for \"%s\" and \"%s\"", study_assets_path_s, local_image_filename_s);
 								}
 
-							FreeCopiedString (local_image_filename_s);
-						}		/* if (local_image_filename_s) */
-					else
-						{
-							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetFilenameOnly () failed for \"%s\"", full_image_filename_s);
+							FreeCopiedString (rotated_dir_s);
 						}
 
-				}		/* if (EnsureDirectoryExists (study_assets_path_s)) */
+				}
 			else
 				{
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "EnsureDirectoryExists () failed for \"%s\"", study_assets_path_s);
+					if ((* ((data_p -> dftsd_assets_path_s) + l - 1)) == c)
+						{
+							study_assets_path_s = ConcatenateVarargsStrings (data_p -> dftsd_assets_path_s, current_study_id_s, sep_s, "plot_", study_index_s, NULL);
+						}
+					else
+						{
+							study_assets_path_s = ConcatenateVarargsStrings (data_p -> dftsd_assets_path_s, sep_s, current_study_id_s, sep_s, "plot_", study_index_s, NULL);
+						}
 				}
 
-			FreeCopiedString (study_assets_path_s);
-		}		/* if (study_assets_path_s) */
+			if (study_assets_path_s)
+				{
+					if (EnsureDirectoryExists (study_assets_path_s))
+						{
+							/* Make sure that the directory for the rotated images exists */
+
+
+							char *local_image_filename_s = GetFilenameOnly (full_image_filename_s);
+
+							if (local_image_filename_s)
+								{
+									char *dest_filename_s = ConcatenateVarArgsStrings (study_assets_path_s, sep_s, local_image_filename_s, NULL);
+
+									if (dest_filename_s)
+										{
+											if (CopyToNewFile (full_image_filename_s, dest_filename_s, NULL))
+												{
+													const char * const filename_from_root_s = dest_filename_s + strlen (data_p -> dftsd_assets_path_s);
+
+													char *image_url_s = MakeFilename (data_p -> dftsd_fd_url_s, filename_from_root_s);
+
+													if (image_url_s)
+														{
+															*image_url_ss = image_url_s;
+															success_flag = true;
+														}		/* if (image_url_s) */
+													else
+														{
+															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "MakeFilename () failed for \"%s\" and \"%s\"", data_p -> dftsd_fd_url_s, filename_from_root_s);
+														}
+
+												}		/* if (CopyToNewFile (full_image_filename_s, dest_filename_s)) */
+											else
+												{
+													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "CopyToNewFile () failed for \"%s\" and \"%s\"", full_image_filename_s, dest_filename_s);
+												}
+
+											FreeCopiedString (dest_filename_s);
+										}		/* if (dest_filename_s) */
+									else
+										{
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "MakeFilename () failed for \"%s\" and \"%s\"", study_assets_path_s, local_image_filename_s);
+										}
+
+									FreeCopiedString (local_image_filename_s);
+								}		/* if (local_image_filename_s) */
+							else
+								{
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetFilenameOnly () failed for \"%s\"", full_image_filename_s);
+								}
+
+						}		/* if (EnsureDirectoryExists (study_assets_path_s)) */
+					else
+						{
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "EnsureDirectoryExists () failed for \"%s\"", study_assets_path_s);
+						}
+
+					FreeCopiedString (study_assets_path_s);
+				}		/* if (study_assets_path_s) */
+			else
+				{
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "MakeFilename () failed for \"%s\" and \"%s\"", data_p -> dftsd_assets_path_s, current_study_id_s);
+				}
+
+			FreeCopiedString (study_index_s);
+		}		/* if (study_index_s) */
 	else
 		{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "MakeFilename () failed for \"%s\" and \"%s\"", data_p -> dftsd_assets_path_s, current_study_id_s);
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "ConvertUnsignedIntegerToString () failed for " UINT32_FMT, study_index);
 		}
 
 	return success_flag;
 }
 
+
+/*
+ * Each Plot will have a directory like <study id>/Plot_<study index>. Inside this, all of the
+ * images at the top level will be the those in their natural orientation. There will also be 3
+ * subdirectories:
+ *
+ * metadata: where all of the image metadata goes
+ * rotated: where all of the rotated images in portrait/landscape view are stored
+ *
+ * Both the top-level and rotated directories will also have a thumbnails directory where their
+ * respective thumbnails will be stored.
+ *
+ * So we have
+ *
+ * PLOT directory
+ *   |
+ *   -- image files
+ *   |
+ *   -- metadata directory
+ *   |
+ *   -- thumbnails directory
+ *   |
+ *   -- rotated directory
+ *     |
+ *     -- rotated thumbnails directory
+ */
+static bool CreatePlotImageDirectories ()
+{
+
+}
 
 
 static bool GetStudyIndex (const char * const plot_s, uint32 *index_p)

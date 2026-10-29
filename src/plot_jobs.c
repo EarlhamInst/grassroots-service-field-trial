@@ -105,7 +105,6 @@ static const char * const S_GENE_BANK_DESCRIPTION_S = "";
 static const char * const S_TREATMENT_TITLE_S = "Treatment";
 static const char * const S_TREATMENT_DESCRIPTION_S = "";
 
-static const char * const S_REPLICATE_TITLE_S = "Replicate";
 static const char * const S_REPLICATE_DESCRIPTION_S = "";
 
 static const char * const S_COMMENT_TITLE_S = "Comment";

@@ -328,7 +328,7 @@ static json_t *GetMeasuredVariableAsJSONForStudyStorage (const MeasuredVariable 
 		}		/* if (mv_json_p) */
 	else
 		{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, mv_json_p, "Failed to allocate json for \"%s\"", mv_p -> mv_variable_term_p -> st_name_s);
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to allocate json for \"%s\"", mv_p -> mv_variable_term_p -> st_name_s);
 		}
 
 	return NULL;
