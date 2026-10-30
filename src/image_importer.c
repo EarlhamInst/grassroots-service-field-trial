@@ -51,6 +51,9 @@ static bool CopyImageFile (const char *full_image_filename_s, const char *curren
 
 static bool GetStudyIndex (const char * const plot_s, uint32 *index_p);
 
+static bool IsRotatedImage (const char * const full_image_filename_s);
+
+
 
 
 OperationStatus RunImportImages (const char * const import_path_s, const FieldTrialServiceData * const data_p)
@@ -316,7 +319,6 @@ static bool CopyImageFile (const char *full_image_filename_s, const char *curren
 		{
 			char sep_s [2];
 			const char c = GetFileSeparatorChar ();
-			char *dest_filename_s;
 			const size_t l = strlen (data_p -> dftsd_assets_path_s);
 			char *study_assets_path_s;
 
@@ -364,7 +366,7 @@ static bool CopyImageFile (const char *full_image_filename_s, const char *curren
 
 							if (local_image_filename_s)
 								{
-									char *dest_filename_s = ConcatenateVarArgsStrings (study_assets_path_s, sep_s, local_image_filename_s, NULL);
+									char *dest_filename_s = ConcatenateVarargsStrings (study_assets_path_s, sep_s, local_image_filename_s, NULL);
 
 									if (dest_filename_s)
 										{
@@ -609,6 +611,15 @@ static int SortByName (const void *v0_p, const void *v1_p)
 	const StringListNode **sln_1_pp = (const StringListNode **) v1_p;
 
 	return Stricmp ((*sln_0_pp) -> sln_string_s, (*sln_1_pp) -> sln_string_s);
+}
+
+
+
+static bool IsRotatedImage (const char * const full_image_filename_s)
+{
+	bool rotated_flag = false;
+
+	return rotated_flag;
 }
 
 

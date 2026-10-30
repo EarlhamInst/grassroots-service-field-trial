@@ -2085,3 +2085,58 @@ static OperationStatus CreateMongoRevisionsCollection (MongoTool *tool_p, const 
 
 	return status;
 }
+
+
+
+
+static OperationStatus CheckAllStudyLinks (Service *service_p, ServiceJob *job_p)
+{
+	OperationStatus status = OS_FAILED;
+	json_t *study_ids_p = GetAllStudyIds (service_p);
+
+	if (study_ids_p)
+		{
+			const FieldTrialServiceData * const data_p = (const FieldTrialServiceData * const) (service_p -> se_data_p);
+			const char * const root_study_url_s = data_p -> dftsd_view_study_url_s;
+			const char * const root_plots_url_s = data_p -> dftsd_view_plots_url_s;
+
+			char *id_s = GetBSONOidBuffer ();
+
+			if (id_s)
+				{
+					size_t i;
+					json_t *id_p;
+
+					json_array_foreach (study_ids_p, i, id_p)
+						{
+							bson_oid_t id;
+
+							if (GetMongoIdFromJSON (id_p, &id))
+								{
+									char *study_url_s = NULL;
+
+									PopulateBSONOidIntoString (&id, id_s);
+
+									study_url_s = MakeFilename (root_study_url_s, id_s);
+
+									if (study_url_s)
+										{
+
+											FreeCopiedString (study_url_s);
+										}		/* if (study_url_s) */
+
+								}
+
+
+
+						}		/* json_array_foreach (study_ids_p, i, id_p) */
+
+					FreeBSONOidString (id_s);
+				}
+
+
+			json_decref (study_ids_p);
+		}		/* if (study_ids_p) */
+
+	return status;
+}
