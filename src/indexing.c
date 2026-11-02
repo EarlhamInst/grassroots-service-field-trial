@@ -177,6 +177,8 @@ static OperationStatus CreateMongoRevisionsCollections (FieldTrialServiceData *d
 
 static OperationStatus CreateMongoRevisionsCollection (MongoTool *tool_p, const char *database_s, const char *collection_s);
 
+static OperationStatus CheckAllStudyLinks (Service *service_p, ServiceJob *job_p);
+
 
 /*
  * API definitions
@@ -2104,32 +2106,119 @@ static OperationStatus CheckAllStudyLinks (Service *service_p, ServiceJob *job_p
 
 			if (id_s)
 				{
-					size_t i;
-					json_t *id_p;
+					CurlTool *curl_p = AllocateMemoryCurlTool (0);
 
-					json_array_foreach (study_ids_p, i, id_p)
+					if (curl_p)
 						{
-							bson_oid_t id;
+							size_t i;
+							json_t *id_p;
 
-							if (GetMongoIdFromJSON (id_p, &id))
+							json_array_foreach (study_ids_p, i, id_p)
 								{
-									char *study_url_s = NULL;
+									bson_oid_t id;
 
-									PopulateBSONOidIntoString (&id, id_s);
-
-									study_url_s = MakeFilename (root_study_url_s, id_s);
-
-									if (study_url_s)
+									if (GetMongoIdFromJSON (id_p, &id))
 										{
+											char *study_url_s = NULL;
 
-											FreeCopiedString (study_url_s);
-										}		/* if (study_url_s) */
+											PopulateBSONOidIntoString (&id, id_s);
 
-								}
+											study_url_s = MakeFilename (root_study_url_s, id_s);
+
+											if (study_url_s)
+												{
+													if (SetUriForCurlTool (curl_p, study_url_s))
+														{
+															bool success_flag = false;
+															CURLcode res;
+
+															PrintLog (STM_LEVEL_FINEST, __FILE__, __LINE__, "About to check \"%s\"", study_url_s);
+
+															res = RunCurlTool (curl_p);
+
+															if (res == CURLE_OK)
+																{
+																	if ((curl_p -> ct_response_code >= 0) && (curl_p -> ct_response_code <= 400))
+																		{
+																			/* success */
+																			success_flag = true;
+																		}
+																	else
+																		{
+																			PrintLog (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Curl failed for \"%s\" with status %l", study_url_s, curl_p -> ct_response_code);
+																		}
+																}
+															else
+																{
+																	PrintLog (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Curl failed for \"%s\" with error \"%s\"", study_url_s, curl_easy_strerror (res));
+																}
+
+															if (!success_flag)
+																{
+																	json_t *result_p = json_object ();
+
+																	if (result_p)
+																		{
+																			if (SetJSONString (result_p, CONTEXT_PREFIX_SCHEMA_ORG_S "url", study_url_s))
+																				{
+																					json_t *dest_record_p = GetDataResourceAsJSONByParts (PROTOCOL_INLINE_S, NULL, id_s, result_p);
+
+																					if (dest_record_p)
+																						{
+																							if (AddResultToServiceJob (job_p, dest_record_p))
+																								{
+																									success_flag = true;
+																								}
+																							else
+																								{
+																									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, dest_record_p, "AddResultToServiceJob () failed for \"%s\"", id_s);
+																									json_decref (dest_record_p);
+																								}
+																						}		/* if (dest_record_p) */
+																					else
+																						{
+																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetResourceAsJSONByParts () failed for \"%s\"", id_s);
+																							json_decref (result_p);
+																							result_p = NULL;
+																						}
+
+																				}
+																			else
+																				{
+
+																				}
+
+																			if (!success_flag)
+																				{
+																					if (result_p)
+																						{
+																							json_decref (result_p);
+																						}
+																				}
+
+																		}
+
+																}
+
+														}		/* if (SetUriForCurlTool (curl_p, study_url_s)) */
+													else
+														{
+
+														}
 
 
 
-						}		/* json_array_foreach (study_ids_p, i, id_p) */
+													FreeCopiedString (study_url_s);
+												}		/* if (study_url_s) */
+
+										}		/* if (GetMongoIdFromJSON (id_p, &id)) */
+
+								}		/* json_array_foreach (study_ids_p, i, id_p) */
+
+							FreeCurlTool (curl_p);
+						}		/* if (curl_p) */
+
+
 
 					FreeBSONOidString (id_s);
 				}
