@@ -744,7 +744,7 @@ static LinkedList *GetFieldTrialFiles (const char * const path_s, const char * c
 
 	if (pattern_s)
 		{
-			if (! (files_p = GetMatchingFiles (pattern_s, full_path_flag)))
+			if (! (files_p = GetMatchingFiles (pattern_s, full_path_flag, false, NULL)))
 				{
 					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetMatchingFiles failed for pattern: \"%s\"", pattern_s);
 				}

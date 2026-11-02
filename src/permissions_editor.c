@@ -168,7 +168,7 @@ static OperationStatus UpdatePermissionsValues (Permissions *permissions_p, cons
 			for (i = 0; i < num_entries; ++ i, ++ value_ss)
 				{
 					const char *email_s = *value_ss;
-					User *user_p = GetUserByEmailAddress (grassroots_p, email_s);
+					User *user_p = GetExistingUserByEmailAddress (grassroots_p, email_s);
 
 					if (user_p)
 						{
