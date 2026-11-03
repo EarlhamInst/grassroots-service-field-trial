@@ -107,9 +107,6 @@ static const char * const S_THUMBNAILS_DIR_S = "thumbnails";
 
 static const char * const S_ROTATED_DIR_S = "rotated";
 
-static const int S_THUMBNAIL_MAX_WIDTH = 640;
-
-static const int S_THUMBNAIL_MAX_HEIGHT = 256;
 
 
 
@@ -555,7 +552,7 @@ static char *CreateThumbnailForImage (const char * const image_filename_s, const
 
 					if (thumbnail_filename_s)
 						{
-							if (CreateThumbnail (image_filename_s, thumbnail_filename_s, data_p -> , S_THUMBNAIL_MAX_HEIGHT))
+							if (CreateThumbnail (image_filename_s, thumbnail_filename_s, data_p -> dftsd_max_thumbnail_width , data_p -> dftsd_max_thumbnail_height))
 								{
 									thumbnail_url_s = GetAssetUrl (thumbnail_filename_s, data_p);
 								}

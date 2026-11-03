@@ -1079,31 +1079,44 @@ static bool SetValidPlotImages (const Plot *plot_p, json_t *plot_json_p, const V
 
 			if (images_json_p)
 				{
-					ImageObjectNode *node_p = (ImageObjectNode *) (plot_p -> pl_images_p -> ll_head_p);
-
-					success_flag = true;
-
-					while (node_p)
+					if (json_object_set_new (plot_json_p, PL_IMAGES_S, images_json_p) == 0)
 						{
-							const ImageObject *image_p = node_p -> ion_image_p;
+							ImageObjectNode *node_p = (ImageObjectNode *) (plot_p -> pl_images_p -> ll_head_p);
 
-							if (AddValidPlotImage (image_p, images_json_p, vf))
+							success_flag = true;
+
+							while (node_p)
 								{
-									node_p = (ImageObjectNode *) (& (node_p -> ion_base_node.ln_next_p));
-								}
-							else
-								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddValidPlotImage () failed for \"%s\", \"%s\"",
-															 image_p -> io_full_image_url_s ? image_p -> io_full_image_url_s : "",
-															 image_p -> io_thumbnail_image_url_s ? image_p -> io_thumbnail_image_url_s: "");
+									const ImageObject *image_p = node_p -> ion_image_p;
 
-									node_p = NULL;
-									success_flag = false;
+									if (AddValidPlotImage (image_p, images_json_p, vf))
+										{
+											node_p = (ImageObjectNode *) (node_p -> ion_base_node.ln_next_p);
+										}
+									else
+										{
+											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, plot_json_p, "AddValidPlotImage () failed for \"%s\", \"%s\"",
+																	 image_p -> io_full_image_url_s ? image_p -> io_full_image_url_s : "",
+																	 image_p -> io_thumbnail_image_url_s ? image_p -> io_thumbnail_image_url_s: "");
 
+											node_p = NULL;
+											success_flag = false;
+
+										}
 								}
+
+						}		/* if (json_object_set_new (plot_json_p, PL_IMAGES_S, images_json_p) == 0) */
+					else
+						{
+							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, plot_json_p, "Failed to add images array for \"%s\"", PL_IMAGES_S);
 						}
 
 				}		/* if (images_json_p) */
+			else
+				{
+					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, plot_json_p, "Failed to allocate images array");
+				}
+
 		}
 	else
 		{
