@@ -744,7 +744,7 @@ static LinkedList *GetFieldTrialFiles (const char * const path_s, const char * c
 
 	if (pattern_s)
 		{
-			char **patterns_ss [2];
+			char *patterns_ss [2];
 
 			*patterns_ss = pattern_s;
 			* (patterns_ss + 1) = NULL;
