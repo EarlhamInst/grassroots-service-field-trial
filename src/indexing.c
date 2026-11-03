@@ -81,6 +81,7 @@
 #include "measured_variable.h"
 
 #include "image_importer.h"
+#include "brapi_importer.h"
 
 /*
  * Static declarations
@@ -124,6 +125,15 @@ static NamedParameterType S_ADD_MONGODB_INDEXES = { "SS Add MongoDB Indexes", PT
 
 
 static NamedParameterType S_IMPORT_IMAGES = { "SS Import Images", PT_STRING };
+
+
+/*
+ * BrAPI import parameters
+ */
+static NamedParameterType S_BRAPI_URL = { "SS BrAPI URL", PT_STRING };
+static NamedParameterType S_BRAPI_TOKEN = { "SS BrAPI Token", PT_PASSWORD };
+static NamedParameterType S_BRAPI_PROGRAM_ID = { "SS BrAPI Program Id", PT_STRING };
+static NamedParameterType S_BRAPI_GENE_BANK = { "SS BrAPI Gene Bank", PT_STRING };
 
 
 
@@ -1069,7 +1079,7 @@ OperationStatus ReindexMeasuredVariables (ServiceJob *job_p, LuceneTool *lucene_
 }
 
 
-static ServiceJobSet *RunFieldTrialIndexingService (Service *service_p, ParameterSet *param_set_p, User * UNUSED_PARAM (user_p), ProvidersStateTable * UNUSED_PARAM (providers_p))
+static ServiceJobSet *RunFieldTrialIndexingService (Service *service_p, ParameterSet *param_set_p, User *user_p, ProvidersStateTable * UNUSED_PARAM (providers_p))
 {
 	FieldTrialServiceData *data_p = (FieldTrialServiceData *) (service_p -> se_data_p);
 
@@ -1411,6 +1421,30 @@ static ServiceJobSet *RunFieldTrialIndexingService (Service *service_p, Paramete
 								}
 						}
 
+
+					/*
+					 * Import from a BrAPI server such as BreedBase
+					 */
+					if (GetCurrentStringParameterValueFromParameterSet (param_set_p, S_BRAPI_URL.npt_name_s, &id_s))
+						{
+							if (!IsStringEmpty (id_s))
+								{
+									const char *token_s = NULL;
+									const char *program_id_s = NULL;
+									const char *gene_bank_s = NULL;
+									OperationStatus s;
+
+									GetCurrentStringParameterValueFromParameterSet (param_set_p, S_BRAPI_TOKEN.npt_name_s, &token_s);
+									GetCurrentStringParameterValueFromParameterSet (param_set_p, S_BRAPI_PROGRAM_ID.npt_name_s, &program_id_s);
+									GetCurrentStringParameterValueFromParameterSet (param_set_p, S_BRAPI_GENE_BANK.npt_name_s, &gene_bank_s);
+
+									s = ImportFromBrAPI (id_s, IsStringEmpty (token_s) ? NULL : token_s, IsStringEmpty (program_id_s) ? NULL : program_id_s,
+																			 IsStringEmpty (gene_bank_s) ? NULL : gene_bank_s, user_p, job_p, data_p);
+
+									MergeServiceJobStatus (job_p, s);
+								}
+						}
+
 				}
 
 		}
@@ -1571,6 +1605,10 @@ static bool GetIndexingParameterTypeForNamedParameter (const Service * UNUSED_PA
 			S_GENERATE_STUDY_METADATA,
 			S_ADD_MONGODB_INDEXES,
 			S_IMPORT_IMAGES,
+			S_BRAPI_URL,
+			S_BRAPI_TOKEN,
+			S_BRAPI_PROGRAM_ID,
+			S_BRAPI_GENE_BANK,
 			NULL
 		};
 
@@ -1631,7 +1669,21 @@ static ParameterSet *GetFieldTrialIndexingServiceParameters (Service *service_p,
 																																				{
 																																					if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, manager_group_p, S_IMPORT_IMAGES.npt_type, S_IMPORT_IMAGES.npt_name_s, "Import Images", "Import a folder of images for a Study's Plots", NULL, PL_ALL)) != NULL)
 																																						{
-																																							return params_p;
+																																							ParameterGroup *brapi_group_p = CreateAndAddParameterGroupToParameterSet ("BrAPI Import", false, data_p, params_p);
+
+																																							if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, brapi_group_p, S_BRAPI_URL.npt_type, S_BRAPI_URL.npt_name_s, "BrAPI server", "The root of a BrAPI v2 server such as BreedBase to import Programmes, Trials, Studies, Plots and Observations from, e.g. https://wheat.triticeaetoolbox.org/brapi/v2", NULL, PL_ALL)) != NULL)
+																																								{
+																																									if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, brapi_group_p, S_BRAPI_TOKEN.npt_type, S_BRAPI_TOKEN.npt_name_s, "Access token", "An optional bearer token for BrAPI servers that need authentication", NULL, PL_ALL)) != NULL)
+																																										{
+																																											if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, brapi_group_p, S_BRAPI_PROGRAM_ID.npt_type, S_BRAPI_PROGRAM_ID.npt_name_s, "Program Id", "The programDbId of the single program to import. Leave this empty to import all of them.", NULL, PL_ALL)) != NULL)
+																																												{
+																																													if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, brapi_group_p, S_BRAPI_GENE_BANK.npt_type, S_BRAPI_GENE_BANK.npt_name_s, "Gene Bank", "The name of the Gene Bank to add any new germplasm to. Leave this empty to use the GRU.", NULL, PL_ALL)) != NULL)
+																																														{
+																																															return params_p;
+																																														}
+																																												}
+																																										}
+																																								}
 																																						}
 																																				}
 																																		}

@@ -8,6 +8,7 @@
 
 #include <dirent.h>
 
+#include "vips/vips.h"
 
 #include "image_importer.h"
 
@@ -46,12 +47,33 @@ static int SortByName (const void *v0_p, const void *v1_p);
 static char **GetImageFilenamesForMatching (const char * const root_path_s);
 
 
-static bool CopyImageFile (const char *full_image_filename_s, const char *current_study_id_s, const uint32 study_index, char **image_url_ss, const FieldTrialServiceData * const data_p);
+static bool CopyImageFile (const char *full_image_filename_s, const char *current_study_id_s, const uint32 study_index, char **image_url_ss, char **thumbnail_url_ss, const FieldTrialServiceData * const data_p);
+
+static char *GetAssetUrl (const char * const asset_filename_s, const FieldTrialServiceData * const data_p);
+
+static char *CreateThumbnailForImage (const char * const image_filename_s, const char * const image_dir_s, const char * const local_image_filename_s, const FieldTrialServiceData * const data_p);
+
+static bool CreateThumbnail (const char * const image_filename_s, const char * const thumbnail_filename_s, const int max_width, const int max_height);
 
 
 static bool GetStudyIndex (const char * const plot_s, uint32 *index_p);
 
 static bool IsRotatedImage (const char * const full_image_filename_s);
+
+static bool CreatePlotImageDirectories (const char * const plot_dir_s);
+
+static bool EnsureSubdirectoryExists (const char * const parent_dir_s, const char * const subdir_s, char **full_subdir_ss);
+
+
+static const char * const S_METADATA_DIR_S = "metadata";
+
+static const char * const S_THUMBNAILS_DIR_S = "thumbnails";
+
+static const char * const S_ROTATED_DIR_S = "rotated";
+
+static const int S_THUMBNAIL_MAX_WIDTH = 256;
+
+static const int S_THUMBNAIL_MAX_HEIGHT = 256;
 
 
 
@@ -60,8 +82,21 @@ OperationStatus RunImportImages (const char * const import_path_s, const FieldTr
 {
 	OperationStatus status = OS_FAILED_TO_START;
 	LinkedList *files_p = NULL;
+	char **patterns_ss = NULL;
 
-	char **patterns_ss = GetImageFilenamesForMatching (import_path_s);
+	/*
+	 * libvips is used to create the thumbnails. VIPS_INIT () is safe to call
+	 * more than once as it does nothing if libvips has already been initialised.
+	 */
+	if (VIPS_INIT ("grassroots") != 0)
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "VIPS_INIT () failed: %s", vips_error_buffer ());
+			vips_error_clear ();
+
+			return status;
+		}
+
+	patterns_ss = GetImageFilenamesForMatching (import_path_s);
 
 	if (patterns_ss)
 		{
@@ -166,8 +201,9 @@ OperationStatus RunImportImages (const char * const import_path_s, const FieldTr
 																	if (GetStudyIndex (plot_s, &study_index))
 																		{
 																			char *image_url_s = NULL;
+																			char *thumbnail_url_s = NULL;
 
-																			if (CopyImageFile (full_image_filename_s, current_study_id_s, study_index, &image_url_s, data_p))
+																			if (CopyImageFile (full_image_filename_s, current_study_id_s, study_index, &image_url_s, &thumbnail_url_s, data_p))
 																				{
 																					/*
 																					 * Get the study index from plot_s
@@ -177,7 +213,6 @@ OperationStatus RunImportImages (const char * const import_path_s, const FieldTr
 																					if (row_p)
 																						{
 																							Plot *plot_p = row_p -> ro_plot_p;
-																							const char *thumbnail_url_s = NULL;
 																							ImageObject *image_p = AllocateImageObject (image_url_s, thumbnail_url_s);
 
 																							if (image_p)
@@ -220,7 +255,13 @@ OperationStatus RunImportImages (const char * const import_path_s, const FieldTr
 
 
 																					FreeCopiedString (image_url_s);
-																				}		/* if (CopyImageFile (full_image_filename_s, current_study_id_s, &image_url_s, data_p)) */
+
+																					if (thumbnail_url_s)
+																						{
+																							FreeCopiedString (thumbnail_url_s);
+																						}
+
+																				}		/* if (CopyImageFile (full_image_filename_s, current_study_id_s, &image_url_s, &thumbnail_url_s, data_p)) */
 
 
 																		}		/* if (GetStudyIndex (plot_s, &study_index)) */
@@ -299,21 +340,26 @@ OperationStatus ImportImage (Study *study_p, const ViewFormat format, const Fiel
 
 
 /**
- * Copy the image file into the appropriate directory and calculate the url for the copied file.
+ * Copy the image file into the appropriate directory, create its thumbnail and calculate the urls
+ * for both of them.
  *
  * @param full_image_filename_s The path to the image file that will be used.
  * @param current_study_id_s The Id for the current sStudy as a string.
  * @param study_index The study index of this plot within its Study.
  * @param image_url_ss A pointer to the string where the resultant image url will be set upon success.
+ * @param thumbnail_url_ss A pointer to the string where the resultant thumbnail url will be set. If the
+ * thumbnail could not be created, this will be set to <code>NULL</code>.
  * @param data_p The configured FieldTrialServiceData.
  * @return <code>true</code> if the file was copied successfully and the image url set, <code>false</code> otherwise.
  */
-static bool CopyImageFile (const char *full_image_filename_s, const char *current_study_id_s, const uint32 study_index, char **image_url_ss, const FieldTrialServiceData * const data_p)
+static bool CopyImageFile (const char *full_image_filename_s, const char *current_study_id_s, const uint32 study_index, char **image_url_ss, char **thumbnail_url_ss, const FieldTrialServiceData * const data_p)
 {
 	bool success_flag = false;
 
 
 	char *study_index_s = ConvertUnsignedIntegerToString (study_index);
+
+	*thumbnail_url_ss = NULL;
 
 	if (study_index_s)
 		{
@@ -326,90 +372,84 @@ static bool CopyImageFile (const char *full_image_filename_s, const char *curren
 			* (sep_s + 1) = '\0';
 
 
-			if (IsRotatedImage (full_image_filename_s))
+			if ((* ((data_p -> dftsd_assets_path_s) + l - 1)) == c)
 				{
-					const char * const rotated_s = "rotated";
-					char *rotated_dir_s = MakeFilename (study_assets_path_s, rotated_s);
-
-					if (rotated_dir_s)
-						{
-
-							if (EnsureDirectoryExists (study_assets_path_s))
-								{
-
-								}
-
-							FreeCopiedString (rotated_dir_s);
-						}
-
+					study_assets_path_s = ConcatenateVarargsStrings (data_p -> dftsd_assets_path_s, current_study_id_s, sep_s, "plot_", study_index_s, NULL);
 				}
 			else
 				{
-					if ((* ((data_p -> dftsd_assets_path_s) + l - 1)) == c)
-						{
-							study_assets_path_s = ConcatenateVarargsStrings (data_p -> dftsd_assets_path_s, current_study_id_s, sep_s, "plot_", study_index_s, NULL);
-						}
-					else
-						{
-							study_assets_path_s = ConcatenateVarargsStrings (data_p -> dftsd_assets_path_s, sep_s, current_study_id_s, sep_s, "plot_", study_index_s, NULL);
-						}
+					study_assets_path_s = ConcatenateVarargsStrings (data_p -> dftsd_assets_path_s, sep_s, current_study_id_s, sep_s, "plot_", study_index_s, NULL);
 				}
+
 
 			if (study_assets_path_s)
 				{
-					if (EnsureDirectoryExists (study_assets_path_s))
+					if (CreatePlotImageDirectories (study_assets_path_s))
 						{
-							/* Make sure that the directory for the rotated images exists */
+							/* Rotated images go into their own subdirectory */
+							char *dest_dir_s = IsRotatedImage (full_image_filename_s) ? MakeFilename (study_assets_path_s, S_ROTATED_DIR_S) : study_assets_path_s;
 
-
-							char *local_image_filename_s = GetFilenameOnly (full_image_filename_s);
-
-							if (local_image_filename_s)
+							if (dest_dir_s)
 								{
-									char *dest_filename_s = ConcatenateVarargsStrings (study_assets_path_s, sep_s, local_image_filename_s, NULL);
+									char *local_image_filename_s = GetFilenameOnly (full_image_filename_s);
 
-									if (dest_filename_s)
+									if (local_image_filename_s)
 										{
-											if (CopyToNewFile (full_image_filename_s, dest_filename_s, NULL))
+											char *dest_filename_s = MakeFilename (dest_dir_s, local_image_filename_s);
+
+											if (dest_filename_s)
 												{
-													const char * const filename_from_root_s = dest_filename_s + strlen (data_p -> dftsd_assets_path_s);
-
-													char *image_url_s = MakeFilename (data_p -> dftsd_fd_url_s, filename_from_root_s);
-
-													if (image_url_s)
+													if (CopyToNewFile (full_image_filename_s, dest_filename_s, NULL))
 														{
-															*image_url_ss = image_url_s;
-															success_flag = true;
-														}		/* if (image_url_s) */
+															char *image_url_s = GetAssetUrl (dest_filename_s, data_p);
+
+															if (image_url_s)
+																{
+																	*image_url_ss = image_url_s;
+																	success_flag = true;
+
+																	/*
+																	 * A missing thumbnail isn't fatal as the image itself is still
+																	 * available.
+																	 */
+																	*thumbnail_url_ss = CreateThumbnailForImage (dest_filename_s, dest_dir_s, local_image_filename_s, data_p);
+																}		/* if (image_url_s) */
+
+														}		/* if (CopyToNewFile (full_image_filename_s, dest_filename_s)) */
 													else
 														{
-															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "MakeFilename () failed for \"%s\" and \"%s\"", data_p -> dftsd_fd_url_s, filename_from_root_s);
+															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "CopyToNewFile () failed for \"%s\" and \"%s\"", full_image_filename_s, dest_filename_s);
 														}
 
-												}		/* if (CopyToNewFile (full_image_filename_s, dest_filename_s)) */
+													FreeCopiedString (dest_filename_s);
+												}		/* if (dest_filename_s) */
 											else
 												{
-													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "CopyToNewFile () failed for \"%s\" and \"%s\"", full_image_filename_s, dest_filename_s);
+													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "MakeFilename () failed for \"%s\" and \"%s\"", dest_dir_s, local_image_filename_s);
 												}
 
-											FreeCopiedString (dest_filename_s);
-										}		/* if (dest_filename_s) */
+											FreeCopiedString (local_image_filename_s);
+										}		/* if (local_image_filename_s) */
 									else
 										{
-											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "MakeFilename () failed for \"%s\" and \"%s\"", study_assets_path_s, local_image_filename_s);
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetFilenameOnly () failed for \"%s\"", full_image_filename_s);
 										}
 
-									FreeCopiedString (local_image_filename_s);
-								}		/* if (local_image_filename_s) */
+									if (dest_dir_s != study_assets_path_s)
+										{
+											FreeCopiedString (dest_dir_s);
+										}
+
+								}		/* if (dest_dir_s) */
 							else
 								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetFilenameOnly () failed for \"%s\"", full_image_filename_s);
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "MakeFilename () failed for \"%s\" and \"%s\"", study_assets_path_s, S_ROTATED_DIR_S);
 								}
 
-						}		/* if (EnsureDirectoryExists (study_assets_path_s)) */
+						}		/* if (CreatePlotImageDirectories (study_assets_path_s)) */
 					else
 						{
-							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "EnsureDirectoryExists () failed for \"%s\"", study_assets_path_s);
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "CreatePlotImageDirectories () failed for \"%s\"", study_assets_path_s);
 						}
 
 					FreeCopiedString (study_assets_path_s);
@@ -424,6 +464,114 @@ static bool CopyImageFile (const char *full_image_filename_s, const char *curren
 	else
 		{
 			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "ConvertUnsignedIntegerToString () failed for " UINT32_FMT, study_index);
+		}
+
+	return success_flag;
+}
+
+
+/**
+ * Get the url for a file that is stored within the configured assets directory.
+ *
+ * @param asset_filename_s The full path to the file. This must be within the assets directory.
+ * @param data_p The configured FieldTrialServiceData.
+ * @return The url which the caller must free with FreeCopiedString () or <code>NULL</code> upon error.
+ */
+static char *GetAssetUrl (const char * const asset_filename_s, const FieldTrialServiceData * const data_p)
+{
+	const char * const filename_from_root_s = asset_filename_s + strlen (data_p -> dftsd_assets_path_s);
+	char *url_s = MakeFilename (data_p -> dftsd_fd_url_s, filename_from_root_s);
+
+	if (!url_s)
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "MakeFilename () failed for \"%s\" and \"%s\"", data_p -> dftsd_fd_url_s, filename_from_root_s);
+		}
+
+	return url_s;
+}
+
+
+/**
+ * Create a thumbnail for an image that has been copied into a plot's directory.
+ *
+ * @param image_filename_s The full path to the copied image.
+ * @param image_dir_s The directory containing the copied image. The thumbnail will be
+ * stored in its thumbnails subdirectory.
+ * @param local_image_filename_s The filename, without any path, of the image. The thumbnail
+ * will use the same filename.
+ * @param data_p The configured FieldTrialServiceData.
+ * @return The url of the thumbnail which the caller must free with FreeCopiedString ()
+ * or <code>NULL</code> upon error.
+ */
+static char *CreateThumbnailForImage (const char * const image_filename_s, const char * const image_dir_s, const char * const local_image_filename_s, const FieldTrialServiceData * const data_p)
+{
+	char *thumbnail_url_s = NULL;
+	char *thumbnails_dir_s = MakeFilename (image_dir_s, S_THUMBNAILS_DIR_S);
+
+	if (thumbnails_dir_s)
+		{
+			char *thumbnail_filename_s = MakeFilename (thumbnails_dir_s, local_image_filename_s);
+
+			if (thumbnail_filename_s)
+				{
+					if (CreateThumbnail (image_filename_s, thumbnail_filename_s, S_THUMBNAIL_MAX_WIDTH, S_THUMBNAIL_MAX_HEIGHT))
+						{
+							thumbnail_url_s = GetAssetUrl (thumbnail_filename_s, data_p);
+						}
+
+					FreeCopiedString (thumbnail_filename_s);
+				}		/* if (thumbnail_filename_s) */
+			else
+				{
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "MakeFilename () failed for \"%s\" and \"%s\"", thumbnails_dir_s, local_image_filename_s);
+				}
+
+			FreeCopiedString (thumbnails_dir_s);
+		}		/* if (thumbnails_dir_s) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "MakeFilename () failed for \"%s\" and \"%s\"", image_dir_s, S_THUMBNAILS_DIR_S);
+		}
+
+	return thumbnail_url_s;
+}
+
+
+/**
+ * Create a thumbnail of an image which will fit within the given dimensions whilst
+ * keeping the original aspect ratio. Any EXIF orientation will be applied so that the
+ * thumbnail is the right way up.
+ *
+ * @param image_filename_s The image to create the thumbnail for.
+ * @param thumbnail_filename_s The filename to save the thumbnail to. Its format will
+ * be determined from the filename extension.
+ * @param max_width The maximum width of the thumbnail.
+ * @param max_height The maximum height of the thumbnail.
+ * @return <code>true</code> if the thumbnail was created successfully, <code>false</code> otherwise.
+ */
+static bool CreateThumbnail (const char * const image_filename_s, const char * const thumbnail_filename_s, const int max_width, const int max_height)
+{
+	bool success_flag = false;
+	VipsImage *thumbnail_p = NULL;
+
+	if (vips_thumbnail (image_filename_s, &thumbnail_p, max_width, "height", max_height, NULL) == 0)
+		{
+			if (vips_image_write_to_file (thumbnail_p, thumbnail_filename_s, NULL) == 0)
+				{
+					success_flag = true;
+				}
+			else
+				{
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "vips_image_write_to_file () failed for \"%s\": %s", thumbnail_filename_s, vips_error_buffer ());
+					vips_error_clear ();
+				}
+
+			g_object_unref (thumbnail_p);
+		}		/* if (vips_thumbnail (image_filename_s, &thumbnail_p, max_width, "height", max_height, NULL) == 0) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "vips_thumbnail () failed for \"%s\": %s", image_filename_s, vips_error_buffer ());
+			vips_error_clear ();
 		}
 
 	return success_flag;
@@ -455,9 +603,84 @@ static bool CopyImageFile (const char *full_image_filename_s, const char *curren
  *     |
  *     -- rotated thumbnails directory
  */
-static bool CreatePlotImageDirectories ()
+static bool CreatePlotImageDirectories (const char * const plot_dir_s)
 {
+	bool success_flag = false;
 
+	if (EnsureDirectoryExists (plot_dir_s))
+		{
+			if (EnsureSubdirectoryExists (plot_dir_s, S_METADATA_DIR_S, NULL))
+				{
+					if (EnsureSubdirectoryExists (plot_dir_s, S_THUMBNAILS_DIR_S, NULL))
+						{
+							char *rotated_dir_s = NULL;
+
+							if (EnsureSubdirectoryExists (plot_dir_s, S_ROTATED_DIR_S, &rotated_dir_s))
+								{
+									if (EnsureSubdirectoryExists (rotated_dir_s, S_THUMBNAILS_DIR_S, NULL))
+										{
+											success_flag = true;
+										}
+
+									FreeCopiedString (rotated_dir_s);
+								}		/* if (EnsureSubdirectoryExists (plot_dir_s, S_ROTATED_DIR_S, &rotated_dir_s)) */
+
+						}		/* if (EnsureSubdirectoryExists (plot_dir_s, S_THUMBNAILS_DIR_S, NULL)) */
+
+				}		/* if (EnsureSubdirectoryExists (plot_dir_s, S_METADATA_DIR_S, NULL)) */
+
+		}		/* if (EnsureDirectoryExists (plot_dir_s)) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "EnsureDirectoryExists () failed for \"%s\"", plot_dir_s);
+		}
+
+	return success_flag;
+}
+
+
+/**
+ * Make sure that a subdirectory exists within a given parent directory.
+ *
+ * @param parent_dir_s The parent directory.
+ * @param subdir_s The name of the subdirectory.
+ * @param full_subdir_ss If this is not <code>NULL</code>, then upon success the full path
+ * of the subdirectory will be stored here and the caller is responsible for freeing it with
+ * FreeCopiedString (). If this is <code>NULL</code>, then the path will be freed.
+ * @return <code>true</code> if the subdirectory exists, <code>false</code> otherwise.
+ */
+static bool EnsureSubdirectoryExists (const char * const parent_dir_s, const char * const subdir_s, char **full_subdir_ss)
+{
+	bool success_flag = false;
+	char *full_subdir_s = MakeFilename (parent_dir_s, subdir_s);
+
+	if (full_subdir_s)
+		{
+			if (EnsureDirectoryExists (full_subdir_s))
+				{
+					success_flag = true;
+				}
+			else
+				{
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "EnsureDirectoryExists () failed for \"%s\"", full_subdir_s);
+				}
+
+			if (success_flag && full_subdir_ss)
+				{
+					*full_subdir_ss = full_subdir_s;
+				}
+			else
+				{
+					FreeCopiedString (full_subdir_s);
+				}
+
+		}		/* if (full_subdir_s) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "MakeFilename () failed for \"%s\" and \"%s\"", parent_dir_s, subdir_s);
+		}
+
+	return success_flag;
 }
 
 
@@ -618,6 +841,28 @@ static int SortByName (const void *v0_p, const void *v1_p)
 static bool IsRotatedImage (const char * const full_image_filename_s)
 {
 	bool rotated_flag = false;
+	char *last_dot_p = strrchr (full_image_filename_s, '.');
+
+	if (last_dot_p)
+		{
+			const char * const rotated_s = "_rotated";
+			const size_t rotated_length = strlen (rotated_s);
+
+			/*
+			 * make sure that we don't look out of the bounds of the
+			 * filename string
+			 */
+			char *start_p = last_dot_p - rotated_length;
+
+			if (full_image_filename_s  < start_p)
+				{
+					if (strncmp (start_p, rotated_s, rotated_length) == 0)
+						{
+							rotated_flag = true;
+						}
+				}
+
+		}		/* if (last_dot_p) */
 
 	return rotated_flag;
 }

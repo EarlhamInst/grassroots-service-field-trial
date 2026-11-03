@@ -5,9 +5,17 @@
 # containing "include" and "lib" subdirectories.
 export LIBEXIF_HOME := /opt/libexif
 
+# libvips is used to create image thumbnails. If you have installed
+# it from your package manager (e.g. libvips-dev), leave this unset.
+# Otherwise set it to the directory containing libvips's "include" and
+# "lib" subdirectories.
+#export LIBVIPS_HOME := /opt/libvips
+
 
 # If you want to compile with the MARTi integration enabled, set this directory 
 # to where the Grassroots MARTi service (https://github.com/TGAC/grassroots-service-marti)
 # is checked out to
 export DIR_MARTI := /Users/tyrrells/Projects/grassroots/services/marti
 
+
+export DIR_VIPS := 

@@ -24,6 +24,19 @@ export DIR_LIBEXIF_LIB := $(DIR_LIBEXIF)/lib
 # END LIBEXIF CONFIGURATION
 
 
+
+# BEGIN LIBVIPS CONFIGURATION
+ifneq ($(LIBVIPS_HOME),)
+DIR_LIBEXIF := $(LIBVIPS_HOME)
+else
+DIR_LIBEXIF := /usr/local
+endif
+export DIR_LIBVIPS_INC := $(DIR_LIBVIPS)/include
+export DIR_LIBVIPS_LIB := $(DIR_LIBVIPS)/lib
+export VIPS_LIB_NAME := vips
+# END LIBVIPS CONFIGURATION
+
+
 VPATH := $(DIR_SRC)
 
 BUILD		:= debug
@@ -58,9 +71,11 @@ INCLUDES = \
 	-I$(DIR_BSON_INC) \
 	-I$(DIR_GRASSROOTS_LUCENE_INC) \
 	-I$(DIR_LIBEXIF_INC) \
-	
+	-I$(DIR_LIBVIPS_INC) \
+
 SRCS 	= \
 	blank_row.c \
+	brapi_importer.c \
 	browse_programme_history.c \
 	browse_study_history.c \
 	browse_trial_history.c \
@@ -155,6 +170,7 @@ LIB_LDFLAGS = 	\
 	-L$(DIR_MONGODB_LIB) -l$(MONGO_LIB_NAME) \
 	-L$(DIR_BSON_LIB) -l$(BSON_LIB_NAME) \
 	-L$(DIR_LIBEXIF_LIB) -lexif \
+	-L$(DIR_LIBVIPS_LIB) -l$(VIPS_LIB_NAME) \
 	-L$(DIR_UUID_LIB) -luuid \
 	-L$(DIR_GRASSROOTS_NETWORK_LIB) -l$(GRASSROOTS_NETWORK_LIB_NAME) \
 	-lcurl
