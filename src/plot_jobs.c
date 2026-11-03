@@ -105,7 +105,6 @@ static const char * const S_GENE_BANK_DESCRIPTION_S = "";
 static const char * const S_TREATMENT_TITLE_S = "Treatment";
 static const char * const S_TREATMENT_DESCRIPTION_S = "";
 
-static const char * const S_REPLICATE_TITLE_S = "Replicate";
 static const char * const S_REPLICATE_DESCRIPTION_S = "";
 
 static const char * const S_COMMENT_TITLE_S = "Comment";
@@ -1912,7 +1911,7 @@ static Plot *CreatePlotFromTabularJSON (const json_t *table_row_json_p, const in
 		}
 
 	plot_p = AllocatePlot (NULL, sowing_date_p, harvest_date_p, width_p, length_p, row, column, treatment_s, comment_s,
-												 image_s, thumbnail_s, sowing_order_p, walking_order_p, study_p);
+												 sowing_order_p, walking_order_p, study_p);
 
 	if (!plot_p)
 		{

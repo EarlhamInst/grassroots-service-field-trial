@@ -289,6 +289,11 @@ typedef struct /*DFW_FIELD_TRIAL_SERVICE_LOCAL*/ FieldTrialServiceData
 	const char *dftsd_grassroots_marti_search_url_s;
 
 
+	uint32 dftsd_max_thumbnail_width;
+
+	uint32 dftsd_max_thumbnail_height;
+
+
 } FieldTrialServiceData;
 
 

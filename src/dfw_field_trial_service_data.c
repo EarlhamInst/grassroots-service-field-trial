@@ -119,6 +119,12 @@ FieldTrialServiceData *AllocateFieldTrialServiceData (void)
 
 			data_p -> dftsd_grassroots_marti_search_url_s = NULL;
 
+
+			data_p -> dftsd_max_thumbnail_width = 640;
+
+			data_p -> dftsd_max_thumbnail_height = 480;
+
+
 			return data_p;
 		}
 
@@ -354,9 +360,15 @@ bool ConfigureFieldTrialService (FieldTrialServiceData *data_p, GrassrootsServer
 				{
 					if (!EnableTreatmentsCache (data_p))
 						{
-							PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "Failed to enable treatmnets cache");
+							PrintErrors (STM_LEVEL_WARNING, __FILE__, __LINE__, "Failed to enable treatments cache");
 						}
 				}
+
+
+			GetJSONUnsignedInteger (service_config_p, "thumbnail_width", & (data_p -> dftsd_max_thumbnail_width));
+
+			GetJSONUnsignedInteger (service_config_p, "thumbnail_height", & (data_p -> dftsd_max_thumbnail_height));
+
 
 		} /* if (data_p -> psd_database_s) */
 

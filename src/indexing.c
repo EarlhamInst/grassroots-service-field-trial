@@ -80,6 +80,9 @@
 #include "plot.h"
 #include "measured_variable.h"
 
+#include "image_importer.h"
+#include "brapi_importer.h"
+
 /*
  * Static declarations
  */
@@ -121,6 +124,19 @@ static NamedParameterType S_GENERATE_STUDY_METADATA = { "SS Generate Phenotypes 
 static NamedParameterType S_ADD_MONGODB_INDEXES = { "SS Add MongoDB Indexes", PT_BOOLEAN };
 
 
+static NamedParameterType S_IMPORT_IMAGES = { "SS Import Images", PT_STRING };
+
+
+/*
+ * BrAPI import parameters
+ */
+static NamedParameterType S_BRAPI_URL = { "SS BrAPI URL", PT_STRING };
+static NamedParameterType S_BRAPI_TOKEN = { "SS BrAPI Token", PT_PASSWORD };
+static NamedParameterType S_BRAPI_PROGRAM_ID = { "SS BrAPI Program Id", PT_STRING };
+static NamedParameterType S_BRAPI_GENE_BANK = { "SS BrAPI Gene Bank", PT_STRING };
+
+
+
 static const char *GetFieldTrialIndexingServiceName (const Service *service_p);
 
 static const char *GetFieldTrialIndexingServiceDescription (const Service *service_p);
@@ -156,6 +172,7 @@ static void GetCacheList (ServiceJob *job_p, const bool full_path_flag, const Fi
 
 static LinkedList *GetFieldTrialFiles (const char * const path_s, const char * const local_pattern_s, const bool full_path_flag);
 
+
 static OperationStatus GenerateAllFrictionlessDataStudies (ServiceJob *job_p, FieldTrialServiceData *data_p);
 
 
@@ -169,6 +186,8 @@ static void GenerateStudyHandbook (Study *study_p, ServiceJob *job_p, FieldTrial
 static OperationStatus CreateMongoRevisionsCollections (FieldTrialServiceData *data_p);
 
 static OperationStatus CreateMongoRevisionsCollection (MongoTool *tool_p, const char *database_s, const char *collection_s);
+
+static OperationStatus CheckAllStudyLinks (Service *service_p, ServiceJob *job_p);
 
 
 /*
@@ -728,6 +747,7 @@ static void GetCacheList (ServiceJob *job_p, const bool full_path_flag, const Fi
 }
 
 
+
 static LinkedList *GetFieldTrialFiles (const char * const path_s, const char * const local_pattern_s, const bool full_path_flag)
 {
 	LinkedList *files_p = NULL;
@@ -744,7 +764,7 @@ static LinkedList *GetFieldTrialFiles (const char * const path_s, const char * c
 
 	if (pattern_s)
 		{
-			char *patterns_ss [2];
+			const char *patterns_ss [2];
 
 			*patterns_ss = pattern_s;
 			* (patterns_ss + 1) = NULL;
@@ -1061,7 +1081,7 @@ OperationStatus ReindexMeasuredVariables (ServiceJob *job_p, LuceneTool *lucene_
 }
 
 
-static ServiceJobSet *RunFieldTrialIndexingService (Service *service_p, ParameterSet *param_set_p, User * UNUSED_PARAM (user_p), ProvidersStateTable * UNUSED_PARAM (providers_p))
+static ServiceJobSet *RunFieldTrialIndexingService (Service *service_p, ParameterSet *param_set_p, User *user_p, ProvidersStateTable * UNUSED_PARAM (providers_p))
 {
 	FieldTrialServiceData *data_p = (FieldTrialServiceData *) (service_p -> se_data_p);
 
@@ -1388,6 +1408,45 @@ static ServiceJobSet *RunFieldTrialIndexingService (Service *service_p, Paramete
 								}
 						}
 
+
+					/*
+					 * Import Images
+					 */
+					if (GetCurrentStringParameterValueFromParameterSet (param_set_p, S_IMPORT_IMAGES.npt_name_s, &id_s))
+						{
+							if (!IsStringEmpty (id_s))
+								{
+									OperationStatus s = RunImportImages (id_s, data_p);
+
+									MergeServiceJobStatus (job_p, s);
+
+								}
+						}
+
+
+					/*
+					 * Import from a BrAPI server such as BreedBase
+					 */
+					if (GetCurrentStringParameterValueFromParameterSet (param_set_p, S_BRAPI_URL.npt_name_s, &id_s))
+						{
+							if (!IsStringEmpty (id_s))
+								{
+									const char *token_s = NULL;
+									const char *program_id_s = NULL;
+									const char *gene_bank_s = NULL;
+									OperationStatus s;
+
+									GetCurrentStringParameterValueFromParameterSet (param_set_p, S_BRAPI_TOKEN.npt_name_s, &token_s);
+									GetCurrentStringParameterValueFromParameterSet (param_set_p, S_BRAPI_PROGRAM_ID.npt_name_s, &program_id_s);
+									GetCurrentStringParameterValueFromParameterSet (param_set_p, S_BRAPI_GENE_BANK.npt_name_s, &gene_bank_s);
+
+									s = ImportFromBrAPI (id_s, IsStringEmpty (token_s) ? NULL : token_s, IsStringEmpty (program_id_s) ? NULL : program_id_s,
+																			 IsStringEmpty (gene_bank_s) ? NULL : gene_bank_s, user_p, job_p, data_p);
+
+									MergeServiceJobStatus (job_p, s);
+								}
+						}
+
 				}
 
 		}
@@ -1547,6 +1606,11 @@ static bool GetIndexingParameterTypeForNamedParameter (const Service * UNUSED_PA
 			S_ROTHAMSTED_TERMS,
 			S_GENERATE_STUDY_METADATA,
 			S_ADD_MONGODB_INDEXES,
+			S_IMPORT_IMAGES,
+			S_BRAPI_URL,
+			S_BRAPI_TOKEN,
+			S_BRAPI_PROGRAM_ID,
+			S_BRAPI_GENE_BANK,
 			NULL
 		};
 
@@ -1605,7 +1669,24 @@ static ParameterSet *GetFieldTrialIndexingServiceParameters (Service *service_p,
 																																		{
 																																			if ((param_p = EasyCreateAndAddBooleanParameterToParameterSet (data_p, params_p, manager_group_p, S_ADD_MONGODB_INDEXES.npt_name_s, "Add MongoDB Indexes", "Add MongoDB Indexes for faster data handling", &b, PL_ALL)) != NULL)
 																																				{
-																																					return params_p;
+																																					if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, manager_group_p, S_IMPORT_IMAGES.npt_type, S_IMPORT_IMAGES.npt_name_s, "Import Images", "Import a folder of images for a Study's Plots", NULL, PL_ALL)) != NULL)
+																																						{
+																																							ParameterGroup *brapi_group_p = CreateAndAddParameterGroupToParameterSet ("BrAPI Import", false, data_p, params_p);
+
+																																							if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, brapi_group_p, S_BRAPI_URL.npt_type, S_BRAPI_URL.npt_name_s, "BrAPI server", "The root of a BrAPI v2 server such as BreedBase to import Programmes, Trials, Studies, Plots and Observations from, e.g. https://wheat.triticeaetoolbox.org/brapi/v2", NULL, PL_ALL)) != NULL)
+																																								{
+																																									if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, brapi_group_p, S_BRAPI_TOKEN.npt_type, S_BRAPI_TOKEN.npt_name_s, "Access token", "An optional bearer token for BrAPI servers that need authentication", NULL, PL_ALL)) != NULL)
+																																										{
+																																											if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, brapi_group_p, S_BRAPI_PROGRAM_ID.npt_type, S_BRAPI_PROGRAM_ID.npt_name_s, "Program Id", "The programDbId of the single program to import. Leave this empty to import all of them.", NULL, PL_ALL)) != NULL)
+																																												{
+																																													if ((param_p = EasyCreateAndAddStringParameterToParameterSet (data_p, params_p, brapi_group_p, S_BRAPI_GENE_BANK.npt_type, S_BRAPI_GENE_BANK.npt_name_s, "Gene Bank", "The name of the Gene Bank to add any new germplasm to. Leave this empty to use the GRU.", NULL, PL_ALL)) != NULL)
+																																														{
+																																															return params_p;
+																																														}
+																																												}
+																																										}
+																																								}
+																																						}
 																																				}
 																																		}
 																																}
@@ -2055,6 +2136,148 @@ static OperationStatus CreateMongoRevisionsCollection (MongoTool *tool_p, const 
 		{
 			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "CreateMongoToolCollection () failed for \"%s\"", collection_s);
 		}
+
+	return status;
+}
+
+
+
+
+static OperationStatus CheckAllStudyLinks (Service *service_p, ServiceJob *job_p)
+{
+	OperationStatus status = OS_FAILED;
+	json_t *study_ids_p = GetAllStudyIds (service_p);
+
+	if (study_ids_p)
+		{
+			const FieldTrialServiceData * const data_p = (const FieldTrialServiceData * const) (service_p -> se_data_p);
+			const char * const root_study_url_s = data_p -> dftsd_view_study_url_s;
+			const char * const root_plots_url_s = data_p -> dftsd_view_plots_url_s;
+
+			char *id_s = GetBSONOidBuffer ();
+
+			if (id_s)
+				{
+					CurlTool *curl_p = AllocateMemoryCurlTool (0);
+
+					if (curl_p)
+						{
+							size_t i;
+							json_t *id_p;
+
+							json_array_foreach (study_ids_p, i, id_p)
+								{
+									bson_oid_t id;
+
+									if (GetMongoIdFromJSON (id_p, &id))
+										{
+											char *study_url_s = NULL;
+
+											PopulateBSONOidIntoString (&id, id_s);
+
+											study_url_s = MakeFilename (root_study_url_s, id_s);
+
+											if (study_url_s)
+												{
+													if (SetUriForCurlTool (curl_p, study_url_s))
+														{
+															bool success_flag = false;
+															CURLcode res;
+
+															PrintLog (STM_LEVEL_FINEST, __FILE__, __LINE__, "About to check \"%s\"", study_url_s);
+
+															res = RunCurlTool (curl_p);
+
+															if (res == CURLE_OK)
+																{
+																	if ((curl_p -> ct_response_code >= 0) && (curl_p -> ct_response_code <= 400))
+																		{
+																			/* success */
+																			success_flag = true;
+																		}
+																	else
+																		{
+																			PrintLog (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Curl failed for \"%s\" with status %l", study_url_s, curl_p -> ct_response_code);
+																		}
+																}
+															else
+																{
+																	PrintLog (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Curl failed for \"%s\" with error \"%s\"", study_url_s, curl_easy_strerror (res));
+																}
+
+															if (!success_flag)
+																{
+																	json_t *result_p = json_object ();
+
+																	if (result_p)
+																		{
+																			if (SetJSONString (result_p, CONTEXT_PREFIX_SCHEMA_ORG_S "url", study_url_s))
+																				{
+																					json_t *dest_record_p = GetDataResourceAsJSONByParts (PROTOCOL_INLINE_S, NULL, id_s, result_p);
+
+																					if (dest_record_p)
+																						{
+																							if (AddResultToServiceJob (job_p, dest_record_p))
+																								{
+																									success_flag = true;
+																								}
+																							else
+																								{
+																									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, dest_record_p, "AddResultToServiceJob () failed for \"%s\"", id_s);
+																									json_decref (dest_record_p);
+																								}
+																						}		/* if (dest_record_p) */
+																					else
+																						{
+																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetResourceAsJSONByParts () failed for \"%s\"", id_s);
+																							json_decref (result_p);
+																							result_p = NULL;
+																						}
+
+																				}
+																			else
+																				{
+
+																				}
+
+																			if (!success_flag)
+																				{
+																					if (result_p)
+																						{
+																							json_decref (result_p);
+																						}
+																				}
+
+																		}
+
+																}
+
+														}		/* if (SetUriForCurlTool (curl_p, study_url_s)) */
+													else
+														{
+
+														}
+
+
+
+													FreeCopiedString (study_url_s);
+												}		/* if (study_url_s) */
+
+										}		/* if (GetMongoIdFromJSON (id_p, &id)) */
+
+								}		/* json_array_foreach (study_ids_p, i, id_p) */
+
+							FreeCurlTool (curl_p);
+						}		/* if (curl_p) */
+
+
+
+					FreeBSONOidString (id_s);
+				}
+
+
+			json_decref (study_ids_p);
+		}		/* if (study_ids_p) */
 
 	return status;
 }

@@ -26,7 +26,7 @@
 #include "dfw_field_trial_service_library.h"
 #include "study.h"
 #include "jansson.h"
-
+#include "image_object.h"
 
 #include "linked_list.h"
 
@@ -83,6 +83,12 @@ PLOT_PREFIX const char *PL_SOWING_ORDER_S PLOT_VAL ("sowing_order");
 PLOT_PREFIX const char *PL_WALKING_ORDER_S PLOT_VAL ("walking_order");
 
 
+
+
+
+
+
+
 typedef struct Plot
 {
 	bson_oid_t *pl_id_p;
@@ -131,16 +137,9 @@ typedef struct Plot
 	LinkedList *pl_rows_p;
 
 	/**
-	 * A url for any images,
+	 * A LinkedList of ImageObjectNodes for any images,
 	 */
-	char *pl_image_url_s;
-
-
-	/**
-	 * A url for any images thumbnail,
-	 */
-	char *pl_thumbnail_url_s;
-
+	LinkedList *pl_images_p;
 
 } Plot;
 
@@ -165,7 +164,7 @@ extern "C"
 
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL Plot *AllocatePlot (bson_oid_t *id_p, const struct tm *sowing_date_p, const struct tm *harvest_date_p, const double64 *width_p, const double64 *length_p, const uint32 row_index,
-										const uint32 column_index, const char *treatments_s, const char *comment_s, const char *image_s, const char *thumbnail_s,
+										const uint32 column_index, const char *treatments_s, const char *comment_s,
 										const uint32 *walking_order_p, const uint32 *sowing_order_p, Study *parent_p);
 
 
@@ -179,10 +178,15 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL PlotNode *AllocatePlotNode (Plot *plot_p);
 DFW_FIELD_TRIAL_SERVICE_LOCAL void FreePlotNode (ListItem *node_p);
 
 
+DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddImageToPlotByParts (Plot *plot_p, const char * const full_image_url_s, const char * const thumbnail_s);
+
+DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddImageToPlot (Plot *plot_p, ImageObject *image_p);
+
+
 DFW_FIELD_TRIAL_SERVICE_LOCAL json_t *GetPlotAsJSON (Plot *plot_p, const ViewFormat format, JSONProcessor *processor_p, const FieldTrialServiceData *data_p);
 
 
-DFW_FIELD_TRIAL_SERVICE_LOCAL Plot *GetPlotFromJSON (const json_t *plot_json_p, Study *parent_study_p, const ViewFormat format, FieldTrialServiceData *data_p);
+DFW_FIELD_TRIAL_SERVICE_LOCAL Plot *GetPlotFromJSON (const json_t *plot_json_p, Study *parent_study_p, const ViewFormat format, const FieldTrialServiceData *data_p);
 
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL bool GetPlotRows (Plot *plot_p, json_t *rows_array_p, const Study *study_p, const ViewFormat format, FieldTrialServiceData *data_p);

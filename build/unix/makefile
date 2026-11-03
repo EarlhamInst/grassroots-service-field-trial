@@ -24,6 +24,8 @@ export DIR_LIBEXIF_LIB := $(DIR_LIBEXIF)/lib
 # END LIBEXIF CONFIGURATION
 
 
+
+
 VPATH := $(DIR_SRC)
 
 BUILD		:= debug
@@ -58,9 +60,10 @@ INCLUDES = \
 	-I$(DIR_BSON_INC) \
 	-I$(DIR_GRASSROOTS_LUCENE_INC) \
 	-I$(DIR_LIBEXIF_INC) \
-	
+
 SRCS 	= \
 	blank_row.c \
+	brapi_importer.c \
 	browse_programme_history.c \
 	browse_study_history.c \
 	browse_trial_history.c \
@@ -81,6 +84,8 @@ SRCS 	= \
 	gene_bank_jobs.c \
 	guard_row.c \
 	handbook_generator.c \
+	image_importer.c \
+	image_object.c \
 	image_util.c \
 	indexing.c \
 	instrument.c \

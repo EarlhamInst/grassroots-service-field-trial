@@ -1126,7 +1126,7 @@ Observation *GetMatchingObservation (const StandardRow *row_p, const MeasuredVar
 }
 
 
-Row *GetRowByStudyIndex (const int32 by_study_index, Study *study_p, const ViewFormat format, FieldTrialServiceData *data_p)
+Row *GetRowByStudyIndex (const int32 by_study_index, Study *study_p, const ViewFormat format, const FieldTrialServiceData *data_p)
 {
 	Row *row_p = NULL;
 	char *index_key_s = ConcatenateVarargsStrings (PL_ROWS_S, ".", RO_STUDY_INDEX_S, NULL);

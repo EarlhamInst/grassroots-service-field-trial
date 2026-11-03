@@ -417,6 +417,18 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL bool SetStudyAccessions (Study * const study_p, js
 
 
 
+/**
+ * The callback used when getting studies using GetDFWObjectByQuery () functions
+ *
+ * @param json_p The JSON obbject that has the Study details.
+ * @param format The ViewFormat to get the Study in.
+ * @param data_p The configured FieldTrialServiceData.s
+ *
+ * @return The matching Study or <code>NULL</code> upon error
+ */
+DFW_FIELD_TRIAL_SERVICE_LOCAL void *GetStudyCallback (const json_t *json_p, const ViewFormat format, const FieldTrialServiceData *data_p);
+
+
 #ifdef __cplusplus
 }
 #endif
