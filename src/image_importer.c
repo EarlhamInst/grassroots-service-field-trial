@@ -1082,7 +1082,7 @@ static char **GetImageFilenamesForMatching (const char * const root_path_s)
 
 	if (paths_ss)
 		{
-			uint32 i;
+			uint32 i = 0;
 			char **path_ss = paths_ss;
 			const char **pattern_ss = patterns_ss;
 			bool success_flag = true;

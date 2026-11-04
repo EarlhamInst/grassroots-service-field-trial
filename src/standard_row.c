@@ -220,7 +220,8 @@ bool SetStandardRowPlannedMaterial (StandardRow *row_p, Material *planned_materi
 StandardRow *GetStandardRowFromJSON (const json_t *row_json_p, Plot *plot_p, Material *material_p, const Study *study_p, const ViewFormat format, FieldTrialServiceData *data_p)
 {
 	StandardRow *row_p = NULL;
-	Material *material_to_use_p = material_p;
+	Material *planted_material_p = material_p;
+	MEM_FLAG planted_material_mem = material_p ? MF_SHADOW_USE : MF_ALREADY_FREED;
 
 	/*
 	 * If we haven't got a plot, let's get it
@@ -243,8 +244,6 @@ StandardRow *GetStandardRowFromJSON (const json_t *row_json_p, Plot *plot_p, Mat
 	if (plot_p)
 		{
 			uint32 rack_index = 0;
-			Material *planted_material_p = NULL;
-			MEM_FLAG planted_material_mem = MF_ALREADY_FREED;
 
 			if (GetJSONUnsignedInteger (row_json_p, SR_RACK_INDEX_S, &rack_index))
 				{
@@ -265,7 +264,7 @@ StandardRow *GetStandardRowFromJSON (const json_t *row_json_p, Plot *plot_p, Mat
 									/*
 									 * If we haven't already got the material, get it!
 									 */
-									if (!material_to_use_p)
+									if (!planted_material_p)
 										{
 											bson_oid_t *material_id_p = GetNewUnitialisedBSONOid ();
 											bool success_flag = true;
@@ -276,10 +275,11 @@ StandardRow *GetStandardRowFromJSON (const json_t *row_json_p, Plot *plot_p, Mat
 												{
 													if (GetNamedIdFromJSON (row_json_p, SR_MATERIAL_ID_S, material_id_p))
 														{
-															material_to_use_p = GetMaterialById (material_id_p, data_p);
+															planted_material_p = GetMaterialById (material_id_p, data_p);
 
-															if (material_to_use_p)
+															if (planted_material_p)
 																{
+																	planted_material_mem = MF_DEEP_COPY;
 																	material_flag = true;
 																	success_flag = true;
 																}
@@ -336,8 +336,8 @@ StandardRow *GetStandardRowFromJSON (const json_t *row_json_p, Plot *plot_p, Mat
 																			FreeRow (& (row_p -> sr_base));
 																			row_p = NULL;
 
-																			/* id_p and material_to_use_p have been freed by FreeRow () */
-																			material_to_use_p = NULL;
+																			/* id_p and planted_material_p have been freed by FreeRow () */
+																			planted_material_p = NULL;
 																		}
 																}
 															else
@@ -347,7 +347,7 @@ StandardRow *GetStandardRowFromJSON (const json_t *row_json_p, Plot *plot_p, Mat
 																	row_p = NULL;
 
 																	/* id_p has been freed by FreeRow () */
-																	material_to_use_p = NULL;
+																	planted_material_p = NULL;
 																}
 
 														}
@@ -378,18 +378,18 @@ StandardRow *GetStandardRowFromJSON (const json_t *row_json_p, Plot *plot_p, Mat
 
 	if (row_p)
 		{
-			if (material_to_use_p && (material_to_use_p != material_p) && (row_p -> sr_planted_material_p != material_to_use_p))
+			if (planted_material_p && (planted_material_p != material_p) && (row_p -> sr_planted_material_p != planted_material_p))
 				{
-					FreeMaterial (material_to_use_p);
+					FreeMaterial (planted_material_p);
 				}
 
 			return row_p;
 		}
 	else
 		{
-			if (material_to_use_p && (material_to_use_p != material_p))
+			if (planted_material_p && (planted_material_p != material_p))
 				{
-					FreeMaterial (material_to_use_p);
+					FreeMaterial (planted_material_p);
 				}
 
 			return NULL;

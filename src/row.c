@@ -15,11 +15,12 @@
 
 #include "blank_row.h"
 #include "discard_row.h"
+#include "guard_row.h"
 #include "standard_row.h"
 #include "plot_jobs.h"
 
 
-static const char *S_ROW_TYPES_SS [] = { "Standard", "Discard", "Blank" };
+static const char *S_ROW_TYPES_SS [RT_NUM_VALUES] = { "Standard", "Discard", "Blank", "Guard" };
 
 
 
@@ -224,7 +225,7 @@ json_t *GetRowAsJSON (const Row *row_p, const ViewFormat format, JSONProcessor *
 				}		/* if (AddBaseRowToJSON (& (row_p -> sr_base), row_json_p, format)) */
 			else
 				{
-
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddRowToJSON () failed for row " UINT32_FMT " in \"%s\"", row_p -> ro_by_study_index, row_p -> ro_study_p -> st_name_s);
 				}
 
 			json_decref (row_json_p);
@@ -288,7 +289,19 @@ Row *GetRowFromJSON (const json_t *row_json_p, Plot *plot_p, const Study *study_
 			}
 			break;
 
-		default:
+		case RT_GUARD:
+			{
+				GuardRow *gr_p = GetGuardRowFromJSON (row_json_p, plot_p, study_p, format, data_p);
+
+				if (gr_p)
+					{
+						row_p = & (gr_p -> gu_base);
+					}
+			}
+			break;
+
+		case RT_NUM_VALUES:
+			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, row_json_p, "Row is invalid");
 			break;
 	}		/* switch (rt) */
 

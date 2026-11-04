@@ -594,33 +594,43 @@ bool AddImageToPlot (Plot *plot_p, ImageObject *image_p)
 {
 	/* Check if the image is already on the plot's list */
 	ImageObjectNode *node_p = (ImageObjectNode *) (plot_p -> pl_images_p -> ll_head_p);
+	bool image_flag = false;
 
 	while (node_p)
 		{
 			if (CompareImageObjects (image_p, node_p -> ion_image_p) == 0)
 				{
 					/* Image is already on list */
-					return true;
+					image_flag = true;
+					node_p = NULL;		/* force exit from loop */
+				}
+			else
+				{
+					node_p = (ImageObjectNode *) (node_p -> ion_base_node.ln_next_p);
 				}
 		}
 
-	node_p = AllocateImageObjectNode (image_p);
-
-	if (node_p)
+	if (!image_flag)
 		{
-			LinkedListAddTail (plot_p -> pl_images_p, & (node_p -> ion_base_node));
+			node_p = AllocateImageObjectNode (image_p);
 
-			return true;
-		}		/* if (node_p) */
-	else
-		{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AllocateImageObjectNode () failed for \"%s\" and \"%s\"",
-									 image_p -> io_full_image_url_s ? image_p -> io_full_image_url_s : "",
-									 image_p -> io_thumbnail_image_url_s ? image_p -> io_thumbnail_image_url_s : ""
-									);
-		}
+			if (node_p)
+				{
+					LinkedListAddTail (plot_p -> pl_images_p, & (node_p -> ion_base_node));
 
-	return false;
+					image_flag = true;
+				}		/* if (node_p) */
+			else
+				{
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AllocateImageObjectNode () failed for \"%s\" and \"%s\"",
+											 image_p -> io_full_image_url_s ? image_p -> io_full_image_url_s : "",
+											 image_p -> io_thumbnail_image_url_s ? image_p -> io_thumbnail_image_url_s : ""
+											);
+				}
+
+		}		/* if (!image_flag) */
+
+	return image_flag;
 }
 
 
