@@ -20,11 +20,19 @@ static bool GetImageObjectAsSchemaOrgObject (json_t *image_json_p, const ImageOb
 
 static int CompareNullableStrings (const char * const value_0_s, const char * const value_1_s);
 
+
+static const char * const S_WAVELENGTHS_SS [WA_NUM_TYPES] =
+{
+	"RGB",
+	"Hyperspectral",
+	"Thermal"
+};
+
 /*
  * API DEFINITIONS
  */
 
-ImageObject *AllocateImageObject (const char * const image_s, const char * const thumbnail_s)
+ImageObject *AllocateImageObject (const char * const image_s, const char * const thumbnail_s, struct tm *date_p, const uint32 index, const Wavelength wavelength)
 {
 	if (image_s || thumbnail_s)
 		{
@@ -42,6 +50,14 @@ ImageObject *AllocateImageObject (const char * const image_s, const char * const
 								{
 									image_p -> io_full_image_url_s = copied_image_s;
 									image_p -> io_thumbnail_image_url_s = copied_thumbnail_s;
+
+									if (date_p)
+										{
+											CopyTime (date_p, & (image_p -> io_date));
+										}
+
+									image_p -> io_index = index;
+									image_p -> io_wavelength = wavelength;
 
 									return image_p;
 								}
@@ -125,18 +141,49 @@ json_t *GetImageObjectAsJSON (const ImageObject * const image_p, const ViewForma
 
 					case VF_STORAGE:
 						{
-							if ((image_p -> io_full_image_url_s == NULL) || (SetJSONString (json_p, IO_FULL_IMAGE_URL_S, image_p -> io_full_image_url_s)))
+							if (SetNonTrivialString (json_p, IO_FULL_IMAGE_URL_S, image_p -> io_full_image_url_s, true))
 								{
-									if ((image_p -> io_thumbnail_image_url_s == NULL) || (SetJSONString (json_p, IO_THUMBNAIL_URL_S, image_p -> io_thumbnail_image_url_s)))
+									if (SetNonTrivialString (json_p, IO_THUMBNAIL_URL_S, image_p -> io_thumbnail_image_url_s, true))
 										{
-											success_flag = true;
-										}
+											char *time_s = GetTimeAsString (& (image_p -> io_date), false, NULL);
+
+											if (time_s)
+												{
+													if (SetNonTrivialString (json_p, IO_DATE_S, time_s, true))
+														{
+															if (SetNonTrivialUnsignedInt (json_p, IO_INDEX_S, & (image_p -> io_index), false))
+																{
+																	const char *wavelength_s = GetWavelengthAsString (image_p -> io_wavelength);
+
+																	if (wavelength_s)
+																		{
+																			if (SetJSONString (json_p, IO_WAVELENGTH_S, wavelength_s))
+																				{
+																					success_flag = true;
+																				}
+																		}
+
+																}
+
+														}		/* if (SetNonTrivialString (json_p, IO_THUMBNAIL_URL_S, image_p -> io_thumbnail_image_url_s, true)) */
+													else
+														{
+															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "Failed to set \"%s\":\"%s\"", IO_DATE_S, itime_s);
+														}
+
+													FreeCopiedString (time_s);
+												}
+
+
+
+
+										}		/* if (SetNonTrivialString (json_p, IO_THUMBNAIL_URL_S, image_p -> io_thumbnail_image_url_s, true)) */
 									else
 										{
 											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "Failed to set \"%s\":\"%s\"", IO_THUMBNAIL_URL_S, image_p -> io_thumbnail_image_url_s);
 										}
 
-								}
+								}		/* if (SetNonTrivialString (json_p, IO_FULL_IMAGE_URL_S, image_p -> io_full_image_url_s, true)) */
 							else
 								{
 									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "Failed to set \"%s\":\"%s\"", IO_FULL_IMAGE_URL_S, image_p -> io_full_image_url_s);
@@ -174,20 +221,48 @@ json_t *GetImageObjectAsJSON (const ImageObject * const image_p, const ViewForma
 
 ImageObject *GetImageObjectFromJSON (const json_t * const json_p)
 {
+	ImageObject *image_p = NULL;
 	const char *full_image_s = GetJSONString (json_p, IO_FULL_IMAGE_URL_S);
 	const char *thumbnail_image_s = GetJSONString (json_p, IO_THUMBNAIL_URL_S);
 
 	if (full_image_s || thumbnail_image_s)
 		{
-			ImageObject *image_p = AllocateImageObject (full_image_s, thumbnail_image_s);
+			struct tm *image_date_p = NULL;
+			const char *date_s = GetJSONString (json_p, IO_DATE_S);
+			const char *wavelength_s = GetJSONString (json_p, IO_WAVELENGTH_S);
+			uint32 image_index = 1;
+			Wavelength wavelength = WA_NUM_TYPES;
 
-			if (image_p)
+			GetJSONUnsignedInteger (json_p, IO_INDEX_S, &image_index);
+
+			if (date_s)
 				{
-					return image_p;
+					image_date_p = GetTimeFromString (date_s);
 				}
 			else
 				{
+
+				}
+
+			if (wavelength_s)
+				{
+					if (GetWavelengthFromString (wavelength_s, &wavelength))
+						{
+
+						}
+				}
+
+
+			image_p = AllocateImageObject (full_image_s, thumbnail_image_s,image_date_p, image_index, wavelength);
+
+			if (!image_p)
+				{
 					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "AllocateImageObject () failed for \"%s\" and \"%s\"", full_image_s, thumbnail_image_s);
+				}
+
+			if (image_date_p)
+				{
+					FreeTime (image_date_p);
 				}
 		}
 	else
@@ -195,7 +270,7 @@ ImageObject *GetImageObjectFromJSON (const json_t * const json_p)
 			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "No image details specified");
 		}
 
-	return NULL;
+	return image_p;
 }
 
 
@@ -238,6 +313,48 @@ int CompareImageObjects (const ImageObject * const image_0_p, const ImageObject 
 
 	return res;
 }
+
+
+
+const char *GetWavelengthAsString (const Wavelength w)
+{
+	const char *wavelength_s = NULL;
+
+	if ((w >= 0) && (w < WA_NUM_TYPES))
+		{
+			wavelength_s = * (S_WAVELENGTHS_SS + w);
+		}
+
+	return wavelength_s;
+}
+
+
+bool GetWavelengthFromString (const char * const wavelength_s, Wavelength *w_p)
+{
+	bool success_flag = false;
+	const char **value_ss = S_WAVELENGTHS_SS;
+	Wavelength w = 0;
+
+	while ((!success_flag) && (w < WA_NUM_TYPES))
+		{
+			if (strcmp (wavelength_s, *value_ss) == 0)
+				{
+					*w_p = w;
+					success_flag = true;
+				}
+			else
+				{
+					++ w;
+					++ value_ss;
+				}
+		}
+
+	return success_flag;
+}
+
+
+
+
 
 
 static int CompareNullableStrings (const char * const value_0_s, const char * const value_1_s)
@@ -313,4 +430,5 @@ static bool GetImageObjectAsSchemaOrgObject (json_t *image_json_p, const ImageOb
 
   return success_flag;
 }
+
 

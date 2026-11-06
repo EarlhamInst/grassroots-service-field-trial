@@ -199,15 +199,122 @@ OperationStatus RunImportImages (const char * const import_path_s, const FieldTr
 															if (current_study_p)
 																{
 																	/* Let's get the plot */
-																	const char *date_s;
-																	const char *flight_s;
-																	const char *wavelength_s;
-																	const char *plot_s;
 																	uint32 study_index = 0;
 																	Row *row_p = NULL;
+																	struct tm image_date = { 0 };
 
+																	/* date */
 																	parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
-																	date_s = parts_node_p -> sln_string_s;
+
+																	if (SetTimeFromDDMMYYString (&image_date, parts_node_p -> sln_string_s))
+																		{
+																			parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
+																			int temp;
+
+																			flight_s = parts_node_p -> sln_string_s;
+
+																			if (GetValidInteger (& (parts_node_p -> sln_string_s), &temp))
+																				{
+																					if (temp >= 0)
+																						{
+																							uint32 image_index = (uint32) temp;
+																							Wavelength wavelength;
+
+																							/* Get the wavelength */
+																							parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
+																							if (GetWavelengthFromString (parts_node_p -> sln_string_s, &wavelength))
+																								{
+
+																									/* plot index */
+																									parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
+																									if (GetStudyIndex (parts_node_p -> sln_string_s, &study_index))
+																										{
+																											char *image_url_s = NULL;
+																											char *thumbnail_url_s = NULL;
+
+																											if (CopyImageFile (full_image_filename_s, current_study_id_s, study_index, &image_url_s, &thumbnail_url_s, data_p))
+																												{
+																													/*
+																													 * Get the study index from plot_s
+																													 */
+																													row_p = GetRowByStudyIndex (study_index, current_study_p, VF_STORAGE, data_p);
+
+																													if (row_p)
+																														{
+																															Plot *plot_p = row_p -> ro_plot_p;
+																															ImageObject *image_p = AllocateImageObject (image_url_s, thumbnail_url_s, &image_date, image_index, wavelength);
+
+																															if (image_p)
+																																{
+																																	if (AddImageToPlot (plot_p, image_p))
+																																		{
+																																			if (SavePlot (plot_p, data_p))
+																																				{
+																																					++ num_successes;
+																																				}
+																																			else
+																																				{
+
+																																				}
+
+																																		}
+																																	else
+																																		{
+																																			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddImageToPlot () failed for \"%s\", \"%s\"", image_url_s,
+																																									 thumbnail_url_s ? thumbnail_url_s : "");
+
+																																			FreeImageObject (image_p);
+																																		}
+
+																																}		/* if (image_p) */
+																															else
+																																{
+																																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AllocateImageObject () failed for \"%s\", \"%s\"", image_url_s,
+																																							 thumbnail_url_s ? thumbnail_url_s : "");
+
+																																}
+
+
+																														}		/* if (row_p) */
+																													else
+																														{
+																															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetRowByStudyIndex () failed for plot index " UINT32_FMT " from study \"%s\"", study_index, current_study_p -> st_name_s);
+
+																														}
+
+
+																													FreeCopiedString (image_url_s);
+
+																													if (thumbnail_url_s)
+																														{
+																															FreeCopiedString (thumbnail_url_s);
+																														}
+
+																												}		/* if (CopyImageFile (full_image_filename_s, current_study_id_s, &image_url_s, &thumbnail_url_s, data_p)) */
+
+
+																										}		/* if (GetStudyIndex (plot_s, &study_index)) */
+																									else
+																										{
+																											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get study_index from \"%s\"", plot_s);
+																										}
+
+
+																								}
+																							else
+																								{
+
+																								}
+
+																						}
+
+
+																				}
+
+
+
+																		}		/* if (SetTimeFromDDMMYYString (&image_date, date_s)) */
+
 
 																	parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
 																	flight_s = parts_node_p -> sln_string_s;
@@ -219,77 +326,6 @@ OperationStatus RunImportImages (const char * const import_path_s, const FieldTr
 																	plot_s = parts_node_p -> sln_string_s;
 
 
-																	if (GetStudyIndex (plot_s, &study_index))
-																		{
-																			char *image_url_s = NULL;
-																			char *thumbnail_url_s = NULL;
-
-																			if (CopyImageFile (full_image_filename_s, current_study_id_s, study_index, &image_url_s, &thumbnail_url_s, data_p))
-																				{
-																					/*
-																					 * Get the study index from plot_s
-																					 */
-																					row_p = GetRowByStudyIndex (study_index, current_study_p, VF_STORAGE, data_p);
-
-																					if (row_p)
-																						{
-																							Plot *plot_p = row_p -> ro_plot_p;
-																							ImageObject *image_p = AllocateImageObject (image_url_s, thumbnail_url_s);
-
-																							if (image_p)
-																								{
-																									if (AddImageToPlot (plot_p, image_p))
-																										{
-																											if (SavePlot (plot_p, data_p))
-																												{
-																													++ num_successes;
-																												}
-																											else
-																												{
-
-																												}
-
-																										}
-																									else
-																										{
-																											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddImageToPlot () failed for \"%s\", \"%s\"", image_url_s,
-																																	 thumbnail_url_s ? thumbnail_url_s : "");
-
-																											FreeImageObject (image_p);
-																										}
-
-																								}		/* if (image_p) */
-																							else
-																								{
-																									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AllocateImageObject () failed for \"%s\", \"%s\"", image_url_s,
-																															 thumbnail_url_s ? thumbnail_url_s : "");
-
-																								}
-
-
-																						}		/* if (row_p) */
-																					else
-																						{
-																							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetRowByStudyIndex () failed for plot index " UINT32_FMT " from study \"%s\"", study_index, current_study_p -> st_name_s);
-
-																						}
-
-
-																					FreeCopiedString (image_url_s);
-
-																					if (thumbnail_url_s)
-																						{
-																							FreeCopiedString (thumbnail_url_s);
-																						}
-
-																				}		/* if (CopyImageFile (full_image_filename_s, current_study_id_s, &image_url_s, &thumbnail_url_s, data_p)) */
-
-
-																		}		/* if (GetStudyIndex (plot_s, &study_index)) */
-																	else
-																		{
-																			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get study_index from \"%s\"", plot_s);
-																		}
 
 
 																}		/* if (current_study_p) */
