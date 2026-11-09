@@ -178,7 +178,8 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL PlotNode *AllocatePlotNode (Plot *plot_p);
 DFW_FIELD_TRIAL_SERVICE_LOCAL void FreePlotNode (ListItem *node_p);
 
 
-DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddImageToPlotByParts (Plot *plot_p, const char * const full_image_url_s, const char * const thumbnail_s);
+DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddImageToPlotByParts (Plot *plot_p, const char * const full_image_url_s, const char * const thumbnail_s, struct tm *date_p, const uint32 index, const Wavelength wavelength);
+
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL bool AddImageToPlot (Plot *plot_p, ImageObject *image_p);
 

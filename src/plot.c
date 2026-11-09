@@ -559,9 +559,9 @@ json_t *GetPlotAsJSON (Plot *plot_p, const ViewFormat format, JSONProcessor *pro
 
 
 
-bool AddImageToPlotByParts (Plot *plot_p, const char * const full_image_url_s, const char * const thumbnail_s)
+bool AddImageToPlotByParts (Plot *plot_p, const char * const full_image_url_s, const char * const thumbnail_s, struct tm *date_p, const uint32 index, const Wavelength wavelength)
 {
-	ImageObject *image_p = AllocateImageObject (full_image_url_s, thumbnail_s);
+	ImageObject *image_p = AllocateImageObject (full_image_url_s, thumbnail_s, date_p, index, wavelength);
 
 	if (image_p)
 		{

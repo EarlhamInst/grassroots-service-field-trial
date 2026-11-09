@@ -10,6 +10,7 @@
 #include "image_object.h"
 #include "memory_allocations.h"
 #include "streams.h"
+#include "time_util.h"
 
 
 /*
@@ -165,10 +166,10 @@ json_t *GetImageObjectAsJSON (const ImageObject * const image_p, const ViewForma
 
 																}
 
-														}		/* if (SetNonTrivialString (json_p, IO_THUMBNAIL_URL_S, image_p -> io_thumbnail_image_url_s, true)) */
+														}		/* if (SetNonTrivialString (json_p, IO_DATE_S, time_s, true)) */
 													else
 														{
-															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "Failed to set \"%s\":\"%s\"", IO_DATE_S, itime_s);
+															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "Failed to set \"%s\":\"%s\"", IO_DATE_S, time_s);
 														}
 
 													FreeCopiedString (time_s);

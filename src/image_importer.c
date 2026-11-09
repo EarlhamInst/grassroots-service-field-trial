@@ -48,6 +48,7 @@
 #include "math_utils.h"
 #include "filesystem_utils.h"
 #include "memory_allocations.h"
+#include "time_util.h"
 
 
 
@@ -99,6 +100,9 @@ static bool IsRotatedImage (const char * const full_image_filename_s);
 static bool CreatePlotImageDirectories (const char * const plot_dir_s);
 
 static bool EnsureSubdirectoryExists (const char * const parent_dir_s, const char * const subdir_s, char **full_subdir_ss);
+
+
+static bool GetImageIndex (const char *value_s, int *index_p);
 
 
 static const char * const S_METADATA_DIR_S = "metadata";
@@ -209,11 +213,10 @@ OperationStatus RunImportImages (const char * const import_path_s, const FieldTr
 																	if (SetTimeFromDDMMYYString (&image_date, parts_node_p -> sln_string_s))
 																		{
 																			parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
-																			int temp;
+																			int temp = -1;
 
-																			flight_s = parts_node_p -> sln_string_s;
-
-																			if (GetValidInteger (& (parts_node_p -> sln_string_s), &temp))
+																			/* flight */
+																			if (GetImageIndex (parts_node_p -> sln_string_s, &temp))
 																				{
 																					if (temp >= 0)
 																						{
@@ -296,7 +299,7 @@ OperationStatus RunImportImages (const char * const import_path_s, const FieldTr
 																										}		/* if (GetStudyIndex (plot_s, &study_index)) */
 																									else
 																										{
-																											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get study_index from \"%s\"", plot_s);
+																											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get study_index from \"%s\"", parts_node_p -> sln_string_s);
 																										}
 
 
@@ -314,19 +317,6 @@ OperationStatus RunImportImages (const char * const import_path_s, const FieldTr
 
 
 																		}		/* if (SetTimeFromDDMMYYString (&image_date, date_s)) */
-
-
-																	parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
-																	flight_s = parts_node_p -> sln_string_s;
-
-																	parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
-																	wavelength_s = parts_node_p -> sln_string_s;
-
-																	parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
-																	plot_s = parts_node_p -> sln_string_s;
-
-
-
 
 																}		/* if (current_study_p) */
 
@@ -536,8 +526,17 @@ static bool CopyImageFile (const char *full_image_filename_s, const char *curren
  */
 static char *GetAssetUrl (const char * const asset_filename_s, const FieldTrialServiceData * const data_p)
 {
-	const char * const filename_from_root_s = asset_filename_s + strlen (data_p -> dftsd_assets_path_s);
-	char *url_s = MakeFilename (data_p -> dftsd_fd_url_s, filename_from_root_s);
+	const char *filename_from_root_s = asset_filename_s + strlen (data_p -> dftsd_assets_path_s);
+	const char sep = GetFileSeparatorChar ();
+	char *url_s = NULL;
+
+	/* scroll past any separators */
+	while ((*filename_from_root_s != '\0') && (*filename_from_root_s == sep))
+		{
+			++ filename_from_root_s;
+		}
+
+	url_s = MakeFilename (data_p -> dftsd_fd_url_s, filename_from_root_s);
 
 	if (!url_s)
 		{
@@ -1251,4 +1250,36 @@ static bool IsRotatedImage (const char * const full_image_filename_s)
 	return rotated_flag;
 }
 
+
+
+static bool GetImageIndex (const char *value_s, int *index_p)
+{
+	bool success_flag = false;
+	bool loop_flag = true;
+
+	while (loop_flag)
+		{
+			if (*value_s == '\0')
+				{
+					loop_flag = false;
+				}
+			else if (isdigit (*value_s))
+				{
+					if (GetValidInteger (&value_s, index_p))
+						{
+							success_flag = true;
+						}
+
+					loop_flag = false;
+				}
+			else
+				{
+					++ value_s;
+				}
+		}
+
+
+
+	return success_flag;
+}
 
