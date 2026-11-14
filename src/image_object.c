@@ -410,7 +410,26 @@ static bool GetImageObjectAsSchemaOrgObject (json_t *image_json_p, const ImageOb
 				{
 					if ((image_p ->io_thumbnail_image_url_s == NULL) || (SetJSONString (image_json_p, "thumbnail", image_p ->io_thumbnail_image_url_s)))
 						{
-							success_flag = true;
+							char *time_s = GetTimeAsString (& (image_p -> io_date), false, NULL);
+
+							if (time_s)
+								{
+									if (SetJSONString (image_json_p, "datePublished", time_s))
+										{
+											if (SetJSONInteger (image_json_p, "index", image_p -> io_index))
+												{
+													const char *wavelength_s = GetWavelengthAsString (image_p -> io_wavelength);
+
+													if ((wavelength_s == NULL) || (SetJSONString (image_json_p, "wavelength", wavelength_s)))
+														{
+															success_flag = true;
+														}
+												}
+										}
+
+									FreeCopiedString (time_s);
+								}
+
 						}		/* if (SetJSONString (image_json_p, "thumbnail, thumbnail_url_s)) */
 					else
 						{
