@@ -111,6 +111,7 @@ static const char * const S_THUMBNAILS_DIR_S = "thumbnails";
 
 static const char * const S_ROTATED_DIR_S = "rotated";
 
+static const char * const S_ORIGINAL_DIR_S = "original";
 
 
 
@@ -992,9 +993,11 @@ static bool CreatePlotImageDirectories (const char * const plot_dir_s)
 
 	if (EnsureDirectoryExists (plot_dir_s))
 		{
-			if (EnsureSubdirectoryExists (plot_dir_s, S_METADATA_DIR_S, NULL))
+			char *original_dir_s = NULL;
+
+			if (EnsureSubdirectoryExists (plot_dir_s, S_ORIGINAL_DIR_S, original_dir_s))
 				{
-					if (EnsureSubdirectoryExists (plot_dir_s, S_THUMBNAILS_DIR_S, NULL))
+					if (EnsureSubdirectoryExists (original_dir_s, S_THUMBNAILS_DIR_S, NULL))
 						{
 							char *rotated_dir_s = NULL;
 
@@ -1002,15 +1005,21 @@ static bool CreatePlotImageDirectories (const char * const plot_dir_s)
 								{
 									if (EnsureSubdirectoryExists (rotated_dir_s, S_THUMBNAILS_DIR_S, NULL))
 										{
-											success_flag = true;
-										}
+											if (EnsureSubdirectoryExists (plot_dir_s, S_METADATA_DIR_S, NULL))
+												{
+													success_flag = true;
+												}
+
+										}		/* if (EnsureSubdirectoryExists (rotated_dir_s, S_THUMBNAILS_DIR_S, NULL)) */
 
 									FreeCopiedString (rotated_dir_s);
-								}		/* if (EnsureSubdirectoryExists (plot_dir_s, S_ROTATED_DIR_S, &rotated_dir_s)) */
+								}		/* if (EnsureSubdirectoryExists (rotated_dir_s, S_ROTATED_DIR_S, &rotated_dir_s)) */
 
-						}		/* if (EnsureSubdirectoryExists (plot_dir_s, S_THUMBNAILS_DIR_S, NULL)) */
 
-				}		/* if (EnsureSubdirectoryExists (plot_dir_s, S_METADATA_DIR_S, NULL)) */
+						}		/* if (EnsureSubdirectoryExists (original_dir_s, S_THUMBNAILS_DIR_S, NULL)) */
+
+					FreeCopiedString (original_dir_s);
+				}		/* if (EnsureSubdirectoryExists (plot_dir_s, S_ORIGINAL_DIR_S, original_dir_s)) */
 
 		}		/* if (EnsureDirectoryExists (plot_dir_s)) */
 	else
