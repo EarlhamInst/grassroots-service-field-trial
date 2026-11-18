@@ -41,7 +41,7 @@ static bool AddRowsToJSON (const Plot *plot_p, json_t *plot_json_p, const ViewFo
 static bool SetValidPlotImages (const Plot *plot_p, json_t *plot_json_p, const ViewFormat vf);
 
 
-static bool AddValidPlotImage (const ImageObject *image_p, json_t *images_json_p, const ViewFormat vf);
+static bool AddValidPlotImageSet (const ImageSet *image_p, json_t *images_json_p, const ViewFormat vf);
 
 
 
@@ -561,7 +561,7 @@ json_t *GetPlotAsJSON (Plot *plot_p, const ViewFormat format, JSONProcessor *pro
 
 bool AddImageToPlotByParts (Plot *plot_p, const char * const full_image_url_s, const char * const thumbnail_s, struct tm *date_p, const uint32 index, const Wavelength wavelength)
 {
-	ImageObject *image_p = AllocateImageObject (full_image_url_s, thumbnail_s, date_p, index, wavelength);
+	ImageSet2 *image_p = AllocateImageObject (full_image_url_s, thumbnail_s, date_p, index, wavelength);
 
 	if (image_p)
 		{
@@ -590,7 +590,7 @@ bool AddImageToPlotByParts (Plot *plot_p, const char * const full_image_url_s, c
 
 
 
-bool AddImageToPlot (Plot *plot_p, ImageObject *image_p)
+bool AddImageSetToPlot (Plot *plot_p, ImageSet *image_set_p)
 {
 	/* Check if the image is already on the plot's list */
 	ImageObjectNode *node_p = (ImageObjectNode *) (plot_p -> pl_images_p -> ll_head_p);
@@ -743,7 +743,7 @@ Plot *GetPlotFromJSON (const json_t *plot_json_p, Study *parent_study_p, const V
 
 																	json_array_foreach (value_p, i, image_json_p)
 																		{
-																			ImageObject *image_p = GetImageObjectFromJSON (image_json_p);
+																			ImageSet2 *image_p = GetImageObjectFromJSON (image_json_p);
 
 																			if (image_p)
 																				{
@@ -1097,7 +1097,7 @@ static bool SetValidPlotImages (const Plot *plot_p, json_t *plot_json_p, const V
 
 							while (node_p)
 								{
-									const ImageObject *image_p = node_p -> ion_image_p;
+									const ImageSet2 *image_p = node_p -> ion_image_p;
 
 									if (AddValidPlotImage (image_p, images_json_p, vf))
 										{
@@ -1139,11 +1139,11 @@ static bool SetValidPlotImages (const Plot *plot_p, json_t *plot_json_p, const V
 
 
 
-static bool AddValidPlotImage (const ImageObject *image_p, json_t *images_json_p, const ViewFormat vf)
+static bool AddValidPlotImageSet (const ImageSet *image_p, json_t *images_json_p, const ViewFormat vf)
 {
 	bool success_flag = false;
 
-	json_t *image_json_p = GetImageObjectAsJSON (image_p, vf);
+	json_t *image_json_p = GetImageSetAsJSON (image_p, vf);
 
 	if (image_json_p)
 		{

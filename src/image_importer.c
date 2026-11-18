@@ -246,11 +246,11 @@ OperationStatus RunImportImages (const char * const import_path_s, const FieldTr
 																													if (row_p)
 																														{
 																															Plot *plot_p = row_p -> ro_plot_p;
-																															ImageObject *image_p = AllocateImageObject (image_url_s, thumbnail_url_s, &image_date, image_index, wavelength);
+																															ImageSet *image_set_p = AllocateImageSet (&image_date, image_index, wavelength);
 
-																															if (image_p)
+																															if (image_set_p)
 																																{
-																																	if (AddImageToPlot (plot_p, image_p))
+																																	if (AddImageSetToPlot (plot_p, image_set_p))
 																																		{
 																																			if (SavePlot (plot_p, data_p))
 																																				{
@@ -267,7 +267,7 @@ OperationStatus RunImportImages (const char * const import_path_s, const FieldTr
 																																			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddImageToPlot () failed for \"%s\", \"%s\"", image_url_s,
 																																									 thumbnail_url_s ? thumbnail_url_s : "");
 
-																																			FreeImageObject (image_p);
+																																			FreeImageSet (image_set_p);
 																																		}
 
 																																}		/* if (image_p) */
