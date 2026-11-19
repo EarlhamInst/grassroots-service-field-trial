@@ -85,7 +85,7 @@ Plot *AllocatePlot (bson_oid_t *id_p, const struct tm *sowing_date_p, const stru
 
 																	if (rows_p)
 																		{
-																			LinkedList *images_p = AllocateLinkedList (FreeImageObjectNode);
+																			LinkedList *images_p = AllocateLinkedList (FreeImageSetNode);
 
 
 																			if (images_p)
@@ -558,47 +558,15 @@ json_t *GetPlotAsJSON (Plot *plot_p, const ViewFormat format, JSONProcessor *pro
 }
 
 
-
-bool AddImageToPlotByParts (Plot *plot_p, const char * const full_image_url_s, const char * const thumbnail_s, struct tm *date_p, const uint32 index, const Wavelength wavelength)
-{
-	ImageSet2 *image_p = AllocateImageObject (full_image_url_s, thumbnail_s, date_p, index, wavelength);
-
-	if (image_p)
-		{
-			if (AddImageToPlot (plot_p, image_p))
-				{
-					return true;
-				}		/* if (node_p) */
-			else
-				{
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddImageToPlot () failed for \"%s\" and \"%s\"",
-											 full_image_url_s ? full_image_url_s : "",
-											 thumbnail_s ? thumbnail_s : "");
-				}
-
-			FreeImageObject (image_p);
-		}		/* if (image_p) */
-	else
-		{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AllocateImageObject () failed for \"%s\" and \"%s\"",
-									 full_image_url_s ? full_image_url_s : "",
-									 thumbnail_s ? thumbnail_s : "");
-		}
-
-	return false;
-}
-
-
-
 bool AddImageSetToPlot (Plot *plot_p, ImageSet *image_set_p)
 {
 	/* Check if the image is already on the plot's list */
-	ImageObjectNode *node_p = (ImageObjectNode *) (plot_p -> pl_images_p -> ll_head_p);
+	ImageSetNode *node_p = (ImageSetNode *) (plot_p -> pl_images_p -> ll_head_p);
 	bool image_flag = false;
 
 	while (node_p)
 		{
-			if (CompareImageObjects (image_p, node_p -> ion_image_p) == 0)
+			if (CompareImageSets (image_set_p, node_p -> isn_image_p) == 0)
 				{
 					/* Image is already on list */
 					image_flag = true;
@@ -606,26 +574,23 @@ bool AddImageSetToPlot (Plot *plot_p, ImageSet *image_set_p)
 				}
 			else
 				{
-					node_p = (ImageObjectNode *) (node_p -> ion_base_node.ln_next_p);
+					node_p = (ImageSetNode *) (node_p -> isn_base_node.ln_next_p);
 				}
 		}
 
 	if (!image_flag)
 		{
-			node_p = AllocateImageObjectNode (image_p);
+			node_p = AllocateImageSetNode (image_set_p);
 
 			if (node_p)
 				{
-					LinkedListAddTail (plot_p -> pl_images_p, & (node_p -> ion_base_node));
+					LinkedListAddTail (plot_p -> pl_images_p, & (node_p -> isn_base_node));
 
 					image_flag = true;
 				}		/* if (node_p) */
 			else
 				{
-					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AllocateImageObjectNode () failed for \"%s\" and \"%s\"",
-											 image_p -> io_full_image_url_s ? image_p -> io_full_image_url_s : "",
-											 image_p -> io_thumbnail_image_url_s ? image_p -> io_thumbnail_image_url_s : ""
-											);
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AllocateImageSetNode () failed");
 				}
 
 		}		/* if (!image_flag) */
@@ -743,11 +708,11 @@ Plot *GetPlotFromJSON (const json_t *plot_json_p, Study *parent_study_p, const V
 
 																	json_array_foreach (value_p, i, image_json_p)
 																		{
-																			ImageSet2 *image_p = GetImageObjectFromJSON (image_json_p);
+																			ImageSet *image_set_p = GetImageSetFromJSON (image_json_p);
 
-																			if (image_p)
+																			if (image_set_p)
 																				{
-																					if (AddImageToPlot (plot_p, image_p))
+																					if (AddImageSetToPlot (plot_p, image_set_p))
 																						{
 																							++ num_successes;
 																						}
@@ -756,7 +721,7 @@ Plot *GetPlotFromJSON (const json_t *plot_json_p, Study *parent_study_p, const V
 																							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, image_json_p, "Failed to add image to plot " UINT32_FMT ", " UINT32_FMT " in study \"%s\"",
 																																 plot_p -> pl_row_index, plot_p -> pl_column_index, parent_study_p -> st_name_s);
 
-																							FreeImageObject (image_p);
+																							FreeImageSet (image_set_p);
 																						}
 
 																				}
@@ -1091,24 +1056,21 @@ static bool SetValidPlotImages (const Plot *plot_p, json_t *plot_json_p, const V
 				{
 					if (json_object_set_new (plot_json_p, PL_IMAGES_S, images_json_p) == 0)
 						{
-							ImageObjectNode *node_p = (ImageObjectNode *) (plot_p -> pl_images_p -> ll_head_p);
+							ImageSetNode *node_p = (ImageSetNode *) (plot_p -> pl_images_p -> ll_head_p);
 
 							success_flag = true;
 
 							while (node_p)
 								{
-									const ImageSet2 *image_p = node_p -> ion_image_p;
+									const ImageSet *image_set_p = node_p -> isn_image_p;
 
-									if (AddValidPlotImage (image_p, images_json_p, vf))
+									if (AddValidPlotImageSet (image_set_p, images_json_p, vf))
 										{
-											node_p = (ImageObjectNode *) (node_p -> ion_base_node.ln_next_p);
+											node_p = (ImageSetNode *) (node_p -> isn_base_node.ln_next_p);
 										}
 									else
 										{
-											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, plot_json_p, "AddValidPlotImage () failed for \"%s\", \"%s\"",
-																	 image_p -> io_full_image_url_s ? image_p -> io_full_image_url_s : "",
-																	 image_p -> io_thumbnail_image_url_s ? image_p -> io_thumbnail_image_url_s: "");
-
+											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, plot_json_p, "AddValidPlotImage () failed");
 											node_p = NULL;
 											success_flag = false;
 

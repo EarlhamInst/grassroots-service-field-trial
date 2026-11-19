@@ -137,7 +137,7 @@ typedef struct Plot
 	LinkedList *pl_rows_p;
 
 	/**
-	 * A LinkedList of ImageObjectNodes for any images,
+	 * A LinkedList of ImageSetNodes for any images,
 	 */
 	LinkedList *pl_images_p;
 

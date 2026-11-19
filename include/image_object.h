@@ -31,7 +31,7 @@ typedef struct ImageObjectNode
 {
 	ListItem ion_node;
 
-	ImageObject *ion_image_set_p;
+	ImageObject *ion_image_obj_p;
 } ImageObjectNode;
 
 

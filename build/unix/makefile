@@ -86,6 +86,7 @@ SRCS 	= \
 	handbook_generator.c \
 	image_importer.c \
 	image_object.c \
+	image_set.c \
 	image_util.c \
 	indexing.c \
 	instrument.c \
