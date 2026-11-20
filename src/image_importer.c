@@ -963,29 +963,26 @@ static bool HasFileExtension (const char * const filename_s, const char * const 
 
 
 /*
- * Each Plot will have a directory like <study id>/Plot_<study index>. Inside this, all of the
- * images at the top level will be the those in their natural orientation. There will also be 3
- * subdirectories:
+ * Each Plot will have a directory like <study id>/Plot_<study index>. There will be a metadata
+ * directory called metadata where all of the image metadata goes
+ * Then there will be a named directory for each image e.g. "original" or "rotated",
+ * with each of these will have a subdirectory for thumbnails
  *
- * metadata: where all of the image metadata goes
- * rotated: where all of the rotated images in portrait/landscape view are stored
- *
- * Both the top-level and rotated directories will also have a thumbnails directory where their
- * respective thumbnails will be stored.
  *
  * So we have
  *
  * PLOT directory
  *   |
- *   -- image files
- *   |
- *   -- metadata directory
- *   |
- *   -- thumbnails directory
+ *   -- images directory
+ *     |
+ *     -- thumbnails directory
  *   |
  *   -- rotated directory
  *     |
  *     -- rotated thumbnails directory
+ *   |
+ *   -- metadata directory
+ *
  */
 static bool CreatePlotImageDirectories (const char * const plot_dir_s)
 {
@@ -995,7 +992,7 @@ static bool CreatePlotImageDirectories (const char * const plot_dir_s)
 		{
 			char *original_dir_s = NULL;
 
-			if (EnsureSubdirectoryExists (plot_dir_s, S_ORIGINAL_DIR_S, original_dir_s))
+			if (EnsureSubdirectoryExists (plot_dir_s, S_ORIGINAL_DIR_S, &original_dir_s))
 				{
 					if (EnsureSubdirectoryExists (original_dir_s, S_THUMBNAILS_DIR_S, NULL))
 						{

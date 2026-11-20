@@ -14,6 +14,9 @@
 #include "dfw_field_trial_service_data.h"
 #include "dfw_field_trial_service_library.h"
 
+#include "image_object.h"
+
+
 
 typedef enum Wavelength
 {
@@ -123,6 +126,12 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL int CompareImageSets (const ImageSet * const image
 DFW_FIELD_TRIAL_SERVICE_LOCAL const char *GetWavelengthAsString (const Wavelength w);
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL bool GetWavelengthFromString (const char * const wavelength_s, Wavelength *w_p);
+
+
+DFW_FIELD_TRIAL_SERVICE_LOCAL OperationStatus AddImageObjectToImageSet (ImageSet *image_set_p, ImageObject *image_obj_p);
+
+
+DFW_FIELD_TRIAL_SERVICE_LOCAL ImageObject *GetNamedImageObjectFromImageSet (const ImageSet *image_set_p, const char * const name_s);
 
 
 

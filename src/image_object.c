@@ -9,6 +9,7 @@
 #include "image_object.h"
 #include "string_utils.h"
 #include "time_util.h"
+#include "image_set.h"
 
 
 static bool GetImageObjectAsSchemaOrgObject (json_t *image_json_p, const ImageObject * const io_p, const struct tm * const date_s);
@@ -116,6 +117,19 @@ void FreeImageObjectNode (ListItem *node_p)
 	FreeImageObject (io_node_p -> ion_image_obj_p);
 
 	FreeMemory (io_node_p);
+}
+
+
+const char *GetMainImageURL (const ImageObject * const image_obj_p)
+{
+	const char *url_s = image_obj_p -> io_full_size_url_s;
+
+	if (!url_s)
+		{
+			url_s = image_obj_p -> io_thumbnail_url_s;
+		}
+
+	return url_s;
 }
 
 

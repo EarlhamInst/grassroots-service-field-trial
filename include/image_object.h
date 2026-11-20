@@ -14,8 +14,6 @@
 #include "dfw_field_trial_service_data.h"
 #include "dfw_field_trial_service_library.h"
 
-#include "image_set.h"
-
 
 typedef struct ImageObject
 {
@@ -60,6 +58,10 @@ IMAGE_OBJECT_PREFIX const char *IO_FULL_IMAGE_URL_S IMAGE_OBJECT_CONCAT_VAL (CON
 IMAGE_OBJECT_PREFIX const char *IO_THUMBNAIL_URL_S IMAGE_OBJECT_CONCAT_VAL (CONTEXT_PREFIX_SCHEMA_ORG_S, "thumbnailUrl");
 
 
+
+/* forward declaration */
+struct ImageSet;
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -78,10 +80,13 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL ImageObjectNode *AllocateImageObjectNode (ImageObj
 DFW_FIELD_TRIAL_SERVICE_LOCAL void FreeImageObjectNode (ListItem *node_p);
 
 
-DFW_FIELD_TRIAL_SERVICE_LOCAL json_t *GetImageObjectAsJSON (const ImageObject * const io_p, const ImageSet * const parent_p, const ViewFormat vf);
+DFW_FIELD_TRIAL_SERVICE_LOCAL json_t *GetImageObjectAsJSON (const ImageObject * const io_p, const struct ImageSet * const parent_p, const ViewFormat vf);
 
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL ImageObject *GetImageObjectFromJSON (const json_t * const json_p);
+
+
+DFW_FIELD_TRIAL_SERVICE_LOCAL const char *GetMainImageURL (const ImageObject * const image_obj_p);
 
 
 #ifdef __cplusplus

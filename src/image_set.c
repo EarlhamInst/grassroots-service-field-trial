@@ -11,7 +11,6 @@
 #include "memory_allocations.h"
 #include "streams.h"
 #include "time_util.h"
-#include "image_object.h"
 
 
 /*
@@ -20,6 +19,8 @@
 
 
 static bool AddImageObjectToJSON (json_t *images_json_p, const ImageObject * const io_p, const ImageSet * const is_p, const ViewFormat vf);
+
+static ImageObjectNode *GetNamedImageObjectNode (const ImageSet *image_set_p, const char * const name_s);
 
 
 static const char * const S_WAVELENGTHS_SS [WA_NUM_TYPES] =
@@ -69,6 +70,28 @@ void FreeImageSet (ImageSet *image_set_p)
 	FreeLinkedList (image_set_p -> is_images_p);
 
 	FreeMemory (image_set_p);
+}
+
+
+
+OperationStatus AddImageObjectToImageSet (ImageSet *image_set_p, ImageObject *image_obj_p)
+{
+	OperationStatus status = OS_IDLE;
+	ImageObjectNode *node_p = AllocateImageObjectNode (image_obj_p);
+
+	if (node_p)
+		{
+			LinkedListAddTail (image_set_p -> is_images_p, & (node_p -> ion_node));
+			status = OS_SUCCEEDED;
+		}
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AllocateImageObjectNode () failed for \"%s\" (\"%s\")",
+									 image_obj_p -> io_name_s, GetMainImageURL (image_obj_p));
+			status = OS_FAILED;
+		}
+
+	return status;
 }
 
 
@@ -291,9 +314,39 @@ bool GetWavelengthFromString (const char * const wavelength_s, Wavelength *w_p)
 }
 
 
+ImageObject *GetNamedImageObjectFromImageSet (const ImageSet *image_set_p, const char * const name_s)
+{
+	ImageObject *io_p = NULL;
+	ImageObjectNode *node_p = GetNamedImageObjectNode (image_set_p, name_s);
+
+	if (node_p)
+		{
+			io_p = node_p -> ion_image_obj_p;
+		}
+
+	return io_p;
+}
 
 
 
+static ImageObjectNode *GetNamedImageObjectNode (const ImageSet *image_set_p, const char * const name_s)
+{
+	ImageObjectNode *node_p = (ImageObjectNode *) (image_set_p -> is_images_p -> ll_head_p);
+
+	while (node_p)
+		{
+			if (strcmp (node_p -> ion_image_obj_p -> io_name_s, name_s) == 0)
+				{
+					return node_p;
+				}
+			else
+				{
+					node_p = (ImageObjectNode *) (node_p -> ion_node.ln_next_p);
+				}
+		}
+
+	return NULL;
+}
 
 
 
