@@ -11,15 +11,15 @@
 #include "memory_allocations.h"
 #include "streams.h"
 #include "time_util.h"
+#include "image_object.h"
 
 
 /*
  * STATIC DECLARATIONS
  */
 
-static bool GetImageSetAsSchemaOrgObject (json_t *image_json_p, const ImageSet * const image_p);
 
-static int CompareNullableStrings (const char * const value_0_s, const char * const value_1_s);
+static bool AddImageObjectToJSON (json_t *images_json_p, const ImageObject * const io_p, const ImageSet * const is_p, const ViewFormat vf);
 
 
 static const char * const S_WAVELENGTHS_SS [WA_NUM_TYPES] =
@@ -72,7 +72,7 @@ void FreeImageSet (ImageSet *image_set_p)
 }
 
 
-json_t *GetImageSetAsJSON (const ImageSet * const image_p, const ViewFormat vf)
+json_t *GetImageSetAsJSON (const ImageSet * const image_set_p, const ViewFormat vf)
 {
 	json_t *json_p = json_object ();
 
@@ -80,101 +80,98 @@ json_t *GetImageSetAsJSON (const ImageSet * const image_p, const ViewFormat vf)
 		{
 			bool success_flag = false;
 
-			switch (vf)
+			char *time_s = GetTimeAsString (& (image_set_p -> is_date), false, NULL);
+
+			if (time_s)
 				{
-					case VF_CLIENT_FULL:
+					if (SetNonTrivialString (json_p, IS_DATE_S, time_s, true))
 						{
-							if (GetImageSetAsSchemaOrgObject (json_p, image_p))
+							if (SetNonTrivialUnsignedInt (json_p, IS_INDEX_S, & (image_set_p -> is_index), false))
 								{
-									success_flag = true;
-								}
-							else
-								{
+									const char *wavelength_s = GetWavelengthAsString (image_set_p -> is_wavelength);
 
-								}
-						}
-
-						break;
-
-					case VF_CLIENT_MINIMAL:
-						success_flag = true;
-						break;
-
-
-					case VF_STORAGE:
-						{
-							if (SetNonTrivialString (json_p, IO_FULL_IMAGE_URL_S, image_p -> io_full_image_url_s, true))
-								{
-									if (SetNonTrivialString (json_p, IO_THUMBNAIL_URL_S, image_p -> io_thumbnail_image_url_s, true))
+									if (wavelength_s)
 										{
-											char *time_s = GetTimeAsString (& (image_p -> io_date), false, NULL);
-
-											if (time_s)
+											if (SetJSONString (json_p, IS_WAVELENGTH_S, wavelength_s))
 												{
-													if (SetNonTrivialString (json_p, IO_DATE_S, time_s, true))
+													if (image_set_p -> is_images_p -> ll_size > 0)
 														{
-															if (SetNonTrivialUnsignedInt (json_p, IO_INDEX_S, & (image_p -> io_index), false))
-																{
-																	const char *wavelength_s = GetWavelengthAsString (image_p -> io_wavelength);
+															json_t *image_objects_json_p = json_array ();
 
-																	if (wavelength_s)
+															if (image_objects_json_p)
+																{
+																	if (json_object_set_new (json_p, IS_IMAGES_S, image_objects_json_p) == 0)
 																		{
-																			if (SetJSONString (json_p, IO_WAVELENGTH_S, wavelength_s))
+																			ImageObjectNode *io_node_p = (ImageObjectNode *) (image_set_p -> is_images_p -> ll_head_p);
+																			bool added_flag = true;
+
+																			while (io_node_p && added_flag)
+																				{
+																					if (AddImageObjectToJSON (json_p, io_node_p -> ion_image_obj_p, image_set_p, vf))
+																						{
+																							io_node_p = (ImageObjectNode *) (io_node_p -> ion_node.ln_next_p);
+																						}
+																					else
+																						{
+																							added_flag = false;
+																						}
+																				}		/* while (io_node_p) */
+
+																			if (added_flag)
 																				{
 																					success_flag = true;
 																				}
 																		}
+																	else
+																		{
 
+																			json_decref (image_objects_json_p);
+																		}
 																}
 
-														}		/* if (SetNonTrivialString (json_p, IO_DATE_S, time_s, true)) */
-													else
-														{
-															PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "Failed to set \"%s\":\"%s\"", IO_DATE_S, time_s);
-														}
 
-													FreeCopiedString (time_s);
+
+														}
+												}
+											else
+												{
+													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "Failed to set \"%s\":\"%s\"", IS_WAVELENGTH_S, wavelength_s);
 												}
 
-
-
-
-										}		/* if (SetNonTrivialString (json_p, IO_THUMBNAIL_URL_S, image_p -> io_thumbnail_image_url_s, true)) */
+										}
 									else
 										{
-											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "Failed to set \"%s\":\"%s\"", IO_THUMBNAIL_URL_S, image_p -> io_thumbnail_image_url_s);
+
 										}
 
-								}		/* if (SetNonTrivialString (json_p, IO_FULL_IMAGE_URL_S, image_p -> io_full_image_url_s, true)) */
+								}
 							else
 								{
-									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "Failed to set \"%s\":\"%s\"", IO_FULL_IMAGE_URL_S, image_p -> io_full_image_url_s);
+									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "Failed to set \"%s\": " UINT32_FMT, IS_INDEX_S, image_set_p -> is_index);
 								}
 
+						}		/* if (SetNonTrivialString (json_p, IO_DATE_S, time_s, true)) */
+					else
+						{
+							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "Failed to set \"%s\":\"%s\"", IS_DATE_S, time_s);
 						}
-						break;
 
-					case VF_INDEXING:
-					case VF_REFERENCE:
-						success_flag = true;
-						break;
-
-					case VF_NUM_FORMATS:
-						break;
+					FreeCopiedString (time_s);
 				}
 
 			if (success_flag)
 				{
 					return json_p;
 				}
+			else
+				{
+					json_decref (json_p);
+				}
 
-			json_decref (json_p);
 		}
 	else
 		{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to allocate json for ImageSet \"%s\"",
-									 image_p -> io_full_image_url_s ? image_p -> io_full_image_url_s :image_p -> io_thumbnail_image_url_s);
-
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to allocate json for ImageSet");
 		}
 
 	return NULL;
@@ -183,56 +180,47 @@ json_t *GetImageSetAsJSON (const ImageSet * const image_p, const ViewFormat vf)
 
 ImageSet *GetImageSetFromJSON (const json_t * const json_p)
 {
-	ImageSet *image_p = NULL;
-	const char *full_image_s = GetJSONString (json_p, IO_FULL_IMAGE_URL_S);
-	const char *thumbnail_image_s = GetJSONString (json_p, IO_THUMBNAIL_URL_S);
+	ImageSet *image_set_p = NULL;
 
-	if (full_image_s || thumbnail_image_s)
+	struct tm *image_date_p = NULL;
+	const char *date_s = GetJSONString (json_p, IS_DATE_S);
+	const char *wavelength_s = GetJSONString (json_p, IS_WAVELENGTH_S);
+	uint32 image_index = 1;
+	Wavelength wavelength = WA_NUM_TYPES;
+
+	GetJSONUnsignedInteger (json_p, IS_INDEX_S, &image_index);
+
+	if (date_s)
 		{
-			struct tm *image_date_p = NULL;
-			const char *date_s = GetJSONString (json_p, IO_DATE_S);
-			const char *wavelength_s = GetJSONString (json_p, IO_WAVELENGTH_S);
-			uint32 image_index = 1;
-			Wavelength wavelength = WA_NUM_TYPES;
-
-			GetJSONUnsignedInteger (json_p, IO_INDEX_S, &image_index);
-
-			if (date_s)
-				{
-					image_date_p = GetTimeFromString (date_s);
-				}
-			else
-				{
-
-				}
-
-			if (wavelength_s)
-				{
-					if (GetWavelengthFromString (wavelength_s, &wavelength))
-						{
-
-						}
-				}
-
-
-			image_p = AllocateImageSet (full_image_s, thumbnail_image_s,image_date_p, image_index, wavelength);
-
-			if (!image_p)
-				{
-					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "AllocateImageSet () failed for \"%s\" and \"%s\"", full_image_s, thumbnail_image_s);
-				}
-
-			if (image_date_p)
-				{
-					FreeTime (image_date_p);
-				}
+			image_date_p = GetTimeFromString (date_s);
 		}
 	else
 		{
-			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "No image details specified");
+
 		}
 
-	return image_p;
+	if (wavelength_s)
+		{
+			if (GetWavelengthFromString (wavelength_s, &wavelength))
+				{
+
+				}
+		}
+
+	image_set_p = AllocateImageSet (image_date_p, image_index, wavelength);
+
+	if (!image_set_p)
+		{
+			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "AllocateImageSet () failed");
+		}
+
+	if (image_date_p)
+		{
+			FreeTime (image_date_p);
+		}
+
+
+	return image_set_p;
 }
 
 
@@ -242,13 +230,12 @@ ImageSetNode *AllocateImageSetNode (ImageSet *image_p)
 
 	if (node_p)
 		{
-			InitListItem (& (node_p ->ion_base_node));
-			node_p -> ion_image_p = image_p;
+			InitListItem (& (node_p -> isn_base_node));
+			node_p -> isn_image_p = image_p;
 		}
 	else
 		{
-			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to allocate memory for ImageSetNode for \"%s\"",
-									 image_p -> io_full_image_url_s ? image_p -> io_full_image_url_s :image_p -> io_thumbnail_image_url_s);
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to allocate memory for ImageSetNode");
 		}
 
 	return node_p;
@@ -259,22 +246,11 @@ void FreeImageSetNode (ListItem *node_p)
 {
 	ImageSetNode *image_node_p = (ImageSetNode *) node_p;
 
-	FreeImageSet (image_node_p -> ion_image_p);
+	FreeImageSet (image_node_p -> isn_image_p);
 	FreeMemory (image_node_p);
 }
 
 
-int CompareImageSets (const ImageSet * const image_0_p, const ImageSet * const image_1_p)
-{
-	int res = CompareNullableStrings (image_0_p -> io_full_image_url_s, image_1_p -> io_full_image_url_s);
-
-	if (res == 0)
-		{
-			res = CompareNullableStrings (image_0_p -> io_thumbnail_image_url_s, image_1_p -> io_thumbnail_image_url_s);
-		}
-
-	return res;
-}
 
 
 
@@ -319,74 +295,30 @@ bool GetWavelengthFromString (const char * const wavelength_s, Wavelength *w_p)
 
 
 
-static int CompareNullableStrings (const char * const value_0_s, const char * const value_1_s)
-{
-	int res = 0;
 
-	if (value_0_s)
+
+
+static bool AddImageObjectToJSON (json_t *images_json_p, const ImageObject * const io_p, const ImageSet * const is_p, const ViewFormat vf)
+{
+	bool success_flag = false;
+	json_t *io_json_p = GetImageObjectAsJSON (io_p, is_p, vf);
+
+	if (io_json_p)
 		{
-			if (value_1_s)
+			if (json_array_append_new (images_json_p, io_json_p) == 0)
 				{
-					res = strcmp (value_0_s, value_1_s);
+					success_flag = true;
 				}
 			else
 				{
-					res = -1;
+					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, io_json_p, "Failed to add to images array");
 				}
 		}
 	else
 		{
-			if (value_1_s)
-				{
-					res = 1;
-				}
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "Failed to get ImageObject \"%s\" as JSON", io_p -> io_name_s);
 		}
 
-	return res;
+
+	return success_flag;
 }
-
-/*
- * STATIC DEFINITIONS
- */
-
-
-static bool GetImageSetAsSchemaOrgObject (json_t *image_json_p, const ImageSet * const image_p)
-{
-/*
-	"@context": "https://schema.org",
-  "@type": "ImageSet",
-  "author": "Jane Doe",
-  "contentLocation": "Puerto Vallarta, Mexico",
-  "contentUrl": "mexico-beach.jpg",
-  "datePublished": "2008-01-25",
-  "description": "I took this picture while on vacation last year.",
-  "name": "Beach in Mexico"
-*/
-
-	bool success_flag = false;
-
-
-	char *time_s = GetTimeAsString (& (image_p -> is_date), false, NULL);
-
-	if (time_s)
-		{
-			if (SetJSONString (image_json_p, "datePublished", time_s))
-				{
-					if (SetJSONInteger (image_json_p, "index", image_p -> is_index))
-						{
-							const char *wavelength_s = GetWavelengthAsString (image_p -> is_wavelength);
-
-							if ((wavelength_s == NULL) || (SetJSONString (image_json_p, "wavelength", wavelength_s)))
-								{
-									success_flag = true;
-								}
-						}
-				}
-
-			FreeCopiedString (time_s);
-		}
-
-  return success_flag;
-}
-
-

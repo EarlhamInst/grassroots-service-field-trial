@@ -5,14 +5,16 @@
  *      Author: tyrrells
  */
 
-#ifndef SERVICES_FIELD_TRIALS_INCLUDE_IMAGE_SET_H_
-#define SERVICES_FIELD_TRIALS_INCLUDE_IMAGE_SET_H_
+#ifndef SERVICES_FIELD_TRIALS_INCLUDE_IMAGE_OBJECT_H_
+#define SERVICES_FIELD_TRIALS_INCLUDE_IMAGE_OBJECT_H_
 
 #include "linked_list.h"
 
 
 #include "dfw_field_trial_service_data.h"
 #include "dfw_field_trial_service_library.h"
+
+#include "image_set.h"
 
 
 typedef struct ImageObject
@@ -76,7 +78,7 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL ImageObjectNode *AllocateImageObjectNode (ImageObj
 DFW_FIELD_TRIAL_SERVICE_LOCAL void FreeImageObjectNode (ListItem *node_p);
 
 
-DFW_FIELD_TRIAL_SERVICE_LOCAL json_t *GetImageObjectAsJSON (const ImageObject * const image_p, const ViewFormat vf);
+DFW_FIELD_TRIAL_SERVICE_LOCAL json_t *GetImageObjectAsJSON (const ImageObject * const io_p, const ImageSet * const parent_p, const ViewFormat vf);
 
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL ImageObject *GetImageObjectFromJSON (const json_t * const json_p);
@@ -87,4 +89,4 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL ImageObject *GetImageObjectFromJSON (const json_t 
 #endif
 
 
-#endif /* SERVICES_FIELD_TRIALS_INCLUDE_IMAGE_SET_H_ */
+#endif /* SERVICES_FIELD_TRIALS_INCLUDE_IMAGE_OBJECT_H_ */

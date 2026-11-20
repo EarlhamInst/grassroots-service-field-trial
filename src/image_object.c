@@ -8,6 +8,14 @@
 #define ALLOCATE_IMAGE_OBJECT_TAGS (1)
 #include "image_object.h"
 #include "string_utils.h"
+#include "time_util.h"
+
+
+static bool GetImageObjectAsSchemaOrgObject (json_t *image_json_p, const ImageObject * const io_p, const struct tm * const date_s);
+
+static int CompareNullableStrings (const char * const value_0_s, const char * const value_1_s);
+
+
 
 
 ImageObject *AllocateImageObject (const char * const name_s, const char * const full_size_url_s, const char * const thumbnail_url_s)
@@ -111,35 +119,77 @@ void FreeImageObjectNode (ListItem *node_p)
 }
 
 
-json_t *GetImageObjectAsJSON (const ImageObject * const image_p, const ViewFormat vf)
+json_t *GetImageObjectAsJSON (const ImageObject * const io_p, const ImageSet * const parent_p, const ViewFormat vf)
 {
 	json_t *json_p = json_object ();
 
 	if (json_p)
 		{
-			if (SetJSONString (json_p, IO_NAME_S, image_p -> io_name_s))
+			bool success_flag = true;
+
+			switch (vf)
 				{
-					if ((image_p -> io_full_size_url_s == NULL) && (SetJSONString (json_p, IO_FULL_IMAGE_URL_S, image_p -> io_full_size_url_s)))
+
+					case VF_CLIENT_FULL:
+					case VF_CLIENT_MINIMAL:
 						{
-							if ((image_p -> io_thumbnail_url_s == NULL) && (SetJSONString (json_p, IO_THUMBNAIL_URL_S, image_p -> io_thumbnail_url_s)))
+							if (GetImageObjectAsSchemaOrgObject (json_p, io_p, & (parent_p -> is_date)))
 								{
-									return json_p;
+									success_flag = true;
 								}
 							else
 								{
-									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "GetImageObjectAsJSON (): Failed to set \"%s\": \"%s\"", IO_FULL_IMAGE_URL_S, image_p -> io_thumbnail_url_s);
+
 								}
 						}
-					else
-						{
-							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "GetImageObjectAsJSON (): Failed to set \"%s\": \"%s\"", IO_FULL_IMAGE_URL_S, image_p -> io_full_size_url_s);
-						}
 
+						break;
+
+
+					case VF_STORAGE:
+					case VF_INDEXING:
+					case VF_REFERENCE:
+						{
+							if (SetJSONString (json_p, IO_NAME_S, io_p -> io_name_s))
+								{
+									if (SetNonTrivialString (json_p, IO_FULL_IMAGE_URL_S, io_p -> io_full_size_url_s, true))
+										{
+											if (SetNonTrivialString (json_p, IO_THUMBNAIL_URL_S, io_p -> io_thumbnail_url_s, true))
+												{
+													success_flag = true;
+												}		/* if (SetNonTrivialString (json_p, IO_THUMBNAIL_URL_S, io_p -> io_thumbnail_image_url_s, true)) */
+											else
+												{
+													PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "Failed to set \"%s\":\"%s\"", IO_THUMBNAIL_URL_S, io_p -> io_thumbnail_url_s);
+												}
+
+										}		/* if (SetNonTrivialString (json_p, IO_FULL_IMAGE_URL_S, io_p -> io_full_image_url_s, true)) */
+									else
+										{
+											PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "Failed to set \"%s\":\"%s\"", IO_FULL_IMAGE_URL_S, io_p -> io_full_size_url_s);
+										}
+
+								}		/* if (SetJSONString (json_p, IO_NAME_S, io_p -> io_name_s)) */
+							else
+								{
+									PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "Failed to set \"%s\":\"%s\"", IO_NAME_S, io_p -> io_name_s);
+								}
+
+						}
+						break;
+
+					case VF_NUM_FORMATS:
+						success_flag = false;
+						break;
 				}
-			else
+
+
+			if (success_flag)
 				{
-					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "GetImageObjectAsJSON (): Failed to set \"%s\": \"%s\"", IO_NAME_S, image_p -> io_name_s);
+					return json_p;
 				}
+
+
 
 			json_decref (json_p);
 		}
@@ -168,12 +218,12 @@ ImageObject *GetImageObjectFromJSON (const json_t * const json_p)
 
 					if (!image_obj_p)
 						{
-							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "AllocateImageObject () failed");
+							PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "AllocateImageObject () failed for \"%s\"", name_s);
 						}
 				}
 			else
 				{
-					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "GetImageObjectFromJSON (): no full image or thumbnail specified");
+					PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "GetImageObjectFromJSON (): no full image or thumbnail specified for \"%s\"", name_s);
 				}
 
 		}		/* if (name_s) */
@@ -183,4 +233,127 @@ ImageObject *GetImageObjectFromJSON (const json_t * const json_p)
 		}
 
 	return image_obj_p;
+}
+
+
+
+int CompareImageObjects (const ImageObject * const io_0_p, const ImageObject * const io_1_p)
+{
+	int res = CompareNullableStrings (io_0_p -> io_full_size_url_s, io_1_p -> io_full_size_url_s);
+
+	if (res == 0)
+		{
+			res = CompareNullableStrings (io_0_p -> io_thumbnail_url_s, io_1_p -> io_thumbnail_url_s);
+		}
+
+	return res;
+}
+
+
+/*
+ * STATIC DEFINITIONS
+ */
+
+
+static bool GetImageObjectAsSchemaOrgObject (json_t *image_json_p, const ImageObject * const io_p, const struct tm * const date_p)
+{
+/*
+	"@context": "https://schema.org",
+  "@type": "ImageSet",
+  "author": "Jane Doe",
+  "contentLocation": "Puerto Vallarta, Mexico",
+  "contentUrl": "mexico-beach.jpg",
+  "datePublished": "2008-01-25",
+  "description": "I took this picture while on vacation last year.",
+  "name": "Beach in Mexico"
+*/
+
+	bool success_flag = false;
+
+
+	if (SetJSONString (image_json_p, "@type", "ImageObject"))
+		{
+			if (SetJSONString (image_json_p, "name", io_p -> io_name_s))
+				{
+					if ((io_p -> io_full_size_url_s == NULL) || (SetJSONString (image_json_p, "contentUrl", io_p -> io_full_size_url_s)))
+						{
+							if ((io_p -> io_thumbnail_url_s == NULL) || (SetJSONString (image_json_p, "thumbnailUrl", io_p -> io_thumbnail_url_s)))
+								{
+									if (date_p)
+										{
+											char *time_s = GetTimeAsString (date_p, false, NULL);
+
+											if (time_s)
+												{
+													if (SetJSONString (image_json_p, "datePublished", time_s))
+														{
+															success_flag = true;
+														}
+
+													FreeCopiedString (time_s);
+												}
+
+										}
+									else
+										{
+											success_flag = true;
+										}
+
+
+								}		/* if ((io_p -> io_full_size_url_s == NULL) || (SetJSONString (image_json_p, "contentUrl", io_p -> io_full_size_url_s))) */
+							else
+								{
+
+								}
+
+						}		/* if ((io_p -> io_full_size_url_s == NULL) || (SetJSONString (image_json_p, "contentUrl", io_p -> io_full_size_url_s))) */
+					else
+						{
+
+						}
+				}		/* if (SetJSONString (image_json_p, "name", io_p -> io_name_s)) */
+			else
+				{
+
+				}
+
+
+
+		}		/* if (SetJSONString (image_json_p, "@type", "ImageObject")) */
+	else
+		{
+
+		}
+
+
+
+  return success_flag;
+}
+
+
+
+static int CompareNullableStrings (const char * const value_0_s, const char * const value_1_s)
+{
+	int res = 0;
+
+	if (value_0_s)
+		{
+			if (value_1_s)
+				{
+					res = strcmp (value_0_s, value_1_s);
+				}
+			else
+				{
+					res = -1;
+				}
+		}
+	else
+		{
+			if (value_1_s)
+				{
+					res = 1;
+				}
+		}
+
+	return res;
 }
