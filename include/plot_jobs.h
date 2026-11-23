@@ -29,7 +29,7 @@
 
 #include "study.h"
 #include "plot.h"
-
+#include "image_set.h"
 
 
 #ifndef DOXYGEN_SHOULD_SKIP_THIS
@@ -107,6 +107,10 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL Plot *GetPlotByRowColumnRack (const uint32 row, co
 
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL Plot *GetPlotById (bson_oid_t *id_p, Study *study_p, const ViewFormat format, FieldTrialServiceData *data_p);
+
+
+
+DFW_FIELD_TRIAL_SERVICE_LOCAL ImageSet *GetPlotImageSet (const Plot *plot_p, struct tm *image_date_p, const uint32 image_index, const Wavelength wavelength);
 
 
 /**

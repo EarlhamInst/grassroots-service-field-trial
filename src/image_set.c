@@ -35,27 +35,52 @@ static const char * const S_WAVELENGTHS_SS [WA_NUM_TYPES] =
  */
 
 
-ImageSet *AllocateImageSet (struct tm *date_p, const uint32 index, const Wavelength wavelength)
+ImageSet *AllocateImageSet (struct tm *src_date_p, const uint32 index, const Wavelength wavelength)
 {
 	LinkedList *image_objects_p = AllocateLinkedList (FreeImageSetNode);
 
 	if (image_objects_p)
 		{
-			ImageSet *image_set_p = AllocMemory (sizeof (ImageSet));
+			struct tm *dest_date_p = NULL;
+			bool got_date_flag = false;
 
-			if (image_set_p)
+			if (src_date_p)
 				{
-					if (date_p)
+					dest_date_p = DuplicateTime (src_date_p);
+
+					if (dest_date_p)
 						{
-							CopyTime (date_p, & (image_set_p -> is_date));
+							got_date_flag = true;
+						}
+					else
+						{
+
+						}
+				}
+			else
+				{
+					got_date_flag = true;
+				}
+
+			if (got_date_flag)
+				{
+					ImageSet *image_set_p = AllocMemory (sizeof (ImageSet));
+
+					if (image_set_p)
+						{
+							image_set_p -> is_date_p = dest_date_p;
+							image_set_p -> is_index = index;
+							image_set_p -> is_wavelength = wavelength;
+
+							image_set_p -> is_images_p = image_objects_p;
+
+							return image_set_p;
 						}
 
-					image_set_p -> is_index = index;
-					image_set_p -> is_wavelength = wavelength;
-
-					image_set_p -> is_images_p = image_objects_p;
-
-					return image_set_p;
+					if (dest_date_p)
+						{
+							FreeTime (dest_date_p);
+						}
 				}
 
 			FreeLinkedList (image_objects_p);
@@ -67,6 +92,11 @@ ImageSet *AllocateImageSet (struct tm *date_p, const uint32 index, const Wavelen
 
 void FreeImageSet (ImageSet *image_set_p)
 {
+	if (image_set_p -> is_date_p)
+		{
+			FreeTime (image_set_p -> is_date_p);
+		}
+
 	FreeLinkedList (image_set_p -> is_images_p);
 
 	FreeMemory (image_set_p);
@@ -103,7 +133,7 @@ json_t *GetImageSetAsJSON (const ImageSet * const image_set_p, const ViewFormat 
 		{
 			bool success_flag = false;
 
-			char *time_s = GetTimeAsString (& (image_set_p -> is_date), false, NULL);
+			char *time_s = GetTimeAsString (image_set_p -> is_date_p, false, NULL);
 
 			if (time_s)
 				{
@@ -275,6 +305,24 @@ void FreeImageSetNode (ListItem *node_p)
 
 
 
+int CompareImageSets (const ImageSet * const is0_p, const ImageSet * const is1_p)
+{
+	const bool dates_only_flag = true;
+	int res = CompareDates (is0_p -> is_date_p, is1_p -> is_date_p, dates_only_flag);
+
+	if (res == 0)
+		{
+			res = (is0_p -> is_index) - (is1_p -> is_index);
+
+			if (res == 0)
+				{
+					res = (is0_p -> is_wavelength) - (is1_p -> is_wavelength);
+				}
+		}
+
+	return res;
+}
+
 
 
 const char *GetWavelengthAsString (const Wavelength w)
@@ -293,7 +341,7 @@ const char *GetWavelengthAsString (const Wavelength w)
 bool GetWavelengthFromString (const char * const wavelength_s, Wavelength *w_p)
 {
 	bool success_flag = false;
-	const char **value_ss = S_WAVELENGTHS_SS;
+	const char **value_ss = (const char **) S_WAVELENGTHS_SS;
 	Wavelength w = 0;
 
 	while ((!success_flag) && (w < WA_NUM_TYPES))

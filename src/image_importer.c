@@ -49,7 +49,7 @@
 #include "filesystem_utils.h"
 #include "memory_allocations.h"
 #include "time_util.h"
-
+#include "plot_jobs.h"
 
 
 /*
@@ -128,7 +128,7 @@ OperationStatus RunImportImages (const char * const import_path_s, const FieldTr
 		{
 			char **pattern_ss = patterns_ss;
 
-			files_p = GetMatchingFiles (patterns_ss, true, false, MatchFilesOnly);
+			files_p = GetMatchingFiles ((const char **) patterns_ss, true, false, MatchFilesOnly);
 
 			if (files_p)
 				{
@@ -245,21 +245,42 @@ OperationStatus RunImportImages (const char * const import_path_s, const FieldTr
 
 																													if (row_p)
 																														{
+																															bool got_image_set_flag = false;
 																															Plot *plot_p = row_p -> ro_plot_p;
-																															ImageSet *image_set_p = AllocateImageSet (&image_date, image_index, wavelength);
+
+																															/* Is it an existing ImageSet? */
+																															ImageSet *image_set_p = GetPlotImageSet (plot_p, &image_date, image_index, wavelength);
 
 																															if (image_set_p)
 																																{
-																																	if (AddImageSetToPlot (plot_p, image_set_p))
-																																		{
-																																			if (SavePlot (plot_p, data_p))
-																																				{
-																																					++ num_successes;
-																																				}
-																																			else
-																																				{
+																																	got_image_set_flag = true;
+																																}
+																															else
+																																{
+																																	image_set_p = AllocateImageSet (&image_date, image_index, wavelength);
 
+																																	if (image_set_p)
+																																		{
+																																			if (AddImageSetToPlot (plot_p, image_set_p))
+																																				{
+																																					got_image_set_flag = true;
 																																				}
+																																		}
+																																}
+
+																															if (got_image_set_flag)
+																																{
+																																	/* Create the ImageObject and add it to the ImageSet */
+
+
+																																	if (SavePlot (plot_p, data_p))
+																																		{
+																																			++ num_successes;
+																																		}
+																																	else
+																																		{
+
+																																		}
 
 																																		}
 																																	else

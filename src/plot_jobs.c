@@ -1978,6 +1978,37 @@ Plot *GetPlotByRowColumnRack (const uint32 row, const uint32 column, const uint3
 }
 
 
+
+
+ImageSet *GetPlotImageSet (const Plot *plot_p, struct tm *image_date_p, const uint32 image_index, const Wavelength wavelength)
+{
+	ImageSetNode *is_node_p = (ImageSetNode *) (plot_p -> pl_images_p -> ll_head_p);
+
+	ImageSet is;
+
+	is.is_date_p = image_date_p;
+	is.is_index = image_index;
+	is.is_wavelength = wavelength;
+
+
+	while (is_node_p)
+		{
+			ImageSet *image_set_p = is_node_p -> isn_image_p;
+
+			if (CompareImageSets (&is, image_set_p) == 0)
+				{
+					return image_set_p;
+				}
+
+			is_node_p = (ImageSetNode *) (is_node_p -> isn_base_node.ln_next_p);
+		}
+
+	return NULL;
+}
+
+
+
+
 static Plot *GetPlotByRowColumn (const uint32 row, const uint32 column, Study *study_p, const ViewFormat format, FieldTrialServiceData *data_p)
 {
 	Plot *plot_p = NULL;

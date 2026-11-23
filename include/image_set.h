@@ -40,7 +40,7 @@ typedef struct ImageSet
 
 
 	/** The date of the image. */
-	struct tm is_date;
+	struct tm *is_date_p;
 
 	/**
 	 * The index, starting from 1, for the image within
@@ -120,7 +120,7 @@ DFW_FIELD_TRIAL_SERVICE_LOCAL void FreeImageSetNode (ListItem *node_p);
 
 
 
-DFW_FIELD_TRIAL_SERVICE_LOCAL int CompareImageSets (const ImageSet * const image_0_p, const ImageSet * const image_1_p);
+DFW_FIELD_TRIAL_SERVICE_LOCAL int CompareImageSets (const ImageSet * const image_set_0_p, const ImageSet * const image_set_1_p);
 
 
 DFW_FIELD_TRIAL_SERVICE_LOCAL const char *GetWavelengthAsString (const Wavelength w);

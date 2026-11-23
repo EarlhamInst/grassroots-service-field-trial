@@ -147,7 +147,7 @@ json_t *GetImageObjectAsJSON (const ImageObject * const io_p, const ImageSet * c
 					case VF_CLIENT_FULL:
 					case VF_CLIENT_MINIMAL:
 						{
-							if (GetImageObjectAsSchemaOrgObject (json_p, io_p, & (parent_p -> is_date)))
+							if (GetImageObjectAsSchemaOrgObject (json_p, io_p, parent_p -> is_date_p))
 								{
 									success_flag = true;
 								}
