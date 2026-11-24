@@ -262,7 +262,44 @@ ImageSet *GetImageSetFromJSON (const json_t * const json_p)
 
 	image_set_p = AllocateImageSet (image_date_p, image_index, wavelength);
 
-	if (!image_set_p)
+	if (image_set_p)
+		{
+			json_t *images_json_p = json_object_get (json_p, IS_IMAGES_S);
+
+			if (images_json_p)
+				{
+					if (json_is_array (images_json_p))
+						{
+							size_t num_images = json_array_size (images_json_p);
+							size_t i;
+
+							for (i = 0; i < num_images; ++ i)
+								{
+									json_t *image_json_p = json_array_get (images_json_p, i);
+
+									ImageObject *io_p = GetImageObjectFromJSON (image_json_p);
+
+									if (io_p)
+										{
+											OperationStatus image_status = AddImageObjectToImageSet (image_set_p, io_p);
+
+											if (image_status != OS_SUCCEEDED)
+												{
+
+												}
+										}
+									else
+										{
+
+										}
+
+								}
+
+						}
+				}
+
+		}
+	else
 		{
 			PrintJSONToErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, json_p, "AllocateImageSet () failed");
 		}
