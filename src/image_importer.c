@@ -482,49 +482,58 @@ static bool CopyImageFile (const char *full_image_filename_s, const char *curren
 
 							if (dest_dir_s)
 								{
-									char *local_image_filename_s = GetFilenameOnly (full_image_filename_s);
-
-									if (local_image_filename_s)
+									if (EnsureDirectoryExists (dest_dir_s))
 										{
-											char *dest_filename_s = MakeFilename (dest_dir_s, local_image_filename_s);
+											char *local_image_filename_s = GetFilenameOnly (full_image_filename_s);
 
-											if (dest_filename_s)
+											if (local_image_filename_s)
 												{
-													if (CopyToNewFile (full_image_filename_s, dest_filename_s, NULL))
+													char *dest_filename_s = MakeFilename (dest_dir_s, local_image_filename_s);
+
+													if (dest_filename_s)
 														{
-															char *image_url_s = GetAssetUrl (dest_filename_s, data_p);
-
-															if (image_url_s)
+															if (CopyToNewFile (full_image_filename_s, dest_filename_s, NULL))
 																{
-																	*image_url_ss = image_url_s;
-																	success_flag = true;
+																	char *image_url_s = GetAssetUrl (dest_filename_s, data_p);
 
-																	/*
-																	 * A missing thumbnail isn't fatal as the image itself is still
-																	 * available.
-																	 */
-																	*thumbnail_url_ss = CreateThumbnailForImage (dest_filename_s, dest_dir_s, local_image_filename_s, data_p);
-																}		/* if (image_url_s) */
+																	if (image_url_s)
+																		{
+																			*image_url_ss = image_url_s;
+																			success_flag = true;
 
-														}		/* if (CopyToNewFile (full_image_filename_s, dest_filename_s)) */
+																			/*
+																			 * A missing thumbnail isn't fatal as the image itself is still
+																			 * available.
+																			 */
+																			*thumbnail_url_ss = CreateThumbnailForImage (dest_filename_s, dest_dir_s, local_image_filename_s, data_p);
+																		}		/* if (image_url_s) */
+
+																}		/* if (CopyToNewFile (full_image_filename_s, dest_filename_s)) */
+															else
+																{
+																	PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "CopyToNewFile () failed for \"%s\" and \"%s\"", full_image_filename_s, dest_filename_s);
+																}
+
+															FreeCopiedString (dest_filename_s);
+														}		/* if (dest_filename_s) */
 													else
 														{
-															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "CopyToNewFile () failed for \"%s\" and \"%s\"", full_image_filename_s, dest_filename_s);
+															PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "MakeFilename () failed for \"%s\" and \"%s\"", dest_dir_s, local_image_filename_s);
 														}
 
-													FreeCopiedString (dest_filename_s);
-												}		/* if (dest_filename_s) */
+													FreeCopiedString (local_image_filename_s);
+												}		/* if (local_image_filename_s) */
 											else
 												{
-													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "MakeFilename () failed for \"%s\" and \"%s\"", dest_dir_s, local_image_filename_s);
+													PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetFilenameOnly () failed for \"%s\"", full_image_filename_s);
 												}
-
-											FreeCopiedString (local_image_filename_s);
-										}		/* if (local_image_filename_s) */
+										}		/* if (EnsureDirectoryExists (dest_dir_s)) */
 									else
 										{
-											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "GetFilenameOnly () failed for \"%s\"", full_image_filename_s);
+											PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "EnsureDirectoryExists () failed for \"%s\"", dest_dir_s);
 										}
+
+
 
 									if (dest_dir_s != study_assets_path_s)
 										{

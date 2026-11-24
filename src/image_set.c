@@ -160,7 +160,7 @@ json_t *GetImageSetAsJSON (const ImageSet * const image_set_p, const ViewFormat 
 
 																			while (io_node_p && added_flag)
 																				{
-																					if (AddImageObjectToJSON (json_p, io_node_p -> ion_image_obj_p, image_set_p, vf))
+																					if (AddImageObjectToJSON (image_objects_json_p, io_node_p -> ion_image_obj_p, image_set_p, vf))
 																						{
 																							io_node_p = (ImageObjectNode *) (io_node_p -> ion_node.ln_next_p);
 																						}
