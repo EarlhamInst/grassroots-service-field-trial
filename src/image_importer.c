@@ -76,7 +76,8 @@ static int SortByName (const void *v0_p, const void *v1_p);
 static char **GetImageFilenamesForMatching (const char * const root_path_s);
 
 
-static bool CopyImageFile (const char *full_image_filename_s, const char *current_study_id_s, const uint32 study_index, char **image_url_ss, char **thumbnail_url_ss, const FieldTrialServiceData * const data_p);
+static bool CopyImageFile (const char *full_image_filename_s, const char *current_study_id_s, const uint32 study_index, const char *image_name_s, char **image_url_ss, char **thumbnail_url_ss, const FieldTrialServiceData * const data_p);
+
 
 static char *GetAssetUrl (const char * const asset_filename_s, const FieldTrialServiceData * const data_p);
 
@@ -95,9 +96,8 @@ static bool HasFileExtension (const char * const filename_s, const char * const 
 
 static bool GetStudyIndex (const char * const plot_s, uint32 *index_p);
 
-static bool IsRotatedImage (const char * const full_image_filename_s);
 
-static bool CreatePlotImageDirectories (const char * const plot_dir_s);
+static bool GetImageName (const char * const full_image_filename_s, char **name_ss);
 
 static bool EnsureSubdirectoryExists (const char * const parent_dir_s, const char * const subdir_s, char **full_subdir_ss);
 
@@ -105,13 +105,16 @@ static bool EnsureSubdirectoryExists (const char * const parent_dir_s, const cha
 static bool GetImageIndex (const char *value_s, int *index_p);
 
 
+static bool CreatePlotImageDirectory (const char * const plot_dir_s, const char * const subdirectory_s);
+
+static bool CreateRootPlotDirectories (const char * const plot_dir_s);
+
+
+
+
 static const char * const S_METADATA_DIR_S = "metadata";
 
 static const char * const S_THUMBNAILS_DIR_S = "thumbnails";
-
-static const char * const S_ROTATED_DIR_S = "rotated";
-
-static const char * const S_ORIGINAL_DIR_S = "original";
 
 
 
@@ -157,6 +160,7 @@ OperationStatus RunImportImages (const char * const import_path_s, const FieldTr
 									PA_FLIGHT_NUMBER,
 									PA_WAVELENGTH,
 									PA_PLOT,
+									PA_OPTIONAL_ROTATED,
 									PA_NUM_PARTS
 								};
 
@@ -167,7 +171,7 @@ OperationStatus RunImportImages (const char * const import_path_s, const FieldTr
 
 									if (parts_p)
 										{
-											if (parts_p -> ll_size == PA_NUM_PARTS)
+											if (parts_p -> ll_size >= PA_PLOT)
 												{
 													StringListNode *parts_node_p = (StringListNode *) (parts_p -> ll_head_p);
 													char *code_s = GetFilenameOnly (parts_node_p -> sln_string_s);
@@ -235,8 +239,21 @@ OperationStatus RunImportImages (const char * const import_path_s, const FieldTr
 																										{
 																											char *image_url_s = NULL;
 																											char *thumbnail_url_s = NULL;
+																											char *image_name_s = "original";
 
-																											if (CopyImageFile (full_image_filename_s, current_study_id_s, study_index, &image_url_s, &thumbnail_url_s, data_p))
+																											/* optional suffix */
+																											parts_node_p = (StringListNode *) (parts_node_p -> sln_node.ln_next_p);
+
+																											if (parts_node_p)
+																												{
+																													if (!GetImageName (parts_node_p -> sln_string_s, &image_name_s))
+																														{
+																															/* error getting name */
+																														}
+																												}
+
+
+																											if (CopyImageFile (full_image_filename_s, current_study_id_s, study_index, image_name_s, &image_url_s, &thumbnail_url_s, data_p))
 																												{
 																													/*
 																													 * Get the study index from plot_s
@@ -265,31 +282,35 @@ OperationStatus RunImportImages (const char * const import_path_s, const FieldTr
 																																				{
 																																					got_image_set_flag = true;
 																																				}
+																																			else
+																																				{
+																																					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddImageToPlot () failed for \"%s\", \"%s\"", image_url_s,
+																																											 thumbnail_url_s ? thumbnail_url_s : "");
+
+																																					FreeImageSet (image_set_p);
+																																				}
 																																		}
 																																}
 
 																															if (got_image_set_flag)
 																																{
 																																	/* Create the ImageObject and add it to the ImageSet */
+																																	ImageObject *io_p = AllocateImageObject (image_name_s, image_url_s, thumbnail_url_s);
 
-
-																																	if (SavePlot (plot_p, data_p))
+																																	if (io_p)
 																																		{
-																																			++ num_successes;
-																																		}
-																																	else
-																																		{
+																																			OperationStatus image_status = AddImageObjectToImageSet (image_set_p, io_p);
+
+																																			if (image_status == OS_SUCCEEDED)
+																																				{
+																																					if (SavePlot (plot_p, data_p))
+																																						{
+																																							++ num_successes;
+																																						}
+																																				}
 
 																																		}
 
-																																		}
-																																	else
-																																		{
-																																			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "AddImageToPlot () failed for \"%s\", \"%s\"", image_url_s,
-																																									 thumbnail_url_s ? thumbnail_url_s : "");
-
-																																			FreeImageSet (image_set_p);
-																																		}
 
 																																}		/* if (image_p) */
 																															else
@@ -421,7 +442,7 @@ OperationStatus ImportImage (Study *study_p, const ViewFormat format, const Fiel
  * @param data_p The configured FieldTrialServiceData.
  * @return <code>true</code> if the file was copied successfully and the image url set, <code>false</code> otherwise.
  */
-static bool CopyImageFile (const char *full_image_filename_s, const char *current_study_id_s, const uint32 study_index, char **image_url_ss, char **thumbnail_url_ss, const FieldTrialServiceData * const data_p)
+static bool CopyImageFile (const char *full_image_filename_s, const char *current_study_id_s, const uint32 study_index, const char *image_name_s, char **image_url_ss, char **thumbnail_url_ss, const FieldTrialServiceData * const data_p)
 {
 	bool success_flag = false;
 
@@ -436,6 +457,7 @@ static bool CopyImageFile (const char *full_image_filename_s, const char *curren
 			const char c = GetFileSeparatorChar ();
 			const size_t l = strlen (data_p -> dftsd_assets_path_s);
 			char *study_assets_path_s;
+			const char *assets_path_sep_s = "";
 
 			*sep_s = c;
 			* (sep_s + 1) = '\0';
@@ -443,20 +465,20 @@ static bool CopyImageFile (const char *full_image_filename_s, const char *curren
 
 			if ((* ((data_p -> dftsd_assets_path_s) + l - 1)) == c)
 				{
-					study_assets_path_s = ConcatenateVarargsStrings (data_p -> dftsd_assets_path_s, current_study_id_s, sep_s, "plot_", study_index_s, NULL);
+					assets_path_sep_s = "";
 				}
 			else
 				{
-					study_assets_path_s = ConcatenateVarargsStrings (data_p -> dftsd_assets_path_s, sep_s, current_study_id_s, sep_s, "plot_", study_index_s, NULL);
+					assets_path_sep_s = sep_s;
 				}
 
+			study_assets_path_s = ConcatenateVarargsStrings (data_p -> dftsd_assets_path_s, assets_path_sep_s, current_study_id_s, sep_s, "plot_", study_index_s, NULL);
 
 			if (study_assets_path_s)
 				{
-					if (CreatePlotImageDirectories (study_assets_path_s))
+					if (CreateRootPlotDirectories (study_assets_path_s))
 						{
-							/* Rotated images go into their own subdirectory */
-							char *dest_dir_s = IsRotatedImage (full_image_filename_s) ? MakeFilename (study_assets_path_s, S_ROTATED_DIR_S) : study_assets_path_s;
+							char *dest_dir_s = MakeFilename (study_assets_path_s, image_name_s);
 
 							if (dest_dir_s)
 								{
@@ -512,7 +534,7 @@ static bool CopyImageFile (const char *full_image_filename_s, const char *curren
 								}		/* if (dest_dir_s) */
 							else
 								{
-									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "MakeFilename () failed for \"%s\" and \"%s\"", study_assets_path_s, S_ROTATED_DIR_S);
+									PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "MakeFilename () failed for \"%s\" and \"%s\"", study_assets_path_s, image_name_s);
 								}
 
 						}		/* if (CreatePlotImageDirectories (study_assets_path_s)) */
@@ -1005,39 +1027,20 @@ static bool HasFileExtension (const char * const filename_s, const char * const 
  *   -- metadata directory
  *
  */
-static bool CreatePlotImageDirectories (const char * const plot_dir_s)
+static bool CreateRootPlotDirectories (const char * const plot_dir_s)
 {
 	bool success_flag = false;
 
 	if (EnsureDirectoryExists (plot_dir_s))
 		{
-			char *original_dir_s = NULL;
-
-			if (EnsureSubdirectoryExists (plot_dir_s, S_ORIGINAL_DIR_S, &original_dir_s))
+			if (EnsureSubdirectoryExists (plot_dir_s, S_METADATA_DIR_S, NULL))
 				{
-					if (EnsureSubdirectoryExists (original_dir_s, S_THUMBNAILS_DIR_S, NULL))
-						{
-							char *rotated_dir_s = NULL;
-
-							if (EnsureSubdirectoryExists (plot_dir_s, S_ROTATED_DIR_S, &rotated_dir_s))
-								{
-									if (EnsureSubdirectoryExists (rotated_dir_s, S_THUMBNAILS_DIR_S, NULL))
-										{
-											if (EnsureSubdirectoryExists (plot_dir_s, S_METADATA_DIR_S, NULL))
-												{
-													success_flag = true;
-												}
-
-										}		/* if (EnsureSubdirectoryExists (rotated_dir_s, S_THUMBNAILS_DIR_S, NULL)) */
-
-									FreeCopiedString (rotated_dir_s);
-								}		/* if (EnsureSubdirectoryExists (rotated_dir_s, S_ROTATED_DIR_S, &rotated_dir_s)) */
-
-
-						}		/* if (EnsureSubdirectoryExists (original_dir_s, S_THUMBNAILS_DIR_S, NULL)) */
-
-					FreeCopiedString (original_dir_s);
-				}		/* if (EnsureSubdirectoryExists (plot_dir_s, S_ORIGINAL_DIR_S, original_dir_s)) */
+					success_flag = true;
+				}
+			else
+				{
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "EnsureSubdirectoryExists () failed for \"%s\", \"%s\"", plot_dir_s, S_METADATA_DIR_S);
+				}
 
 		}		/* if (EnsureDirectoryExists (plot_dir_s)) */
 	else
@@ -1047,6 +1050,47 @@ static bool CreatePlotImageDirectories (const char * const plot_dir_s)
 
 	return success_flag;
 }
+
+
+static bool CreatePlotImageDirectory (const char * const plot_dir_s, const char * const subdirectory_s)
+{
+	bool success_flag = false;
+
+	if (EnsureDirectoryExists (plot_dir_s))
+		{
+			char *full_subdirectory_path_s = NULL;
+
+			if (EnsureSubdirectoryExists (plot_dir_s, subdirectory_s, &full_subdirectory_path_s))
+				{
+					if (EnsureSubdirectoryExists (full_subdirectory_path_s, S_THUMBNAILS_DIR_S, NULL))
+						{
+							success_flag = true;
+						}
+					else
+						{
+							PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "EnsureSubdirectoryExists () failed for \"%s\", \"%s\"", full_subdirectory_path_s, S_THUMBNAILS_DIR_S);
+						}
+
+					if (full_subdirectory_path_s)
+						{
+							FreeCopiedString (full_subdirectory_path_s);
+						}
+
+				}
+			else
+				{
+					PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "EnsureSubdirectoryExists () failed for \"%s\", \"%s\"", plot_dir_s, subdirectory_s);
+				}
+
+		}		/* if (EnsureDirectoryExists (plot_dir_s)) */
+	else
+		{
+			PrintErrors (STM_LEVEL_SEVERE, __FILE__, __LINE__, "EnsureDirectoryExists () failed for \"%s\"", plot_dir_s);
+		}
+
+	return success_flag;
+}
+
 
 
 /**
@@ -1248,33 +1292,34 @@ static int SortByName (const void *v0_p, const void *v1_p)
 
 
 
-static bool IsRotatedImage (const char * const full_image_filename_s)
+
+static bool GetImageName (const char * const full_image_filename_s, char **name_ss)
 {
-	bool rotated_flag = false;
+	bool success_flag = false;
 	char *last_dot_p = strrchr (full_image_filename_s, '.');
 
 	if (last_dot_p)
 		{
-			const char * const rotated_s = "_rotated";
-			const size_t rotated_length = strlen (rotated_s);
+			size_t length = last_dot_p - full_image_filename_s;
 
-			/*
-			 * make sure that we don't look out of the bounds of the
-			 * filename string
-			 */
-			char *start_p = last_dot_p - rotated_length;
-
-			if (full_image_filename_s  < start_p)
+			if (length > 0)
 				{
-					if (strncmp (start_p, rotated_s, rotated_length) == 0)
+					char *name_s = CopyToNewString (full_image_filename_s, length, false);
+
+					if (name_s)
 						{
-							rotated_flag = true;
+							*name_ss = name_s;
+							success_flag = true;
 						}
+				}
+			else
+				{
+					success_flag = true;
 				}
 
 		}		/* if (last_dot_p) */
 
-	return rotated_flag;
+	return success_flag;
 }
 
 
