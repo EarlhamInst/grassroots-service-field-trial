@@ -482,7 +482,7 @@ static bool CopyImageFile (const char *full_image_filename_s, const char *curren
 
 							if (dest_dir_s)
 								{
-									if (EnsureDirectoryExists (dest_dir_s))
+									if (CreatePlotImageDirectory (study_assets_path_s, image_name_s))
 										{
 											char *local_image_filename_s = GetFilenameOnly (full_image_filename_s);
 
